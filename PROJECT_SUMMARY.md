@@ -1,10 +1,16 @@
 # Pendragon GM's Binder — Project Summary
 *Last updated: 2026-04-05 | Current version: v2.1.1 | Status: Stable, LAN-hosted on Windows, Linux migration planned*
 
+> **📦 Source of truth:** https://github.com/Solaire503/pendragon-gm-binder (private repo)
+> Clone with `git clone https://github.com/Solaire503/pendragon-gm-binder.git` on any machine.
+> Secrets (`secrets.env`, `users.json`) and live runtime state (`binder-save.json`,
+> `announcements.json`, `submissions.json`, `backups/`) are **intentionally gitignored** —
+> they only exist on the host machine and must be recreated or copied manually on a new install.
+
 > **📌 AI / New Conversation Handoff Notice**
 > If you are an AI assistant picking this project up in a fresh conversation, **read this
 > entire file first**. It is the master reference. The user (Steve) plans to format the
-> C: drive; all persistent project state lives on G:, including Claude memory files
+> C: drive; all persistent project state lives on G: and on GitHub. Claude memory files
 > cannot be assumed to exist. Cross-reference these companion docs as needed:
 >
 > - **`Proxmox-Ubuntu_Plan.md`** — full Linux migration plan (Proxmox VM + Cloudflare Tunnel)
