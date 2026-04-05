@@ -1,0 +1,286 @@
+Name,Role,Status,Household,Manor,Age,Glory,Year_Born,Year_Died,Pronoun
+"Lady Jenna","Baron","Alive","","Sarum [Salisbury]",21,"-",477,None,"She/her"
+
+"Robert","Page","Alive","","Sarum [Salisbury]",6,"-",492,None,"He/him"
+
+"Sir Amig","Estate Holder","Alive","","Du Plain (Castle/Estate)",63,"7234",435,None,"He/him"
+
+"Bishop Roger","Priest","Alive","","",60,"-",438,None,"He/him"
+
+"Father Tewi","Priest","Alive","","",70,"-",428,None,"He/him"
+
+"Arthur","Page","Alive","","",6,"-",492,None,"He/him"
+
+"Lady Guenever","Baby","Alive","","",1,"-",497,None,"She/her"
+
+"Merlin the Magician","Druid","Alive","","",None,"20000",None,None,"He/him"
+
+"Ceradoc Dawnwell","Player Knight","Alive","","Dawnwell",34,"See Sheet",464,None,"He/him"
+
+"Cadfan ap Rhodri","Squire","Alive","","",16,"-",482,None,"He/him"
+
+"Marrin Blackwood","Player Knight","Alive","","Blackwood",34,"See Sheet",464,None,"He/him"
+
+"Cerys ferch Owain","Knight","Alive","","",20,"1375",478,None,"She/her"
+
+"Aberthol Cador","Player Knight","Alive","","Cador",34,"See Sheet",464,None,"He/him"
+
+"Rhun ap Drystan","Squire","Alive","Cador","Cador",17,"-",481,None,"He/him"
+
+"Vivienne Westwood","Player Knight","Alive","","Westwood",34,"See Sheet",464,None,"She/her"
+
+"Lestyn of Berwick","Squire","Alive","","",16,"75",482,None,"He/him"
+
+
+"Lady Olwen of Benoic","Steward","Alive","Westwood","",32,"-",466,None,"She/her"
+
+"Idwal of Amesbury","Bachelor Knight","Alive","","Sarum [Salisbury]",26,"",472,None,"He/him"
+
+"Dame Terrwyn, the Wild Hawk","Knight","Alive","Blackwood","Blackwood",40,"5090",458,None,"She/her"
+
+"Lady Isolde","Steward","Alive","Dawnwell","Dawnwell",36,"-",462,None,"She/her"
+
+"Lucan Corvus","Steward","Alive","Blackwood","Sarum [Salisbury]",38,"-",460,None,"He/him"
+
+"Sir Edern of Mallardene","Knight","Alive","Dawnwell","Dawnwell",70,"3866",428,None,"He/him"
+
+"Dame Lleueu of Escoce","Vassal Knight","Alive","","Ebble",40,"6100",458,None,"She/her"
+
+"Arwenn Alduen","Squire","Alive","","Dawnwell",17,"--",481,None,"She/her"
+
+"Lady Rhiannon of Wilton","Steward","Alive","","Sarum [Salisbury]",46,"-",452,None,"She/her"
+
+"Dame Efa","Knight","Alive","","Sarum [Salisbury]",31,"1030",467,None,"She/her"
+
+"Sir Rowan","Bachelor Knight","Alive","","Sarum [Salisbury]",31,"1030",467,None,"He/him"
+
+"Sir Merrick","Vassal Knight","Alive","","Norton Bavant",61,"5480",437,None,"He/him"
+
+"Sir Madog Cador","Bachelor Knight","Alive","Cador","Sarum [Salisbury]",32,"1700",466,None,"He/him"
+
+"Syr Myf","Vassal Knight","Alive","","Wilton (Castle/Town)",38,"5000",460,None,"She/her"
+
+"Dame Nesta","Vassal Knight","Alive","Dawnwell","Alduen",29,"1298",469,None,"She/her"
+
+"Sir Strixen Blackwood","Knight","Alive","Blackwood","Bedwyn (Under Blackwood)",27,"1500",471,None,"He/him"
+
+"Berwyn 'Berry' ap Hywel","Squire","Alive","","Blackwood",20,"150",478,None,"He/him"
+
+"Sir Tegan ap Merwydd","Knight","Alive","","Sarum [Salisbury]",70,"3000",428,None,"He/him"
+
+"Sir Osric Harrowmere","Knight","Alive","","Wylye",36,"1350",462,None,"He/him"
+
+"Dame Mair of Baverstock","Knight","Alive","","Baverstock",30,"1100",468,None,"She/her"
+
+"Syr Aled ap Cenydd","Knight","Alive","","Dinton",28,"900",470,None,"He/him"
+
+"Dame Elowen Wren","Knight","Alive","","Woodford",27,"750",471,None,"She/her"
+
+"Sir Cadfan "Two-Teeth"","Knight","Alive","","Stapleford",40,"1600",458,None,"He/him"
+
+"Lady Nessa of Upavon","Steward","Alive","","Berwick St. James",32,"-",466,None,"She/her"
+
+"Sir Beornwulf Stoke","Vassal Knight","Alive","","Winterbourne Stoke",46,"4600",452,None,"He/him"
+
+"Dame Gwenllian ferch Iorwerth","Vassal Knight","Alive","","Newton",29,"820",469,None,"She/her"
+
+"Sir Alaric Chalk","Vassal Knight","Alive","","Chalke",33,"1200",465,None,"He/him"
+
+"Dame Ysabel Laverstock","Vassal Knight","Alive","","Laverstock",42,"3900",456,None,"She/her"
+
+"Sir Eadric Gunnor","Vassal Knight","Alive","","Winterbourne Gunnet (Gareth)",31,"980",467,None,"He/him"
+
+"Syr Bran "Ash-Hand"","Vassal Knight","Alive","","Idmiston ",34,"2420",464,None,"He/him"
+
+"Sir Tomas "Tony" ap Iago","Vassal Knight","Alive","","Newton Tony",32,"1000",466,None,"He/him"
+
+"Syr Lenore of Wilton","Vassal Knight","Alive","","Wilton (Castle/Town)",43,"6000",455,None,"She/her"
+
+"Sir Caladbolg ap Morydd","Banneret Knight","Alive","","Warminster (Estate)",53,"7899",445,None,"He/him"
+
+"Lady Ysanna of Pitton","Vassal Knight","Alive","","Pitton",32,"--",466,None,"She/her"
+
+"Sir Owyn of Barbury","Knight","Alive","","",30,"3300",468,None,"He/him"
+
+"Lady Elaina","Steward","Alive","","Durnford",26,"--",472,None,"She/her"
+
+"Sir Gros ap Idwal","Knight","Alive","","",57,"2200",441,None,"He/him"
+
+"Lady Saoirse","Steward","Alive","","Burcombe",28,"--",470,None,"She/her"
+
+"Finnian mac Cormac","Baby","Alive","","Burcombe",10,"1000",488,None,"He/him"
+
+"Sir Rory mac Enna","Knight","Alive","","",33,"3500",465,None,"He/him"
+
+"Lady Maud","Steward","Alive","","Berwick St. James",24,"--",474,None,"She/her"
+
+"Sir Jasper of Stapleford","Knight","Alive","","Stapleford",31,"1135",467,None,"He/him"
+
+"Madoc ap Madoc","Steward","Alive","","Tisbury",20,"1000",478,None,"He/him"
+
+"Sir Caedfael","Vassal Knight","Alive","","Grafton",43,"2400",455,None,"He/him"
+
+"Lady Rhiwen","Steward","Alive","","Tidcombe",36,"900",462,None,"She/her"
+
+"Sir Edmond","Vassal Knight","Alive","","Oxenwood",40,"2900",458,None,"He/him"
+
+"Sir Aethelstan","Vassal Knight","Alive","","Fosbury",38,"2100",460,None,"He/him"
+
+"Syr Alys","Vassal Knight","Alive","","Tangley",35,"2700",463,None,"She/her"
+
+"Sir Osmond","Vassal Knight","Alive","","Clatford",26,"1600",472,None,"He/him"
+
+"Sir Brychan ap Cadell","Banneret Knight","Alive","","Devizes",51,"7200",447,None,"He/him"
+
+"Sir Maelgwyn of Potterne","Vassal Knight","Alive","","Devizes",46,"4100",452,None,"He/him"
+
+"Dame Eluned of Market Lavington","Vassal Knight","Alive","","Devizes",41,"3600",457,None,"She/her"
+
+"Sir Owain of Marston","Vassal Knight","Alive","","Devizes",38,"3900",460,None,"He/him"
+
+"Sir Rhydian ap Merrick","Vassal Knight","Alive","Blackwood","Bedwyn (Under Blackwood)",23,"2200",475,None,"He/him"
+
+"Gareth ap Elidyr","Vassal Knight","Alive","","Pitton",27,"900",471,None,"He/him"
+
+"Lady Anwen ferch Rhiannon","Steward","Alive","","Broughton",16,"--",482,None,"She/her"
+
+"Murnic ap Murna","Bachelor Knight","Alive","","Broughton",28,"1534",470,None,"He/him"
+
+"Rory mac Filia","Bachelor Knight","Alive","","Burcombe",32,"2700",466,None,"She/her"
+
+"Sir Isembard of Upavon","Bachelor Knight","Alive","","Upavon (Estate)",45,"3988",453,None,"He/him"
+
+
+
+
+
+"Sir Cynwal","Mercenary Knight","Alive","","",27,"1200",471,None,"He/him"
+
+"Sir Edwyn of Brackmere","Bachelor Knight","Alive","","Levcomagus [Silchester Barony]",35,"1020",463,None,"He/him"
+
+"Syr Nia","Vassal Knight","Alive","","Knook",38,"3105",460,None,"She/her"
+
+"Syr Nerthaid","Vassal Knight","Alive","","Deptford",22,"1000",476,None,"He/him"
+
+"Syr Hroðgar","Vassal Knight","Alive","","Orcheston",49,"4233",449,None,"He/him"
+
+"Gwrfelling","Steward","Alive","","Cador",31,"--",467,None,"He/him"
+
+"Lady Gwendolyn of Rydychan","Baron","Alive","","Rydychan [County]",45,"--",453,None,"She/her"
+
+"Morcant ap Gwent","Knight","Alive","","Sarum [Salisbury]",26,"",472,None,"He/him"
+
+"Dame Eleri of Wilton","Bachelor Knight","Alive","","Sarum [Salisbury]",23,"",475,None,"She/her"
+
+"Vesa Blackwood","Squire","Alive","Blackwood","",13,"",485,None,"She/her"
+
+"Tomric Blackwood*","Page","Alive","Blackwood","",12,"",486,None,"He/him"
+
+"Sadhbh (Sive) Blackwood","Page","Alive","Blackwood","",6,"",492,None,"She/her"
+
+"Vaughann Blackwood","Baby","Alive","Blackwood","",4,"",494,None,"He/him"
+
+"Ffion Blackwood","Baby","Alive","Blackwood","",2,"",496,None,"She/her"
+
+"Rowan Blackwood","Baby","Alive","Blackwood","",1,"",497,None,"He/him"
+
+"Paldja","Druid","Alive","Blackwood","",70,"",428,None,"She/her"
+
+"Lady Rhiwen","Steward","Alive","Blackwood","",36,"--",462,None,"He/him"
+
+"Marrick Blackwood","Baby","Alive","Blackwood","",2,"",496,None,"He/him"
+
+"Parrigain Conwood","Steward","Alive","Blackwood","",56,"",442,None,"He/him"
+
+"Gusteve Conwood","Knight","Alive","Blackwood","",32,"",466,None,"He/him"
+
+"Rudolph Conwood","Steward","Alive","Blackwood","",30,"",468,None,"He/him"
+
+"Henwich Conwood","Steward","Alive","Blackwood","",29,"",469,None,"She/her"
+
+"Beautrix Thurgwin","Knight","Alive","Blackwood","",34,"",464,None,"She/her"
+
+"Mihill Thurgwin","Knight","Alive","Blackwood","",33,"",465,None,"He/him"
+
+"Melicent Thurgwin","Steward","Alive","Blackwood","",31,"",467,None,"She/her"
+
+"Eua Thurgwin","Steward","Alive","Blackwood","",28,"",470,None,"She/her"
+
+"Levin Thurgwin","Knight","Alive","Blackwood","",56,"",442,None,"He/him"
+
+"Bayria Thurgwin","Steward","Alive","Blackwood","",51,"",447,None,"She/her"
+
+"Bronwen","Steward","Alive","Cador","",31,"-",467,None,"She/her"
+
+"Ilar Cador","Page","Alive","Cador","",8,"--",490,None,"He/him"
+
+"Rhun Cador","Page","Alive","Cador","",7,"",491,None,"He/him"
+
+"Taran Cador","Baby","Alive","Cador","",5,"",493,None,"He/him"
+
+"Telyn Cador","Baby","Alive","Cador","",5,"",493,None,"She/her"
+
+"Drystan Cador","Baby","Alive","Cador","",3,"",495,None,"He/him"
+
+"Bran Cador","Baby","Alive","Cador","",2,"",496,None,"He/him"
+
+"Caradoc","Bachelor Knight","Alive","Cador","Sarum",26,"~1000",472,None,"He/him"
+
+"Elen","Bachelor Knight","Alive","Cador","",23,"~1000",475,None,"She/her"
+
+"Cerys","Steward","Alive","Cador","",55,"",443,None,"She/her"
+
+
+"Gwrfelling","Steward","Alive","Cador","",31,"--",467,None,"He/him"
+
+"Adelaide Dawnwell","Page","Alive","Dawnwell","",9,"",489,None,"She/her"
+
+"Maeve Dawnwell","Page","Alive","Dawnwell","",9,"",489,None,"She/her"
+
+"Selwyn Dawnwell","Page","Alive","Dawnwell","",8,"",490,None,"He/him"
+
+"Caeseria Dawnwell","Baby","Alive","Dawnwell","",4,"",494,None,"She/her"
+
+"Baby Boy Dawnwell","Baby","Alive","Dawnwell","",2,"",496,None,"He/him"
+
+"Mariadoc Dawnwell","Knight","Alive","Dawnwell","",62,"~2000",436,None,"He/him"
+
+"Benadoc Dawnwell","Knight","Alive","Dawnwell","",28,"",470,None,"He/him"
+
+
+
+"Saradoc Dawnwell","Steward","Unknown","Dawnwell","",60,"",438,None,"She/her"
+
+"Orwenn Aulduen","Bachelor Knight","Alive","Dawnwell","",27,"--",471,None,"He/him"
+
+
+
+"Branwen of Orofoise","Steward","Unknown","","",40,"--",448,488,"She/her"
+
+"Aveline Westwood","Steward","Alive","Westwood","",51,"--",447,None,"She/her"
+
+"Garrick Ashbourne","Knight","Alive","","",53,"4453",445,None,"He/him"
+
+"Rhysand Westwood","Page","Alive","Westwood","",6,"",492,None,"He/him"
+
+"Archibald Westwood","Baby","Alive","Westwood","",5,"",493,None,"He/him"
+
+"Viola Westwood","Baby","Alive","Westwood","",3,"",495,None,"She/her"
+
+"Father Arwel","Priest","Alive","Westwood","",44,"--",454,None,"He/him"
+
+"Aderyn Cador","Steward","Alive","Upavon","",30,"--",468,None,"She/her"
+
+"Aberthol Upavon","Page","Alive","Upavon","",6,"",492,None,"He/him"
+
+"Gareth Upavon","Baby","Alive","Upavon","",5,"",493,None,"He/him"
+
+"Anwen Upavon","Baby","Alive","Upavon","",4,"",494,None,"She/her"
+
+"Tegid Upavon","Baby","Alive","Upavon","",4,"",494,None,"He/him"
+
+"Bryce Upavon","Baby","Alive","Upavon","",2,"",496,None,"He/him"
+
+"Nessa Upavon","Steward","Alive","Upavon","",32,"",466,None,"She/her"
+
+"Aldric Bellweather","Steward","Alive","","Oxford (Merchant)",None,"--",475,None,"He/Him"

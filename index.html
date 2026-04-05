@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pendragon GM's Binder — 498 AD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     APP SHELL
+══════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-title">Pendragon</div>
+      <div class="brand-sub">GM's Binder</div>
+    </div>
+    <nav class="app-nav" id="appNav">
+      <button class="nav-tab active" data-tab="dashboard">
+        <span class="nav-icon">⚜</span>
+        <span class="nav-label">Dashboard</span>
+      </button>
+      <button class="nav-tab" data-tab="roster">
+        <span class="nav-icon">📜</span>
+        <span class="nav-label">Roster</span>
+      </button>
+      <button class="nav-tab" data-tab="manors">
+        <span class="nav-icon">🏰</span>
+        <span class="nav-label">Manors</span>
+      </button>
+      <button class="nav-tab gm-only" data-tab="families">
+        <span class="nav-icon">🌳</span>
+        <span class="nav-label">Families</span>
+      </button>
+      <button class="nav-tab gm-only" data-tab="winter">
+        <span class="nav-icon">❄</span>
+        <span class="nav-label">Winter</span>
+      </button>
+      <button class="nav-tab" data-tab="mausoleum">
+        <span class="nav-icon">🕯</span>
+        <span class="nav-label">Mausoleum</span>
+      </button>
+      <button class="nav-tab" data-tab="chronicle">
+        <span class="nav-icon">📖</span>
+        <span class="nav-label">Chronicle</span>
+      </button>
+    </nav>
+    <div class="header-right">
+      <div class="sync-status" id="syncStatus" title="File sync status">
+        <span class="sync-icon" id="syncIcon">◌</span>
+        <span class="sync-label" id="syncLabel">—</span>
+      </div>
+      <div class="year-display">
+        <span class="year-label">Anno Domini</span>
+        <div class="year-value-wrap">
+          <button class="year-btn" id="yearDown" title="Previous year">‹</button>
+          <span class="year-value" id="currentYear">498</span>
+          <button class="year-btn" id="yearUp" title="Next year">›</button>
+        </div>
+      </div>
+      <button class="hdr-btn hdr-btn-gold gm-only" id="btnExport" title="Export all data as JSON">Export</button>
+      <button class="hdr-btn hdr-btn-crimson gm-only" id="btnImport" title="Import data from JSON">Import</button>
+      <button class="hdr-btn hdr-btn-guide" id="btnFeatures" title="View features guide">📖 Guide</button>
+      <button class="hdr-btn hdr-btn-ai gm-only" id="btnApiKey" title="Configure Anthropic API key for AI flavor text">🔑 AI Key</button>
+      <button class="hdr-btn hdr-btn-version" id="btnPatchNotes" title="View patch notes and version history">Version</button>
+    </div>
+  </header>
+
+  <!-- PLAYER READ-ONLY BANNER -->
+  <div class="player-readonly-banner">Read-only view — use your Dashboard to change your Player Knight</div>
+
+  <!-- TAB PANELS -->
+  <main class="app-main">
+    <div class="tab-panel active" id="tab-dashboard"></div>
+    <div class="tab-panel" id="tab-roster"></div>
+    <div class="tab-panel" id="tab-manors"></div>
+    <div class="tab-panel" id="tab-families"></div>
+    <div class="tab-panel" id="tab-winter"></div>
+    <div class="tab-panel" id="tab-mausoleum"></div>
+    <div class="tab-panel" id="tab-chronicle"></div>
+  </main>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL OVERLAY
+══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal-box" id="modalBox">
+    <button class="modal-close" id="modalClose" title="Close">✕</button>
+    <div class="modal-content" id="modalContent"></div>
+  </div>
+</div>
+
+<!-- CARD POPUP — floats above the family tree modal -->
+<div class="card-popup-overlay" id="cardPopupOverlay" hidden>
+  <div class="card-popup-box" id="cardPopupBox">
+    <button class="modal-close" id="cardPopupClose" title="Close (Esc)">✕</button>
+    <div id="cardPopupContent"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- NPC HOVER CARD — follows cursor, shown on data-npc-hover elements -->
+<div id="npcHoverCard" hidden></div>
+
+<!-- ══════════════════════════════════════════════
+     SCRIPTS — order matters (no modules for file:// compat)
+══════════════════════════════════════════════ -->
+<script src="js/data/seed-npcs.js"></script>
+<script src="js/data/seed-manors.js"></script>
+<script src="js/store.js"></script>
+<script src="js/at-mention.js"></script>
+<script src="js/components.js"></script>
+<script src="js/tabs/dashboard.js"></script>
+<script src="js/tabs/roster.js"></script>
+<script src="js/tabs/manors.js"></script>
+<script src="js/tabs/families.js"></script>
+<script src="js/tabs/tree.js"></script>
+<script src="js/tabs/winter.js"></script>
+<script src="js/tabs/solos.js"></script>
+<script src="js/tabs/mausoleum.js"></script>
+<script src="js/tabs/chronicle.js"></script>
+<script src="js/multiplayer.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+</script>
+
+</body>
+</html>

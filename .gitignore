@@ -1,0 +1,41 @@
+# ===== Secrets — NEVER commit =====
+secrets.env
+users.json
+cert.pem
+key.pem
+*.pem
+
+# ===== Live runtime state =====
+# Campaign save data — tracked separately via auto-backup (planned post-Linux migration)
+binder-save.json
+# Phase 2 broadcast/presence/submissions runtime files
+announcements.json
+submissions.json
+presence.json
+
+# ===== Local backups =====
+backups/
+
+# ===== Claude Code local config =====
+.claude/
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+
+# ===== OS junk =====
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+
+# ===== Editor =====
+.vscode/
+.idea/
