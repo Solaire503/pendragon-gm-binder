@@ -62,8 +62,9 @@ const CardPopup = {
 
 // ── MODAL ─────────────────────────────────────────────────────
 const Modal = {
-  _stack:     [],
-  _formDirty: false,
+  _stack:        [],
+  _formDirty:    false,
+  _closeCallback: null,
 
   open(contentHtml, options = {}) {
     const overlay = document.getElementById('modalOverlay');
@@ -80,6 +81,7 @@ const Modal = {
     content.addEventListener('input',  () => { this._formDirty = true; }, true);
     content.addEventListener('change', () => { this._formDirty = true; }, true);
 
+    this._closeCallback = options.onClose || null;
     if (options.onOpen) options.onOpen(content);
   },
 
@@ -91,6 +93,7 @@ const Modal = {
     if (content) content.innerHTML = '';
     this._stack     = [];
     this._formDirty = false;
+    if (this._closeCallback) { this._closeCallback(); this._closeCallback = null; }
   },
 
   // Close triggered by user (X button, ESC, overlay click) — warns if dirty.

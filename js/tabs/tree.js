@@ -23,6 +23,8 @@ const TabTree = {
   _wrap: null,
   _locked: false,
 
+  currentHousehold() { return this._household; },
+
   NODE_W: 148,
   NODE_H: 58,
   NODE_R: 6,
@@ -47,7 +49,7 @@ const TabTree = {
           <span style="font-family:var(--font-display);font-size:0.9rem;color:var(--ink);margin-right:8px;">${icon} ${householdName} · Family Tree</span>
           <button class="btn btn-ghost" id="treeBtnLayout" title="Grid auto-arrange">Auto Layout</button>
           <button class="btn btn-ghost" id="treeBtnDynasty" title="Arrange by generation from the dynasty founder">Dynasty Layout</button>
-          <button class="btn btn-ghost" id="treeBtnBulkAdd" title="Bulk-link multiple people at once">Bulk Add</button>
+          ${isGM() ? `<button class="btn btn-ghost" id="treeBtnBulkAdd" title="Bulk-link multiple people at once">Bulk Add</button>` : ''}
           <button class="btn btn-ghost" id="treeBtnZoomIn">＋</button>
           <button class="btn btn-ghost" id="treeBtnZoomOut">－</button>
           <button class="btn btn-ghost" id="treeBtnReset">Reset View</button>
@@ -56,7 +58,7 @@ const TabTree = {
           <span id="treeFounderBadge" style="margin-left:4px;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.12em;color:var(--gold);display:none;"></span>
           <span id="treeHeadBadge" style="margin-left:4px;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.12em;color:var(--crimson);display:none;"></span>
           <span style="margin-left:auto;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.15em;color:var(--ink-soft);opacity:0.7;" id="treeStatus">
-            Hover a node and click ⊕ to connect · Drag nodes · Scroll to zoom
+            ${isGM() ? 'Hover a node and click ⊕ to connect · Drag nodes · Scroll to zoom' : 'Click a name to view · Drag nodes · Scroll to zoom'}
           </span>
         </div>
         <div class="tree-canvas-wrap" id="treeCanvasWrap" style="position:relative;">
@@ -79,7 +81,7 @@ const TabTree = {
           <button class="btn btn-ghost" id="treeLockBtn" title="Tree unlocked — click to lock and protect your manual positions" style="position:absolute;bottom:12px;right:12px;font-size:1rem;line-height:1;">🔓</button>
         </div>
       </div>
-    `, { tree: true, onOpen: () => this._init(householdName) });
+    `, { tree: true, onOpen: () => this._init(householdName), onClose: () => { this._household = ''; this._locked = false; } });
   },
 
   _init(householdName) {
@@ -438,7 +440,7 @@ const TabTree = {
     const padY    = this.NODE_H + 56;
     let i = 0;
     members.forEach(n => {
-      if (this._locked && STORE.treePos[n.id]?.userPlaced) return;
+      if (this._locked && STORE.treePos[n.id]) return;
       this._nodes[n.id] = {
         x: 60 + (i % cols) * padX,
         y: 60 + Math.floor(i / cols) * padY,
@@ -577,7 +579,7 @@ const TabTree = {
       roots.forEach(addNode);
       byGen[0].forEach(n => addNode(n.id));
       ordered.forEach((n, i) => {
-        if (!this._locked || !STORE.treePos[n.id]?.userPlaced) {
+        if (!this._locked || !STORE.treePos[n.id]) {
           this._nodes[n.id] = { x: ORIGIN_X + i * PAD_X, y: ORIGIN_Y };
         }
       });
@@ -626,14 +628,14 @@ const TabTree = {
       row.forEach(n => addWithSpouses(n));
 
       rowOrdered.forEach((n, i) => {
-        if (!this._locked || !STORE.treePos[n.id]?.userPlaced) {
+        if (!this._locked || !STORE.treePos[n.id]) {
           this._nodes[n.id] = { x: startX + i * PAD_X, y };
         }
       });
 
       // Nudge apart any overlapping nodes (simple left-to-right pass)
       for (let i = 1; i < rowOrdered.length; i++) {
-        if (this._locked && STORE.treePos[rowOrdered[i].id]?.userPlaced) continue;
+        if (this._locked && STORE.treePos[rowOrdered[i].id]) continue;
         const prev = this._nodes[rowOrdered[i - 1].id];
         const cur  = this._nodes[rowOrdered[i].id];
         if (cur.x < prev.x + PAD_X) cur.x = prev.x + PAD_X;
@@ -646,7 +648,7 @@ const TabTree = {
         ? Math.max(...connected.map(n => this._nodes[n.id]?.y ?? 0))
         : ORIGIN_Y - PAD_Y;
       floating.forEach((n, i) => {
-        if (!this._locked || !STORE.treePos[n.id]?.userPlaced) {
+        if (!this._locked || !STORE.treePos[n.id]) {
           this._nodes[n.id] = {
             x: ORIGIN_X + (i % FLOAT_COLS) * PAD_X,
             y: maxY + PAD_Y + Math.floor(i / FLOAT_COLS) * PAD_Y,
@@ -909,63 +911,59 @@ const TabTree = {
         g.appendChild(ft);
       }
 
-      // ── HOVER CONNECT BUTTON (⊕) ────────────────────
-      const connBtn = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      connBtn.setAttribute('class', 'tree-connect-btn');
-      connBtn.style.cursor  = 'crosshair';
-      connBtn.style.opacity = '0';
-      connBtn.setAttribute('transform', `translate(${this.NODE_W + 4}, ${this.NODE_H / 2 - 9})`);
+      // ── HOVER CONNECT BUTTON (⊕) — GM only ──────────
+      if (isGM()) {
+        const connBtn = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        connBtn.setAttribute('class', 'tree-connect-btn');
+        connBtn.style.cursor  = 'crosshair';
+        connBtn.style.opacity = '0';
+        connBtn.setAttribute('transform', `translate(${this.NODE_W + 4}, ${this.NODE_H / 2 - 9})`);
 
-      const connCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      connCircle.setAttribute('cx', 9); connCircle.setAttribute('cy', 9);
-      connCircle.setAttribute('r', 9);
-      connCircle.setAttribute('fill',         '#2a8a40');
-      connCircle.setAttribute('stroke',       'white');
-      connCircle.setAttribute('stroke-width', '1.5');
-      connBtn.appendChild(connCircle);
+        const connCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        connCircle.setAttribute('cx', 9); connCircle.setAttribute('cy', 9);
+        connCircle.setAttribute('r', 9);
+        connCircle.setAttribute('fill',         '#2a8a40');
+        connCircle.setAttribute('stroke',       'white');
+        connCircle.setAttribute('stroke-width', '1.5');
+        connBtn.appendChild(connCircle);
 
-      const connTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      connTxt.setAttribute('x', 9); connTxt.setAttribute('y', 13);
-      connTxt.setAttribute('text-anchor', 'middle');
-      connTxt.setAttribute('font-size', '12');
-      connTxt.setAttribute('fill', 'white');
-      connTxt.setAttribute('font-family', 'sans-serif');
-      connTxt.textContent = '⊕';
-      connBtn.appendChild(connTxt);
+        const connTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        connTxt.setAttribute('x', 9); connTxt.setAttribute('y', 13);
+        connTxt.setAttribute('text-anchor', 'middle');
+        connTxt.setAttribute('font-size', '12');
+        connTxt.setAttribute('fill', 'white');
+        connTxt.setAttribute('font-family', 'sans-serif');
+        connTxt.textContent = '⊕';
+        connBtn.appendChild(connTxt);
 
-      connBtn.setAttribute('title', 'Connect to another person');
-      g.appendChild(connBtn);
+        connBtn.setAttribute('title', 'Connect to another person');
+        g.appendChild(connBtn);
 
-      // Show/hide connect button on node hover
-      g.addEventListener('mouseenter', () => { connBtn.style.opacity = '1'; });
-      g.addEventListener('mouseleave', () => { connBtn.style.opacity = '0'; });
+        // Show/hide connect button on node hover
+        g.addEventListener('mouseenter', () => { connBtn.style.opacity = '1'; });
+        g.addEventListener('mouseleave', () => { connBtn.style.opacity = '0'; });
 
-      // ── CONNECT BUTTON CLICK ────────────────────────
-      connBtn.addEventListener('mousedown', e => {
-        e.stopPropagation();
-        if (this._connectSource === n.id) {
-          // Cancel — full redraw to clear green highlight
-          this._connectSource = null;
-          document.getElementById('treeStatus').textContent = 'Hover a node and click ⊕ to connect · Drag nodes · Scroll to zoom';
-          this._draw(householdName);
-        } else {
-          // Set source — highlight this node directly without redrawing
-          // (redrawing hides the ⊕ button immediately, which is confusing)
-          const prevSrc = this._connectSource;
-          this._connectSource = n.id;
-          document.getElementById('treeStatus').textContent = `Connecting from ${n.name} — now click another node…`;
-          // Reset any previous source node border
-          if (prevSrc) {
-            const prevG = document.querySelector(`[data-npc-node="${prevSrc}"] rect`);
-            if (prevG) { prevG.setAttribute('stroke', prevG.getAttribute('data-orig-stroke') || '#5a5040'); prevG.removeAttribute('data-orig-stroke'); }
+        // ── CONNECT BUTTON CLICK ──────────────────────
+        connBtn.addEventListener('mousedown', e => {
+          e.stopPropagation();
+          if (this._connectSource === n.id) {
+            this._connectSource = null;
+            document.getElementById('treeStatus').textContent = 'Hover a node and click ⊕ to connect · Drag nodes · Scroll to zoom';
+            this._draw(householdName);
+          } else {
+            const prevSrc = this._connectSource;
+            this._connectSource = n.id;
+            document.getElementById('treeStatus').textContent = `Connecting from ${n.name} — now click another node…`;
+            if (prevSrc) {
+              const prevG = document.querySelector(`[data-npc-node="${prevSrc}"] rect`);
+              if (prevG) { prevG.setAttribute('stroke', prevG.getAttribute('data-orig-stroke') || '#5a5040'); prevG.removeAttribute('data-orig-stroke'); }
+            }
+            const thisBg = g.querySelector('rect');
+            if (thisBg) { thisBg.setAttribute('data-orig-stroke', thisBg.getAttribute('stroke')); thisBg.setAttribute('stroke', '#2a8a40'); thisBg.setAttribute('stroke-width', '3'); }
+            connBtn.style.opacity = '1';
           }
-          // Highlight this node green
-          const thisBg = g.querySelector('rect');
-          if (thisBg) { thisBg.setAttribute('data-orig-stroke', thisBg.getAttribute('stroke')); thisBg.setAttribute('stroke', '#2a8a40'); thisBg.setAttribute('stroke-width', '3'); }
-          // Keep ⊕ visible so user knows they're in connect mode
-          connBtn.style.opacity = '1';
-        }
-      });
+        });
+      }
 
       // ── NODE DRAG & CLICK ───────────────────────────
       g.addEventListener('mousedown', e => {
@@ -999,11 +997,13 @@ const TabTree = {
         _clickPos = null;
       });
 
-      // Right-click context menu
-      g.addEventListener('contextmenu', e => {
-        e.preventDefault();
-        this._nodeContextMenu(n.id, e.clientX, e.clientY);
-      });
+      // Right-click context menu — GM only
+      if (isGM()) {
+        g.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          this._nodeContextMenu(n.id, e.clientX, e.clientY);
+        });
+      }
 
       nodesG.appendChild(g);
     });
