@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.1.1';
+const APP_VERSION = '2.2.0';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -57,6 +57,15 @@ const FEATURES = [
       'Click any NPC to open their card: relationships, life events, skills, notes, and family.',
       'The Chronicle tab shows the full campaign record — browse any year and read every event.',
       'The Mausoleum lists everyone who has died, with cause, dates, age at death, and glory.',
+    ],
+  },
+  {
+    heading: 'Chronicle Submissions',
+    icon: '📜',
+    items: [
+      'The "📜 Submit Entry" button on the Chronicle tab lets you contribute a record from your knight\'s point of view.',
+      'Write your account in the submission form and click Submit for Review. Your entry is queued and sent to the GM — nothing appears in the shared chronicle until the GM approves it.',
+      'Once approved, your entry appears in the chronicle for the current year just like any other event.',
     ],
   },
 
@@ -180,6 +189,57 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.2.0',
+    date:    '2026-04-06',
+    sections: [
+      {
+        heading: 'Dedicated Ubuntu Server',
+        items: [
+          'The Binder now runs on a dedicated Ubuntu Server 24.04 LTS VM hosted in Proxmox VE — no more keeping a Windows console window open.',
+          'The server is managed as a systemd service: auto-starts on boot, restarts on failure, and logs to /var/log/pendragon.log.',
+          'Groundwork laid for Cloudflare Tunnel deployment — real HTTPS and internet access without port forwarding, coming soon.',
+        ],
+      },
+      {
+        heading: 'Nav Reorganisation — Fate Menu',
+        items: [
+          'Winter and Mausoleum have been consolidated under a new "Fate ☽" dropdown in the navigation bar, freeing up header space.',
+          'Click Fate to expand the menu and select Winter or Mausoleum. The Fate button highlights when either is active.',
+          'Players see only Mausoleum in the Fate menu; Winter remains GM-only.',
+        ],
+      },
+      {
+        heading: 'Archive Dropdown',
+        items: [
+          'Export and Import have been grouped under a new "Archive ❧" dropdown in the header, keeping the nav bar uncluttered.',
+          'Click Archive to expand the menu and access Export (save a full backup) or Import (restore from a backup file).',
+          'Archive is GM-only; players do not see the button.',
+        ],
+      },
+      {
+        heading: 'Player Chronicle Submissions',
+        items: [
+          'Players can now submit chronicle entries from their perspective directly from the Chronicle tab.',
+          'A "📜 Submit Entry" button opens a form where the player writes a short account. The submission is queued for GM review — nothing goes live without sign-off.',
+          'The GM sees all pending submissions in a review panel at the top of the Chronicle tab. Each entry can be approved (written to the chronicle as a new event), edited before approving, or dismissed.',
+          'Submissions are stored in submissions.json on the server and never affect the main save file until approved.',
+        ],
+      },
+      {
+        heading: 'Mobile Layout — 360px Pass',
+        items: [
+          'The app has been tuned for narrow screens (Z Fold 6 exterior display and similar ~360px viewports).',
+          'Navigation icons now stack above their labels so all tabs remain legible at 360px without truncation.',
+          'Roster cards, filter chips, and the chronicle submission form collapse to single-column layouts on small screens.',
+          'Household roster entries on the player dashboard now open an NPC modal on tap, rather than inline expansion.',
+          'Nav dropdown menus pin to the left edge to prevent overflow off-screen.',
+          'Modal close buttons are at least 44px tall for easier tap targets.',
+          'Year arrows (‹ ›) in the header are now GM-only — players can no longer accidentally change the campaign year.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.1.1',
     date:    '2026-04-05',
@@ -1057,8 +1117,36 @@ const APP = {
   _boot() {
     // Wire nav tabs
     document.querySelectorAll('.nav-tab').forEach(btn => {
-      btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+      if (btn.dataset.tab) btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
     });
+
+    // Wire Fate dropdown
+    const fateTrigger = document.getElementById('navFateBtn');
+    const fateMenu    = document.getElementById('navFateMenu');
+    if (fateTrigger && fateMenu) {
+      fateTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        fateMenu.classList.toggle('open');
+      });
+      fateMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
+        item.addEventListener('click', () => {
+          this.switchTab(item.dataset.tab);
+          fateMenu.classList.remove('open');
+        });
+      });
+      document.addEventListener('click', () => fateMenu.classList.remove('open'));
+    }
+
+    // Wire Archive dropdown
+    const archiveTrigger = document.getElementById('hdrArchiveBtn');
+    const archiveMenu    = document.getElementById('hdrArchiveMenu');
+    if (archiveTrigger && archiveMenu) {
+      archiveTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        archiveMenu.classList.toggle('open');
+      });
+      document.addEventListener('click', () => archiveMenu.classList.remove('open'));
+    }
 
     // Year controls
     document.getElementById('currentYear').textContent = STORE.year;
@@ -1439,6 +1527,12 @@ const APP = {
     document.querySelectorAll('.nav-tab').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === name);
     });
+    // Fate dropdown button: active when winter or mausoleum is showing
+    const fateBtn = document.getElementById('navFateBtn');
+    if (fateBtn) fateBtn.classList.toggle('active', name === 'winter' || name === 'mausoleum');
+    // Close the dropdown on any tab switch
+    const fateMenu = document.getElementById('navFateMenu');
+    if (fateMenu) fateMenu.classList.remove('open');
 
     // Show/hide panels
     document.querySelectorAll('.tab-panel').forEach(p => {

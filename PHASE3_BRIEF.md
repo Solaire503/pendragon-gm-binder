@@ -1,6 +1,6 @@
-# Pendragon GM's Binder — v2.2 Roadmap
+# Pendragon GM's Binder — v2.3 Roadmap
 ## Phase 3 · Player-Writable Space
-### Status: IN PROGRESS
+### Status: NOT STARTED — waiting on horse survival tables from Steve
 
 ---
 

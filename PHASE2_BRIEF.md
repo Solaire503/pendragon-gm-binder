@@ -1,6 +1,6 @@
-# Pendragon GM's Binder — v2.1 Roadmap
+# Pendragon GM's Binder — v2.1 / v2.2 Roadmap
 ## Phase 2 · Live Session Features
-### Status: GM BROADCAST + PRESENCE DONE (2026-04-05) · CHRONICLE SUBMISSIONS + MOBILE LAYOUT PENDING
+### Status: COMPLETE (delivered across v2.1.0, v2.1.1, v2.2.0)
 
 ---
 
@@ -14,21 +14,21 @@ see who's online, and players can contribute to the Chronicle.
 
 ## Features Planned
 
-### GM Broadcast / Announcement Banner
+### ✅ GM Broadcast / Announcement Banner
 - GM types a message in a small panel (GM dashboard or persistent header control)
 - Message appears as a dismissible banner at the top of every player's screen on next refresh
 - GM can clear it at any time
 - Storage: single `announcements.json` (or lightweight field appended to save)
 - Use cases: "Winter phase starting", "Check the Chronicle", "Session in 10 min"
 
-### Presence Indicator
+### ✅ Presence Indicator
 - GM-only panel showing who is currently online
 - A player is "online" if they've polled the server within the last 60 seconds
   (Phase 1 auto-refresh provides this heartbeat for free — no extra client code needed)
 - Green dot = online, grey dot = offline, shown next to each username
 - Storage: in-memory dict on the server — no database needed, resets on restart
 
-### Chronicle Submissions
+### ✅ Chronicle Submissions
 - Players see a **Submit Entry** button on the Chronicle tab
 - Free-text field — player writes a short account from their knight's perspective
 - Submissions queue in a GM-only review panel (GM dashboard or Chronicle tab)
@@ -36,7 +36,7 @@ see who's online, and players can contribute to the Chronicle.
 - Nothing goes live without GM sign-off — GM controls the canon
 - Storage: `submissions.json`, append-only from the player side
 
-### Mobile-Responsive Layout
+### ✅ Mobile-Responsive Layout
 - Responsive CSS pass — app reflows cleanly for phones and tablets
 - Tab navigation converts to compact bottom bar or hamburger menu on small screens
 - Key views prioritised for mobile: Dashboard, Roster, Chronicle

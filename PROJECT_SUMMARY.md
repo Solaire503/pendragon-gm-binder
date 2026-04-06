@@ -1,5 +1,5 @@
 # Pendragon GM's Binder — Project Summary
-*Last updated: 2026-04-05 | Current version: v2.1.1 | Status: Stable, LAN-hosted on Windows, Linux migration planned*
+*Last updated: 2026-04-06 | Current version: v2.2.0 | Status: Stable, running on Ubuntu Server 24.04 (Proxmox VM), LAN + Cloudflare Tunnel pending*
 
 > **📦 Source of truth:** https://github.com/Solaire503/pendragon-gm-binder (private repo)
 > Clone with `git clone https://github.com/Solaire503/pendragon-gm-binder.git` on any machine.
@@ -55,26 +55,20 @@ A unified, multi-user GM tool for a **Pendragon 6e** tabletop campaign. Original
 
 ---
 
-## Hosting & Deployment State (as of 2026-04-05)
+## Hosting & Deployment State (as of 2026-04-06)
 
-### Current (Windows host)
-- Running on Steve's Windows desktop (server PC at `192.168.1.42`)
-- Project files live on **`G:\Other computers\My Laptop\Pendragon GM's Binder\`** (G drive survives a C: format)
-- Launch: open Command Prompt in the project folder, `python server.py`
-- Console supports interactive commands: `restart`, `status`, `users`, `help`
-- `restart` during a save is deferred until the save lock releases (prevents file corruption)
-- Werkzeug access log suppressed; stderr filter silences HTTPS-on-HTTP parser noise
-- LAN URL: `http://192.168.1.42:8765` (works from any device on the home network)
-- **Not currently internet-accessible** — port forwarding deferred until Linux migration
+### Current (Ubuntu Server on Proxmox — v2.2.0+)
+- Running on Ubuntu Server 24.04 LTS VM inside Proxmox VE on `192.168.1.43`
+- Managed as a systemd service (`pendragon.service`): auto-starts on boot, restarts on failure
+- App files: `/home/solaire503/pendragon/`
+- LAN URL: `http://192.168.1.43:8765`
+- Logs: `sudo journalctl -u pendragon.service -f`
+- Restart: `sudo systemctl restart pendragon.service`
 
-### Planned (Ubuntu on Proxmox + Cloudflare Tunnel)
-See `Proxmox-Ubuntu_Plan.md`. Summary:
-- Proxmox VE host → Ubuntu Server 24.04 VM at `192.168.1.50`
-- systemd service (`pendragon.service`) replaces the "keep console open" pattern
-- Cloudflare Tunnel terminates real HTTPS at the edge, no port forwarding needed, no cert management
-- Flask binds to `127.0.0.1:8765`, only reachable via tunnel
-- VM snapshots + nightly rsync of save file for two-layer backups
-- Will need minor code tweaks: `api_drives` (Windows A-Z enumeration → Linux mount points), `config.json` save file path (Windows → Linux paths), guard `_console_listener` behind `sys.stdin.isatty()` so `input()` doesn't block under systemd
+### Next Step (Cloudflare Tunnel)
+- `cloudflared` is installed; quick tunnel was tested and confirmed working
+- Waiting on: domain pointed at Cloudflare, then `cloudflared tunnel login` → `cloudflared tunnel create pendragon` → config YAML → `cloudflared.service` systemd unit
+- Result: stable public HTTPS URL, no port forwarding, no cert management
 
 ---
 
@@ -332,14 +326,15 @@ ESC: pops one layer if stack has entries; otherwise closes.
 | **v2.0.0** | 2026-04-04 | **Multiplayer release:** Flask server, user accounts (GM + 4 players), role-based access, HTTPS, player dashboard, succession flow, read-only player views, GM dashboard attention panels |
 | **v2.1.0** | 2026-04-05 | **Live session features:** GM broadcast messages, player presence/who's-online indicator, heartbeat polling |
 | **v2.1.1** | 2026-04-05 | **QA pass + security hardening:** C-1/C-2 critical bugs (pronoun, chronicle data structure), H-1 through H-6 highs (open redirect, cert backups, gm_required gaps, sendBeacon check, version mismatch, `App`→`APP` typo), plus ~10 medium fixes — see QA_REVIEW.md |
+| **v2.2.0** | 2026-04-06 | **Ubuntu migration + player tools:** Migrated to Ubuntu Server 24.04 on Proxmox (systemd service), Fate nav dropdown (Winter + Mausoleum grouped), Archive header dropdown (Export + Import grouped), player chronicle submissions (submit → GM review/approve), mobile layout pass for ~360px screens, year arrows GM-only |
 
 ---
 
 ## Known Limitations & Deferred Work
 
 ### Not Yet Implemented
-- **Phase 2 remainder (v2.1.x):** Player chronicle submissions (GM approves), mobile layout polish
-- **Phase 3 (v2.2):** Per-player notes system, horse tracking — waiting on survival tables from Steve
+- **Phase 3 (v2.3):** Per-player notes system, horse tracking — waiting on survival tables from Steve
+- **Cloudflare Tunnel:** Server is ready; tunnel setup pending (domain + cloudflared config)
 - **CSRF protection:** Not implemented. Mitigated by `SESSION_COOKIE_SAMESITE='Lax'`. Acceptable for trusted LAN use; revisit before any public-facing deployment.
 - **Conflict resolution on concurrent saves:** Last write wins. Backup rotation provides recovery. Not an issue with single GM.
 - **`/api/browse` directory traversal:** Full FS enumeration for GM; fine for local trusted tool.
@@ -356,25 +351,20 @@ See `QA_REVIEW.md` for full detail. Deferred: M-1 CSRF, M-3 `/api/browse` FS tra
 
 ---
 
-## How to Run (Current — Windows)
+## How to Run (Current — Ubuntu Server via Proxmox)
 
-1. Open Command Prompt in `G:\Other computers\My Laptop\Pendragon GM's Binder\`
-2. Run `python server.py`
-3. Console shows startup banner, `[Keep this window open while using the app]`
-4. Open browser to `http://localhost:8765` (server PC) or `http://192.168.1.42:8765` (LAN)
-5. Login with GM credentials
-6. Interactive commands in the console: `restart`, `status`, `users`, `help`
-7. Close the console window to stop the server
+1. `pendragon.service` auto-starts on boot — nothing needed for normal operation
+2. LAN URL: `http://192.168.1.43:8765`
+3. Logs: `sudo journalctl -u pendragon.service -f`
+4. Restart: `sudo systemctl restart pendragon.service`
+5. Login with GM credentials (`/setup` on first run to create passwords)
 
-**First-time setup on a new machine:** Visit `/setup` first to create passwords, then return to `/` and log in.
+## How to Run (Future — with Cloudflare Tunnel)
 
-## How to Run (Future — Linux via Proxmox)
-
-See `Proxmox-Ubuntu_Plan.md` for the full migration. After cutover:
-1. `sudo systemctl start pendragon` (auto-starts on boot)
-2. Visit the Cloudflare Tunnel URL from any device on the internet
-3. Logs: `journalctl -u pendragon -f`
-4. Restart: `sudo systemctl restart pendragon`
+Once the tunnel is configured:
+1. Service still auto-starts as above; `cloudflared.service` will also run
+2. Visit the Cloudflare Tunnel URL from any device on the internet (no VPN needed)
+3. See `Proxmox-Ubuntu_Plan.md` for the full tunnel setup steps
 
 ---
 
@@ -395,7 +385,7 @@ If an AI assistant is picking this up in a new conversation and needs to underst
 
 ## Conversation Handoff Notes (what to know after a context reset)
 
-- **Latest session (2026-04-05):** Full QA audit via subagent, implemented all critical + high + most medium fixes, bumped to v2.1.1. Added multiplayer broadcast + presence features (v2.1). Wrote comprehensive Linux migration plan (`Proxmox-Ubuntu_Plan.md`). Resolved HTTPS-on-HTTP browser cache issue (Chrome remembered `localhost:8765` as HTTPS from prior session).
+- **Latest session (2026-04-06):** Updated all documentation, patch notes, and features guide to reflect v2.2.0. Previous session (2026-04-05): Full QA audit via subagent, all critical + high + most medium fixes (v2.1.1). Multiplayer broadcast + presence (v2.1). Migrated to Ubuntu Server on Proxmox (v2.2.0), delivered Fate/Archive dropdowns, player chronicle submissions, mobile layout pass, year arrows GM-only.
 - **Working mode:** Steve often says "go ahead and implement all fixes" — trust him and batch them efficiently. He prefers one summary message at the end over step-by-step narration. When he launches parallel work, respect it: don't duplicate effort across agents.
 - **Terminology:** "The binder" = this app. "Phase 1/2/3" = major release milestones. "PK" = Player Knight. "Solos" = solo/yearly/kin event rolls.
 - **Common gotchas encountered:**

@@ -306,7 +306,12 @@ const TabRoster = {
     this._selectedId = id;
     document.querySelectorAll('#rosterList .npc-list-item').forEach(el => el.classList.remove('selected'));
     document.querySelector(`#rosterList .npc-list-item[data-npc-id="${id}"]`)?.classList.add('selected');
-    this._renderDetail(id);
+    // On mobile the detail pane is hidden — open a modal instead
+    if (window.innerWidth <= 640) {
+      Components.openNpcCard(id);
+    } else {
+      this._renderDetail(id);
+    }
   },
 
   deselect() {

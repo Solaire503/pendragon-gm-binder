@@ -38,14 +38,21 @@
         <span class="nav-icon">🌳</span>
         <span class="nav-label">Families</span>
       </button>
-      <button class="nav-tab gm-only" data-tab="winter">
-        <span class="nav-icon">❄</span>
-        <span class="nav-label">Winter</span>
-      </button>
-      <button class="nav-tab" data-tab="mausoleum">
-        <span class="nav-icon">🕯</span>
-        <span class="nav-label">Mausoleum</span>
-      </button>
+      <div class="nav-dropdown" id="navFate">
+        <button class="nav-tab nav-dropdown-trigger" id="navFateBtn" title="Winter &amp; Mausoleum">
+          <span class="nav-icon">☽</span>
+          <span class="nav-label">Fate</span>
+          <span class="nav-caret">▾</span>
+        </button>
+        <div class="nav-dropdown-menu" id="navFateMenu">
+          <button class="nav-dropdown-item gm-only" data-tab="winter">
+            <span class="nav-icon">❄</span> Winter
+          </button>
+          <button class="nav-dropdown-item" data-tab="mausoleum">
+            <span class="nav-icon">🕯</span> Mausoleum
+          </button>
+        </div>
+      </div>
       <button class="nav-tab" data-tab="chronicle">
         <span class="nav-icon">📖</span>
         <span class="nav-label">Chronicle</span>
@@ -59,13 +66,18 @@
       <div class="year-display">
         <span class="year-label">Anno Domini</span>
         <div class="year-value-wrap">
-          <button class="year-btn" id="yearDown" title="Previous year">‹</button>
+          <button class="year-btn gm-only" id="yearDown" title="Previous year">‹</button>
           <span class="year-value" id="currentYear">498</span>
-          <button class="year-btn" id="yearUp" title="Next year">›</button>
+          <button class="year-btn gm-only" id="yearUp" title="Next year">›</button>
         </div>
       </div>
-      <button class="hdr-btn hdr-btn-gold gm-only" id="btnExport" title="Export all data as JSON">Export</button>
-      <button class="hdr-btn hdr-btn-crimson gm-only" id="btnImport" title="Import data from JSON">Import</button>
+      <div class="hdr-dropdown gm-only" id="hdrArchive">
+        <button class="hdr-btn hdr-btn-gold hdr-dropdown-trigger" id="hdrArchiveBtn" title="Export / Import data">⚙ Archive ▾</button>
+        <div class="hdr-dropdown-menu" id="hdrArchiveMenu">
+          <button class="hdr-dropdown-item" id="btnExport">📤 Export JSON</button>
+          <button class="hdr-dropdown-item hdr-dropdown-item-crimson" id="btnImport">📥 Import JSON</button>
+        </div>
+      </div>
       <button class="hdr-btn hdr-btn-guide" id="btnFeatures" title="View features guide">📖 Guide</button>
       <button class="hdr-btn hdr-btn-ai gm-only" id="btnApiKey" title="Configure Anthropic API key for AI flavor text">🔑 AI Key</button>
       <button class="hdr-btn hdr-btn-version" id="btnPatchNotes" title="View patch notes and version history">Version</button>
@@ -73,7 +85,7 @@
   </header>
 
   <!-- PLAYER READ-ONLY BANNER -->
-  <div class="player-readonly-banner">Read-only view — use your Dashboard to change your Player Knight</div>
+  <div class="player-readonly-banner">👁 Player view — tap Dashboard to change your Knight</div>
 
   <!-- TAB PANELS -->
   <main class="app-main">

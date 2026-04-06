@@ -28,6 +28,7 @@ CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
 USERS_FILE   = BASE_DIR / 'users.json'
 BACKUP_DIR   = BASE_DIR / 'backups'
+SUBMISSIONS_FILE = BASE_DIR / 'submissions.json'
 CERT_FILE    = BASE_DIR / 'cert.pem'
 KEY_FILE     = BASE_DIR / 'key.pem'
 PORT         = 8765
@@ -186,6 +187,17 @@ def load_config() -> dict:
 
 def save_config(cfg: dict) -> None:
     CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
+
+def load_submissions():
+    try:
+        if SUBMISSIONS_FILE.exists():
+            return json.loads(SUBMISSIONS_FILE.read_text(encoding='utf-8'))
+    except Exception:
+        pass
+    return []
+
+def save_submissions_data(subs):
+    SUBMISSIONS_FILE.write_text(json.dumps(subs, indent=2), encoding='utf-8')
 
 def get_save_path() -> Path | None:
     p = load_config().get('saveFile')
@@ -673,16 +685,16 @@ def api_ai():
 @app.route('/api/drives')
 @gm_required
 def api_drives():
-    """GM only — exposes filesystem."""
-    drives = []
-    for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
-        p = Path(f'{letter}:/')
-        try:
-            if p.exists():
-                drives.append({'label': f'{letter}:\\', 'path': str(p)})
-        except Exception:
-            pass
-    return jsonify({'base_dir': str(BASE_DIR), 'drives': drives})
+    """GM only — exposes filesystem (Linux: home + common mount points)."""
+    locations = []
+    home = Path.home()
+    if home.exists():
+        locations.append({'label': '~ (home)', 'path': str(home)})
+    for mnt in ['/mnt', '/media', '/']:
+        p = Path(mnt)
+        if p.exists():
+            locations.append({'label': mnt, 'path': mnt})
+    return jsonify({'base_dir': str(BASE_DIR), 'drives': locations})
 
 
 @app.route('/api/succession', methods=['POST'])
@@ -835,6 +847,91 @@ def api_broadcast():
     return jsonify({'ok': True, 'broadcast': entry})
 
 
+@app.route('/api/submissions', methods=['GET'])
+@gm_required
+def api_get_submissions():
+    with _submissions_lock:
+        subs = load_submissions()
+    return jsonify(subs)
+
+
+@app.route('/api/submissions', methods=['POST'])
+@login_required
+def api_post_submission():
+    if session.get('is_gm'):
+        return jsonify({'error': 'GMs add directly to the Chronicle'}), 400
+    data = request.get_json(force=True) or {}
+    text = data.get('text', '').strip()
+    year = data.get('year')
+    if not text or year is None:
+        return jsonify({'error': 'text and year required'}), 400
+    try:
+        year = int(year)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'year must be an integer'}), 400
+    sub = {
+        'id':             'sub-' + str(int(time.time() * 1000)),
+        'playerUsername': session['username'],
+        'subjectId':      str(data.get('subjectId', '')),
+        'subjectName':    str(data.get('subjectName', ''))[:120],
+        'year':           year,
+        'cat':            data.get('cat', 'personal'),
+        'text':           text[:4000],
+        'ts':             int(time.time() * 1000),
+    }
+    with _submissions_lock:
+        subs = load_submissions()
+        subs.append(sub)
+        save_submissions_data(subs)
+    print(f'  [Submit] {session["username"]} submitted chronicle entry for {year} AD')
+    return jsonify({'ok': True, 'id': sub['id']})
+
+
+@app.route('/api/submissions/<sub_id>/approve', methods=['POST'])
+@gm_required
+def api_approve_submission(sub_id):
+    data = request.get_json(force=True) or {}
+    with _submissions_lock:
+        subs = load_submissions()
+        sub = next((s for s in subs if s['id'] == sub_id), None)
+        if not sub:
+            return jsonify({'error': 'not found'}), 404
+        final_text = data.get('text', sub['text']).strip()
+        cat        = data.get('cat', sub.get('cat', 'personal'))
+        year_key   = str(sub['year'])
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'save file not found'}), 500
+    with _save_lock:
+        binder = json.loads(save_path.read_text(encoding='utf-8'))
+        if 'chronicle' not in binder:
+            binder['chronicle'] = {}
+        if year_key not in binder['chronicle']:
+            binder['chronicle'][year_key] = []
+        binder['chronicle'][year_key].append({
+            'id':   'ev-' + str(int(time.time() * 1000)),
+            'text': final_text,
+            'cat':  cat,
+            'ts':   int(time.time() * 1000),
+        })
+        _rotate_backup(save_path)
+        save_path.write_text(json.dumps(binder, indent=2), encoding='utf-8')
+    with _submissions_lock:
+        subs = [s for s in load_submissions() if s['id'] != sub_id]
+        save_submissions_data(subs)
+    print(f'  [Chronicle] GM approved submission {sub_id} for {year_key} AD')
+    return jsonify({'ok': True})
+
+
+@app.route('/api/submissions/<sub_id>/dismiss', methods=['POST'])
+@gm_required
+def api_dismiss_submission(sub_id):
+    with _submissions_lock:
+        subs = [s for s in load_submissions() if s['id'] != sub_id]
+        save_submissions_data(subs)
+    return jsonify({'ok': True})
+
+
 @app.route('/api/broadcasts')
 @login_required
 def api_broadcasts():
@@ -902,6 +999,7 @@ _restart_pending = threading.Event()
 
 _mp_lock     = threading.Lock()
 _broadcasts  = []     # list of {id, message, timestamp, sender}
+_submissions_lock = threading.Lock()
 _presence    = {}     # username → {displayName, role, last_seen}
 
 
@@ -1006,7 +1104,8 @@ if __name__ == '__main__':
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_context.load_cert_chain(str(CERT_FILE), str(KEY_FILE))
 
-    # Start console command listener in background thread
-    threading.Thread(target=_console_listener, daemon=True).start()
+    # Start console command listener in background thread (interactive terminals only)
+    if sys.stdin.isatty():
+        threading.Thread(target=_console_listener, daemon=True).start()
 
     app.run(host='0.0.0.0', port=PORT, ssl_context=ssl_context, debug=False)

@@ -12,12 +12,11 @@ v2.0 is a full Flask application with user accounts, role-based access, HTTP(S),
 dedicated player-facing experience. The GM's workflow is unchanged. Players now have
 their own live view of their household, manor, and chronicle.
 
-> **Hosting note (2026-04-05):** The app is currently hosted on Windows, bound to
-> `0.0.0.0:8765`, running over HTTP on the LAN (see `FORCE_HTTP=1` in `secrets.env`).
-> The planned target environment is Ubuntu Server inside a Proxmox VM, fronted by
-> Cloudflare Tunnel for real public HTTPS — see `Proxmox-Ubuntu_Plan.md`. When that
-> migration happens, the self-signed certificate flow and the Windows-only console
-> restart pattern below both go away and are replaced by systemd + Cloudflare.
+> **Hosting note (updated 2026-04-06):** The app migrated to Ubuntu Server 24.04 on
+> Proxmox (v2.2.0). It now runs as a systemd service at `192.168.1.43:8765`. The
+> self-signed certificate flow and Windows console restart pattern are replaced by
+> `sudo systemctl restart pendragon.service`. Cloudflare Tunnel for public HTTPS is
+> the next infrastructure step — see `Proxmox-Ubuntu_Plan.md`.
 
 ---
 

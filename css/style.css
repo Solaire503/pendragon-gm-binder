@@ -8,6 +8,7 @@
   /* Palette */
   --ink:            #1a1208;
   --ink-soft:       #2e2010;
+  --ink-mid:        #6b5a3a;
   --vellum:         #f2e8d0;
   --vellum-mid:     #ede0c4;
   --vellum-dark:    #e4d4ae;
@@ -68,7 +69,8 @@
    even when author CSS sets display:flex/grid on the same element. */
 [hidden] { display: none !important; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 16px; }
+html { font-size: 16px; overflow-x: hidden; }
+html, body { max-width: 100%; }
 body {
   font-family: var(--font-body);
   background: var(--ink);
@@ -100,7 +102,7 @@ body {
   border-bottom: 2px solid var(--gold);
   box-shadow: 0 2px 20px var(--shadow);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   z-index: 100;
 }
 .app-header::before {
@@ -169,12 +171,103 @@ body {
   background: rgba(184,134,11,0.1);
 }
 
+/* FATE DROPDOWN */
+.nav-dropdown {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.nav-dropdown-trigger .nav-caret {
+  font-size: 0.55rem;
+  margin-left: 3px;
+  opacity: 0.6;
+  transition: transform 0.15s;
+}
+.nav-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: linear-gradient(180deg, #1c0f05 0%, #110a03 100%);
+  border: 1px solid rgba(184,134,11,0.45);
+  border-top: none;
+  min-width: 148px;
+  z-index: 500;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+}
+.nav-dropdown-menu.open { display: block; }
+.nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(184,134,11,0.12);
+  color: rgba(232,201,106,0.75);
+  font-family: var(--font-heading);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+.nav-dropdown-item:last-child { border-bottom: none; }
+.nav-dropdown-item:hover {
+  color: var(--gold-pale);
+  background: rgba(184,134,11,0.1);
+}
+.nav-dropdown-item .nav-icon { font-size: 0.85rem; }
+html.is-gm .nav-dropdown-item.gm-only { display: flex !important; }
+html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
+
+/* HEADER DROPDOWN (Archive etc.) */
+.hdr-dropdown {
+  position: relative;
+}
+.hdr-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: linear-gradient(180deg, #1c0f05 0%, #110a03 100%);
+  border: 1px solid rgba(184,134,11,0.45);
+  min-width: 160px;
+  z-index: 500;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+}
+.hdr-dropdown-menu.open { display: block; }
+.hdr-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(184,134,11,0.12);
+  color: rgba(232,201,106,0.75);
+  font-family: var(--font-heading);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+.hdr-dropdown-item:last-child { border-bottom: none; }
+.hdr-dropdown-item:hover { color: var(--gold-pale); background: rgba(184,134,11,0.1); }
+.hdr-dropdown-item-crimson { color: rgba(220,120,120,0.8) !important; }
+.hdr-dropdown-item-crimson:hover { background: rgba(122,28,28,0.2) !important; }
+
 /* HEADER RIGHT */
 .header-right {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 12px;
+  gap: 5px;
+  padding: 0 8px;
   flex-shrink: 0;
   border-left: 1px solid rgba(184,134,11,0.25);
 }
@@ -250,7 +343,7 @@ body {
 }
 
 .hdr-btn {
-  padding: 5px 12px;
+  padding: 5px 9px;
   border-radius: var(--radius);
   font-family: var(--font-heading);
   font-size: 0.58rem;
@@ -320,15 +413,15 @@ html.is-player .solo-chr-edit-btn { display: none !important; }
 }
 html.is-player .player-readonly-banner {
   display: block;
-  background: rgba(43,70,90,0.25);
-  border-bottom: 1px solid rgba(60,110,160,0.3);
-  color: rgba(140,180,220,0.8);
+  background: rgba(43,70,90,0.45);
+  border-bottom: 1px solid rgba(60,110,160,0.5);
+  color: rgba(160,205,245,0.95);
   font-family: var(--font-heading);
-  font-size: 0.58rem;
-  letter-spacing: 0.12em;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   text-align: center;
-  padding: 5px;
+  padding: 7px 12px;
 }
 
 .hdr-btn-outline {
@@ -373,7 +466,7 @@ html.is-player .player-readonly-banner {
   overflow: hidden;
 }
 .tab-panel.active { display: flex; flex-direction: column; }
-#tab-chronicle { overflow-y: auto; }
+#tab-chronicle { overflow-y: auto; background: var(--vellum); }
 
 /* ── PARCHMENT SURFACE ───────────────────────────────────────── */
 .parchment {
@@ -1441,15 +1534,20 @@ html.is-player .player-readonly-banner {
 .modal-box.modal-tree { max-width: min(1100px, 96vw); padding: 16px; overflow: hidden; }
 .modal-close {
   position: absolute;
-  top: 12px; right: 14px;
+  top: 8px; right: 8px;
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: 1.1rem;
   color: var(--ink-soft);
   opacity: 0.5;
   cursor: pointer;
   transition: opacity 0.1s;
   line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .modal-close:hover { opacity: 1; }
 .modal-title {
@@ -1706,14 +1804,14 @@ html.is-player .player-readonly-banner {
   gap: 12px;
   padding: 60px 20px;
   color: var(--ink-soft);
-  opacity: 0.5;
+  opacity: 0.7;
   text-align: center;
 }
 .empty-state-icon { font-size: 2.5rem; }
 .empty-state-text {
   font-family: var(--font-heading);
-  font-size: 0.65rem;
-  letter-spacing: 0.2em;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
@@ -1745,12 +1843,71 @@ html.is-player .player-readonly-banner {
   .family-sections { grid-template-columns: 1fr; }
   .families-layout { grid-template-columns: 180px 1fr; }
 }
+/* Submission form 2-col grid — collapses on mobile */
+.sub-form-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
 @media (max-width: 640px) {
-  .app-header { flex-wrap: wrap; height: auto; padding: 8px; }
-  .app-nav { overflow-x: auto; }
-  .two-pane, .families-layout { grid-template-columns: 1fr; }
-  .pane-sidebar { max-height: 220px; }
-  .nav-label { display: none; }
+  /* ── Header ── */
+  .app-header   { flex-wrap: wrap; height: auto; padding: 6px 8px; gap: 0; }
+  .header-brand { order: 1; flex-shrink: 0; }
+  .header-right { order: 1; margin-left: auto; gap: 4px; padding: 0 4px; border-left: none; }
+  /* Nav: full-width second row, dark bg, overflow VISIBLE so Fate dropdown can escape */
+  .app-nav      { order: 2; flex: 0 0 100%; overflow: visible;
+                  background: linear-gradient(180deg, #1c0f05 0%, #110a03 100%);
+                  border-top: 1px solid rgba(184,134,11,0.18);
+                  padding: 2px 0; }
+  .brand-title  { font-size: 1rem; }
+  .brand-sub    { font-size: 0.48rem; }
+  .year-label   { display: none; }
+  .year-value   { font-size: 0.9rem; min-width: 28px; }
+  /* Nav tabs: stack icon over label so labels stay visible at 360px */
+  .nav-label    { display: block; font-size: 0.38rem; letter-spacing: 0.08em; margin-top: 1px; }
+  .nav-tab      { flex-direction: column; gap: 2px; padding: 6px 8px; align-items: center; border-bottom-width: 2px; }
+  .nav-tab .nav-icon { font-size: 0.9rem; line-height: 1; }
+  .nav-dropdown-trigger { flex-direction: column; gap: 2px; padding: 6px 8px; }
+  .nav-dropdown-trigger .nav-caret { display: none; }
+  .hdr-btn      { padding: 4px 7px; font-size: 0.52rem; }
+  html.is-player .hdr-btn-guide { display: none; }
+  html.is-player #btnPatchNotes { display: none; }
+
+  /* ── Roster / two-pane: sidebar fills height, detail pane hidden ──
+     Tapping an NPC opens a modal, so the side-by-side detail view
+     isn't needed on mobile. The NPC list is the whole view.        */
+  .two-pane, .families-layout { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  .pane-sidebar { max-height: none; flex: 1; border-right: none; overflow-y: auto; }
+  .pane-content { display: none; }
+
+  /* ── Dashboard ── */
+  .dashboard-layout { grid-template-columns: 1fr; padding: 12px; gap: 12px; }
+
+  /* ── Modals ── */
+  .modal-overlay { padding: 6px; }
+  .modal-box     { padding: 16px; max-width: 100%; width: 100%; max-height: 96vh; }
+
+  /* ── Submission form ── */
+  .sub-form-2col { grid-template-columns: 1fr; }
+
+  /* ── Nav dropdown: pin to left edge on mobile so it doesn't overflow ── */
+  .nav-dropdown-menu { left: 0; right: auto; min-width: 140px; }
+
+  /* ── Filter chips: bigger tap targets on mobile ── */
+  .filter-chip { padding: 6px 10px; }
+
+  /* ── Roster age flags: legible at 360px ── */
+  .roster-age-flag { font-size: 0.58rem; }
+
+  /* ── NPC list items: slightly more breathing room ── */
+  .npc-list-item { padding: 9px 10px; }
+}
+
+@media (max-width: 420px) {
+  .brand-sub                    { display: none; }
+  .hdr-btn-guide, #btnPatchNotes { display: none; }
+  .modal-box                    { padding: 12px; }
+  .sync-label                   { display: none; }
 }
 
 /* ── BLESSED & FATE-TOUCHED BADGES ──────────────────────────── */

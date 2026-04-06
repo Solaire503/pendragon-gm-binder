@@ -193,6 +193,8 @@ const TabChronicle = {
     el.innerHTML = `
       <div style="max-width:800px;margin:0 auto;padding:24px 16px;">
 
+        <div id="chron-submissions-panel"></div>
+
         <!-- ── Year navigation ── -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:32px;flex-wrap:wrap;">
           <button class="btn btn-ghost" style="padding:5px 16px;font-size:1.1rem;line-height:1;"
@@ -224,6 +226,9 @@ const TabChronicle = {
 
       </div>
     `;
+
+    // For GM: async-load pending submissions and inject into panel
+    if (isGM()) this._renderSubmissionsPanel();
   },
 
   // ── SECTION RENDERERS ────────────────────────────────────────
@@ -334,8 +339,203 @@ const TabChronicle = {
             onkeydown="if(event.key==='Enter')TabChronicle.addEvent()">
           <button class="btn btn-primary" style="font-size:0.75rem;padding:6px 14px;"
             onclick="TabChronicle.addEvent()">+ Add</button>
-        </div>` : ''}
+        </div>` : `
+        <div style="margin-top:14px;text-align:right;">
+          <button class="btn btn-ghost" style="font-size:0.75rem;padding:6px 16px;"
+            onclick="TabChronicle.submitEntry()">📜 Submit Entry</button>
+        </div>`}
       </div>`;
+  },
+
+  // ── SUBMISSIONS — GM review panel ────────────────────────────
+  _renderSubmissionsPanel() {
+    fetch('/api/submissions')
+      .then(r => r.json())
+      .then(subs => {
+        const panel = document.getElementById('chron-submissions-panel');
+        if (!panel) return;
+        if (!subs.length) { panel.innerHTML = ''; return; }
+        panel.innerHTML = this._buildSubmissionsHtml(subs);
+      })
+      .catch(() => {});
+  },
+
+  _buildSubmissionsHtml(subs) {
+    const rows = subs.map(s => {
+      const cat   = CHRONICLE_CATS[s.cat] || CHRONICLE_CATS.other;
+      const safeId = s.id.replace(/'/g, "\\'");
+      const escapedText = s.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+      const escapedCat  = (s.cat || 'personal').replace(/'/g, "\\'");
+      return `
+        <div style="padding:12px 16px;background:var(--vellum);border:1px solid rgba(184,134,11,0.3);border-left:3px solid ${cat.colour};border-radius:var(--radius);margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+            <span style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.07em;color:#fff;background:${cat.colour};padding:2px 8px;border-radius:10px;">${cat.label}</span>
+            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-soft);letter-spacing:0.06em;">${s.playerUsername}</span>
+            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-mid);">·</span>
+            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-soft);">${s.subjectName || '(no subject)'}</span>
+            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-mid);">·</span>
+            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--gold-pale);">${s.year} AD</span>
+          </div>
+          <div style="font-size:0.9rem;line-height:1.6;color:var(--ink);margin-bottom:12px;">${AtMention.render(s.text)}</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" style="font-size:0.7rem;padding:4px 14px;"
+              onclick="TabChronicle.approveSubmission('${safeId}')">✓ Approve</button>
+            <button class="btn btn-ghost" style="font-size:0.7rem;padding:4px 14px;"
+              onclick="TabChronicle.editApproveSubmission('${safeId}', \`${escapedText}\`, '${escapedCat}')">✎ Edit & Approve</button>
+            <button class="btn btn-ghost" style="font-size:0.7rem;padding:4px 14px;opacity:0.6;"
+              onclick="TabChronicle.dismissSubmission('${safeId}')">✕ Dismiss</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="margin-bottom:28px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <div style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.14em;text-transform:uppercase;color:#b87820;">📜 Pending Player Submissions</div>
+          <div style="flex:1;height:1px;background:rgba(184,120,32,0.4);"></div>
+          <div style="font-family:var(--font-heading);font-size:0.6rem;color:#b87820;">${subs.length}</div>
+        </div>
+        ${rows}
+      </div>`;
+  },
+
+  approveSubmission(id) {
+    fetch(`/api/submissions/${encodeURIComponent(id)}/approve`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok) {
+          Toast.success('Approved and added to Chronicle');
+          STORE.loadFromFile().then(() => TabChronicle.render());
+        } else {
+          Toast.error(res.error || 'Failed to approve');
+        }
+      }).catch(() => Toast.error('Network error'));
+  },
+
+  editApproveSubmission(id, currentText, currentCat) {
+    const catOptions = Object.entries(CHRONICLE_CATS)
+      .map(([k, v]) => `<option value="${k}" ${k === currentCat ? 'selected' : ''}>${v.label}</option>`)
+      .join('');
+    Modal.open(`
+      <h2 style="font-family:var(--font-heading);font-size:1.1rem;letter-spacing:0.1em;color:var(--gold);margin-bottom:16px;">Edit Submission</h2>
+      <div style="margin-bottom:10px;">
+        <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">CATEGORY</label>
+        <select class="edit-input" id="sub-edit-cat" style="width:auto;padding:5px 8px;font-size:0.78rem;">${catOptions}</select>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">NARRATIVE</label>
+        <textarea class="edit-input" id="sub-edit-text" rows="7"
+          style="width:100%;resize:vertical;">${currentText.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+        <button class="btn btn-primary" onclick="TabChronicle._confirmApprove('${id.replace(/'/g,"\\'")}')">✓ Approve</button>
+      </div>
+    `);
+  },
+
+  _confirmApprove(id) {
+    const text = document.getElementById('sub-edit-text')?.value?.trim();
+    const cat  = document.getElementById('sub-edit-cat')?.value || 'personal';
+    if (!text) return;
+    fetch(`/api/submissions/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, cat }),
+    }).then(r => r.json()).then(res => {
+      if (res.ok) {
+        Modal.close();
+        Toast.success('Approved and added to Chronicle');
+        STORE.loadFromFile().then(() => TabChronicle.render());
+      } else {
+        Toast.error(res.error || 'Failed to approve');
+      }
+    }).catch(() => Toast.error('Network error'));
+  },
+
+  dismissSubmission(id) {
+    fetch(`/api/submissions/${encodeURIComponent(id)}/dismiss`, { method: 'POST' })
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok) {
+          Toast.success('Submission dismissed');
+          this._renderSubmissionsPanel();
+        }
+      }).catch(() => {});
+  },
+
+  // ── SUBMISSIONS — Player submit modal ────────────────────────
+  submitEntry() {
+    const user      = window.__USER__ || {};
+    const household = user.household  || '';
+    const members   = (STORE.householdMembers ? STORE.householdMembers(household) : [])
+                      .filter(m => m.status !== 'Dead');
+    const pk        = members.find(m => m.role === 'Player Knight');
+
+    const catOptions = Object.entries(CHRONICLE_CATS)
+      .map(([k, v]) => `<option value="${k}" ${k === 'personal' ? 'selected' : ''}>${v.label}</option>`)
+      .join('');
+
+    const subjectOptions = members.length
+      ? members.map(m => {
+          const sel = pk && m.id === pk.id ? 'selected' : '';
+          return `<option value="${m.id}" data-name="${m.name.replace(/"/g,'&quot;')}" ${sel}>${m.name} — ${m.role || 'NPC'}</option>`;
+        }).join('')
+      : `<option value="">No household members found</option>`;
+
+    Modal.open(`
+      <h2 style="font-family:var(--font-heading);font-size:1.1rem;letter-spacing:0.1em;color:var(--gold);margin-bottom:18px;">Submit Chronicle Entry</h2>
+      <div class="sub-form-2col" style="gap:12px;margin-bottom:12px;">
+        <div>
+          <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">SUBJECT</label>
+          <select class="edit-input" id="sub-subject" style="width:100%;">${subjectOptions}</select>
+        </div>
+        <div>
+          <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">YEAR</label>
+          <input class="edit-input" type="number" id="sub-year" value="${STORE.year}" style="width:100%;">
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">CATEGORY</label>
+        <select class="edit-input" id="sub-cat" style="width:auto;">${catOptions}</select>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">NARRATIVE — type @ to mention characters</label>
+        <textarea class="edit-input" id="sub-text" rows="7"
+          style="width:100%;resize:vertical;"
+          placeholder="Write your chronicle entry from your knight's perspective…"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+        <button class="btn btn-primary" onclick="TabChronicle._submitConfirm()">📜 Submit for Review</button>
+      </div>
+    `);
+  },
+
+  _submitConfirm() {
+    const subjectEl  = document.getElementById('sub-subject');
+    const subjectId  = subjectEl?.value || '';
+    const subjectName = subjectEl?.selectedOptions?.[0]?.dataset?.name || subjectEl?.selectedOptions?.[0]?.text?.split(' — ')[0] || '';
+    const year       = parseInt(document.getElementById('sub-year')?.value);
+    const cat        = document.getElementById('sub-cat')?.value || 'personal';
+    const text       = document.getElementById('sub-text')?.value?.trim();
+
+    if (!text)             { Toast.error('Please write your entry before submitting.'); return; }
+    if (!year || isNaN(year)) { Toast.error('Please enter a valid year.'); return; }
+
+    fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subjectId, subjectName, year, cat, text }),
+    }).then(r => r.json()).then(res => {
+      if (res.ok) {
+        Modal.close();
+        Toast.success('Entry submitted — awaiting GM approval.');
+      } else {
+        Toast.error(res.error || 'Submission failed.');
+      }
+    }).catch(() => Toast.error('Network error.'));
   },
 
 };
