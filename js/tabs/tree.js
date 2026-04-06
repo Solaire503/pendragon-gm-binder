@@ -21,6 +21,7 @@ const TabTree = {
   _svg: null,
   _connectSource: null,  // npcId waiting for a target click
   _wrap: null,
+  _locked: false,
 
   NODE_W: 148,
   NODE_H: 58,
@@ -75,7 +76,7 @@ const TabTree = {
             <div class="tree-pocket-hint">Drag onto the tree to place</div>
             <div class="tree-pocket-list" id="treePocketList"></div>
           </div>
-          <button class="btn btn-ghost" id="treeBtnUnpin" title="Release all manually placed nodes back to auto-layout" style="position:absolute;bottom:12px;right:12px;display:none;font-size:0.65rem;">🔒 0 Locked</button>
+          <button class="btn btn-ghost" id="treeLockBtn" title="Tree unlocked — click to lock and protect your manual positions" style="position:absolute;bottom:12px;right:12px;font-size:1rem;line-height:1;">🔓</button>
         </div>
       </div>
     `, { tree: true, onOpen: () => this._init(householdName) });
@@ -89,12 +90,12 @@ const TabTree = {
     this._loadPositions(householdName);
     this._updateFounderBadge();
     this._updateHeadBadge();
-    this._updatePinBtn();
+    this._updateLockBtn();
     this._draw(householdName);
     this._fitToView();
 
-    document.getElementById('treeBtnUnpin')?.addEventListener('click', () => {
-      this._releasePins();
+    document.getElementById('treeLockBtn')?.addEventListener('click', () => {
+      this._toggleLock();
     });
 
     // ── SCROLL ZOOM ──────────────────────────────────────
@@ -131,10 +132,8 @@ const TabTree = {
       if (this._dragging) {
         const id = this._dragging.id;
         STORE.setTreePos(id, this._nodes[id].x, this._nodes[id].y);
-        // Mark as user-placed so dynasty layout won't overwrite this position
         STORE.treePos[id].userPlaced = true;
         STORE.save();
-        this._updatePinBtn();
       }
       this._dragging = null;
       this._panning  = false;
@@ -313,34 +312,24 @@ const TabTree = {
     badge.style.display = 'none';
   },
 
-  _updatePinBtn() {
-    const btn = document.getElementById('treeBtnUnpin');
+  _updateLockBtn() {
+    const btn = document.getElementById('treeLockBtn');
     if (!btn) return;
-    const members = this._getCanvasMembers(this._household);
-    const count   = members.filter(n => STORE.treePos[n.id]?.userPlaced).length;
-    if (count > 0) {
-      btn.textContent  = `🔒 ${count} Locked`;
-      btn.style.display = '';
-    } else {
-      btn.style.display = 'none';
-    }
+    btn.textContent = this._locked ? '🔒' : '🔓';
+    btn.title = this._locked
+      ? 'Tree locked — layouts won\'t move your manually placed nodes. Click to unlock.'
+      : 'Tree unlocked — layouts may rearrange nodes. Click to lock your positions.';
   },
 
-  _releasePins() {
-    const members = this._getCanvasMembers(this._household);
-    members.forEach(n => {
-      if (STORE.treePos[n.id]) STORE.treePos[n.id].userPlaced = false;
-    });
-    STORE.save();
-    const hh = STORE.getHousehold(this._household);
-    if (hh?.dynasty_founder) {
-      this._dynastyLayout(this._household);
-    } else {
-      this._autoLayout(this._household);
-    }
-    this._draw(this._household);
-    this._fitToView();
-    this._updatePinBtn();
+  _toggleLock() {
+    this._locked = !this._locked;
+    this._updateLockBtn();
+    Toast.show(
+      this._locked
+        ? 'Tree locked — auto-layout will respect your manual positions.'
+        : 'Tree unlocked — layouts will rearrange freely.',
+      'info'
+    );
   },
 
   // ── POSITIONS ─────────────────────────────────────────
@@ -447,11 +436,14 @@ const TabTree = {
     const cols    = Math.max(1, Math.ceil(Math.sqrt(members.length)));
     const padX    = this.NODE_W + 56;
     const padY    = this.NODE_H + 56;
-    members.forEach((n, i) => {
+    let i = 0;
+    members.forEach(n => {
+      if (this._locked && STORE.treePos[n.id]?.userPlaced) return;
       this._nodes[n.id] = {
         x: 60 + (i % cols) * padX,
         y: 60 + Math.floor(i / cols) * padY,
       };
+      i++;
     });
   },
 
@@ -585,7 +577,7 @@ const TabTree = {
       roots.forEach(addNode);
       byGen[0].forEach(n => addNode(n.id));
       ordered.forEach((n, i) => {
-        if (!STORE.treePos[n.id]?.userPlaced) {
+        if (!this._locked || !STORE.treePos[n.id]?.userPlaced) {
           this._nodes[n.id] = { x: ORIGIN_X + i * PAD_X, y: ORIGIN_Y };
         }
       });
@@ -634,14 +626,14 @@ const TabTree = {
       row.forEach(n => addWithSpouses(n));
 
       rowOrdered.forEach((n, i) => {
-        if (!STORE.treePos[n.id]?.userPlaced) {
+        if (!this._locked || !STORE.treePos[n.id]?.userPlaced) {
           this._nodes[n.id] = { x: startX + i * PAD_X, y };
         }
       });
 
       // Nudge apart any overlapping nodes (simple left-to-right pass)
       for (let i = 1; i < rowOrdered.length; i++) {
-        if (STORE.treePos[rowOrdered[i].id]?.userPlaced) continue;
+        if (this._locked && STORE.treePos[rowOrdered[i].id]?.userPlaced) continue;
         const prev = this._nodes[rowOrdered[i - 1].id];
         const cur  = this._nodes[rowOrdered[i].id];
         if (cur.x < prev.x + PAD_X) cur.x = prev.x + PAD_X;
@@ -654,7 +646,7 @@ const TabTree = {
         ? Math.max(...connected.map(n => this._nodes[n.id]?.y ?? 0))
         : ORIGIN_Y - PAD_Y;
       floating.forEach((n, i) => {
-        if (!STORE.treePos[n.id]?.userPlaced) {
+        if (!this._locked || !STORE.treePos[n.id]?.userPlaced) {
           this._nodes[n.id] = {
             x: ORIGIN_X + (i % FLOAT_COLS) * PAD_X,
             y: maxY + PAD_Y + Math.floor(i / FLOAT_COLS) * PAD_Y,
