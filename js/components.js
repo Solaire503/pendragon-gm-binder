@@ -332,7 +332,10 @@ function buildNpcCardHtml(npc, opts = {}) {
     'Guardian':        ['Guardian of',              'Ward of'],
   };
 
+  // Squire/Page rels are shown in Training History once came_of_age — hide from main rels then
+  const TRAINING_TYPES = new Set(['Squire', 'Page']);
   const rels = STORE.getRelationships(npc.id)
+    .filter(r => !(npc.came_of_age && TRAINING_TYPES.has(r.type)))
     .slice()
     .sort((a, b) => (REL_PRIORITY[a.type] || 50) - (REL_PRIORITY[b.type] || 50));
 
@@ -499,8 +502,10 @@ function buildNpcCardHtml(npc, opts = {}) {
     : '';
 
   // ── Training history block ───────────────────────────────────
-  const trainingRels = STORE.getRelationships(npc.id)
-    .filter(r => r.type === 'Squire' || r.type === 'Page');
+  // Only show Squire/Page in Training History after came_of_age — before that they live in Relationships
+  const trainingRels = npc.came_of_age
+    ? STORE.getRelationships(npc.id).filter(r => r.type === 'Squire' || r.type === 'Page')
+    : [];
 
   const trainingRelHtml = trainingRels.map(r => {
     const isJunior = r.targetId === npc.id;
@@ -527,7 +532,7 @@ function buildNpcCardHtml(npc, opts = {}) {
         <span class="family-member-role" style="background:var(--cobalt-mid);color:#fff;">${(npc.role||'').toLowerCase().includes('page') ? 'Paging at' : 'Paged at'}</span>
         <span class="family-member-name">${npc.page_court}</span>
       </div>` : ''}
-      ${npc.training_where ? (() => {
+      ${npc.training_where && !npc.training_npc_id ? (() => {
         // Determine training type: training_path field is authoritative; if absent,
         // check whether a Squire relationship exists (target = this NPC); finally fall back to role.
         const tp = (npc.training_path || '').toLowerCase();
@@ -732,9 +737,8 @@ function buildNpcEditHtml(npc, isNew = false) {
         </button>
       </div>
       <div class="detail-field mb-8">
-        <div class="detail-label">Training History (free text)</div>
+        <div class="detail-label">Training History</div>
         <div style="display:flex;flex-direction:column;gap:6px;padding:8px;background:var(--vellum-mid);border:1px solid var(--vellum-deep);border-radius:var(--radius);">
-          <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.12em;color:var(--ink-soft);opacity:0.6;">Use the Family Tree to link to specific NPCs. These fields hold free text for courts/places with no NPC entry.</div>
           <div class="detail-field">
             <div class="detail-label">Paged at</div>
             <input class="edit-input" id="ef-page-court" placeholder="e.g. Court of Sarum…" value="${npc.page_court || ''}">
@@ -745,6 +749,9 @@ function buildNpcEditHtml(npc, isNew = false) {
           </div>
           <div class="detail-field">
             <div class="detail-label">Trained / Squired under</div>
+            <div style="font-family:var(--font-heading);font-size:0.5rem;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.7;margin-bottom:4px;">Search for an NPC in the binder — saves a Squire/Page relationship automatically.</div>
+            ${buildNpcSearchHtml('ef-training-npc-search', 'ef-training-npc-id', 'Search for knight or trainer…')}
+            <div style="font-family:var(--font-heading);font-size:0.5rem;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.7;margin:6px 0 4px;">Not in the binder? Type a name instead:</div>
             <input class="edit-input" id="ef-training-where" placeholder="e.g. Sir Elad of Woodford…" value="${npc.training_where || ''}">
           </div>
         </div>
@@ -1019,7 +1026,20 @@ const Components = {
   openEditNpc(id) {
     const npc = STORE.getNpc(id);
     if (!npc) return;
-    Modal.open(buildNpcEditHtml(npc), { wide: true });
+    const allNpcs = STORE.allNpcs().filter(n => n.id !== id).sort((a, b) => a.name.localeCompare(b.name));
+    Modal.open(buildNpcEditHtml(npc), { wide: true, onOpen: () => {
+      initNpcSearch('ef-training-npc-search', 'ef-training-npc-id', allNpcs);
+      // Pre-populate picker if NPC already linked
+      if (npc.training_npc_id) {
+        const linked = STORE.getNpc(npc.training_npc_id);
+        if (linked) {
+          const searchEl = document.getElementById('ef-training-npc-search');
+          const hiddenEl = document.getElementById('ef-training-npc-id');
+          if (searchEl) searchEl.value = linked.name;
+          if (hiddenEl) hiddenEl.value = linked.id;
+        }
+      }
+    }});
   },
 
   // ── Import NPC from Claude.ai JSON ───────────────────────────
@@ -1224,9 +1244,31 @@ const Components = {
       round_table:      g('ef-round-table')?.checked ?? false,
       page_court:         g('ef-page-court')?.value?.trim() || '',
       training_path:      g('ef-training-path')?.value?.trim() || '',
-      training_where:     g('ef-training-where')?.value?.trim() || '',
       statblock_template: g('ef-statblock-template')?.value?.trim() || '',
     };
+
+    const trainingNpcId = g('ef-training-npc-id')?.value?.trim() || '';
+    if (trainingNpcId) {
+      // Linked to a real NPC — store ID, clear free text, auto-create relationship
+      changes.training_npc_id = trainingNpcId;
+      changes.training_where  = '';
+      const path = changes.training_path.toLowerCase();
+      const relType = path.includes('page') ? 'Page' : 'Squire';
+      const alreadyLinked = STORE.relationships.some(r =>
+        r.type === relType &&
+        ((r.sourceId === trainingNpcId && r.targetId === id) ||
+         (r.sourceId === id && r.targetId === trainingNpcId))
+      );
+      if (!alreadyLinked) {
+        // sourceId = trainer/knight, targetId = squire/page
+        STORE.addRelationship(trainingNpcId, id, relType, '');
+      }
+    } else {
+      // Free text — clear any previously linked NPC
+      changes.training_npc_id = '';
+      changes.training_where  = g('ef-training-where')?.value?.trim() || '';
+    }
+
     STORE.updateNpc(id, changes);
     Toast.success('Saved');
     APP.refreshCurrentTab();
@@ -1500,12 +1542,29 @@ const Components = {
       out_of_story:     g('ef-out-of-story')?.checked ?? false,
       out_of_story_note: g('ef-oos-note')?.value?.trim() || '',
       round_table:      g('ef-round-table')?.checked ?? false,
-      page_court:       g('ef-page-court')?.value?.trim() || '',
-      training_where:     g('ef-training-where')?.value?.trim() || '',
+      page_court:         g('ef-page-court')?.value?.trim() || '',
       training_path:      g('ef-training-path')?.value?.trim() || '',
       statblock_template: g('ef-statblock-template')?.value?.trim() || '',
     };
+    const trainingNpcId = g('ef-training-npc-id')?.value?.trim() || '';
+    if (trainingNpcId) {
+      npc.training_npc_id = trainingNpcId;
+      npc.training_where  = '';
+    } else {
+      npc.training_npc_id = '';
+      npc.training_where  = g('ef-training-where')?.value?.trim() || '';
+    }
     const id = STORE.addNpc(npc);
+    if (trainingNpcId) {
+      const path = npc.training_path.toLowerCase();
+      const relType = path.includes('page') ? 'Page' : 'Squire';
+      const alreadyLinked = STORE.relationships.some(r =>
+        r.type === relType &&
+        ((r.sourceId === trainingNpcId && r.targetId === id) ||
+         (r.sourceId === id && r.targetId === trainingNpcId))
+      );
+      if (!alreadyLinked) STORE.addRelationship(trainingNpcId, id, relType, '');
+    }
     Toast.success(`${name} added to the roster`);
     APP.refreshCurrentTab();
     this.openNpcCard(id);
@@ -1525,7 +1584,10 @@ const Components = {
       came_of_age: false, retired: false,
       treeX: null, treeY: null,
     };
-    Modal.open(buildNpcEditHtml(template, true), { wide: true });
+    const allNpcs = STORE.allNpcs().sort((a, b) => a.name.localeCompare(b.name));
+    Modal.open(buildNpcEditHtml(template, true), { wide: true, onOpen: () => {
+      initNpcSearch('ef-training-npc-search', 'ef-training-npc-id', allNpcs);
+    }});
   },
 
   // ── STAT BLOCK TEMPLATE PICKER ────────────────────────────

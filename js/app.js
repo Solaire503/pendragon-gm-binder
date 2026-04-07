@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.5.0';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -247,6 +247,39 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.5.0',
+    date:    '2026-04-07',
+    sections: [
+      {
+        heading: 'Families Tab — Now Open to Players',
+        items: [
+          'The Families tab is now visible to all players. Browse any household\'s roster, manor holdings, and family tree.',
+          'Players can add, edit, and delete relationships on their own household\'s family tree. The ⊕ connect button and right-click context menu are available when viewing your own household\'s tree.',
+          'GM-only tree features (Bulk Add, Edit NPC from right-click) remain restricted to the GM.',
+          'All other households\' trees are view-only for players.',
+        ],
+      },
+      {
+        heading: 'Family Tree — Fixes & Reliability',
+        items: [
+          'Player relationship changes now save correctly. A new /api/relationships endpoint handles player saves — previously all player saves hit a 403 and were silently lost.',
+          'Tree node positions (dragging from the Unplaced pocket) now persist for players.',
+          'Tree lock state (🔒/🔓) now saves per-household and is restored when the tree is reopened.',
+          'Duplicate relationships are now blocked: adding the same relationship type between two NPCs twice is prevented. Inverse pairs (Child/Parent, Spouse/Spouse) are also treated as duplicates.',
+          'Existing duplicate relationships in the data are automatically cleaned up on load.',
+        ],
+      },
+      {
+        heading: 'Training History — Linked NPC Support',
+        items: [
+          'The "Trained / Squired under" field on NPC cards now supports searching for an NPC in the binder. Selecting one auto-creates a Squire or Page relationship — no need to add it separately.',
+          'Free text fallback remains available for trainers/knights not entered in the binder.',
+          'Training relationships (Squire/Page) now appear in the main Relationships section while the NPC is active. Once "Came of Age" is ticked, they move to Training History as a permanent record.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.4.0',
     date:    '2026-04-07',

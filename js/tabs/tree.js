@@ -25,6 +25,14 @@ const TabTree = {
 
   currentHousehold() { return this._household; },
 
+  // True if the current user may edit this tree (GM always can; players only for their own household).
+  _canEdit() {
+    if (isGM()) return true;
+    const playerHH = APP.currentUser?.household;
+    return !!(playerHH && this._household &&
+              playerHH.toLowerCase() === this._household.toLowerCase());
+  },
+
   NODE_W: 148,
   NODE_H: 58,
   NODE_R: 6,
@@ -58,7 +66,7 @@ const TabTree = {
           <span id="treeFounderBadge" style="margin-left:4px;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.12em;color:var(--gold);display:none;"></span>
           <span id="treeHeadBadge" style="margin-left:4px;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.12em;color:var(--crimson);display:none;"></span>
           <span style="margin-left:auto;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.15em;color:var(--ink-soft);opacity:0.7;" id="treeStatus">
-            ${isGM() ? 'Hover a node and click ⊕ to connect · Drag nodes · Scroll to zoom' : 'Click a name to view · Drag nodes · Scroll to zoom'}
+            ${this._canEdit() ? 'Hover a node and click ⊕ to connect · Drag nodes · Scroll to zoom' : 'Click a name to view · Drag nodes · Scroll to zoom'}
           </span>
         </div>
         <div class="tree-canvas-wrap" id="treeCanvasWrap" style="position:relative;">
@@ -90,6 +98,7 @@ const TabTree = {
     if (!this._svg || !this._wrap) return;
 
     this._loadPositions(householdName);
+    this._locked = STORE.treeLock[householdName] === true;
     this._updateFounderBadge();
     this._updateHeadBadge();
     this._updateLockBtn();
@@ -325,6 +334,8 @@ const TabTree = {
 
   _toggleLock() {
     this._locked = !this._locked;
+    STORE.treeLock[this._household] = this._locked;
+    STORE.save();
     this._updateLockBtn();
     Toast.show(
       this._locked
@@ -911,8 +922,8 @@ const TabTree = {
         g.appendChild(ft);
       }
 
-      // ── HOVER CONNECT BUTTON (⊕) — GM only ──────────
-      if (isGM()) {
+      // ── HOVER CONNECT BUTTON (⊕) — GM or own-household player ──────────
+      if (this._canEdit()) {
         const connBtn = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         connBtn.setAttribute('class', 'tree-connect-btn');
         connBtn.style.cursor  = 'crosshair';
@@ -997,8 +1008,8 @@ const TabTree = {
         _clickPos = null;
       });
 
-      // Right-click context menu — GM only
-      if (isGM()) {
+      // Right-click context menu — GM or own-household player
+      if (this._canEdit()) {
         g.addEventListener('contextmenu', e => {
           e.preventDefault();
           this._nodeContextMenu(n.id, e.clientX, e.clientY);
@@ -1570,16 +1581,43 @@ const TabTree = {
     const type    = document.getElementById('tree-rel-type')?.value;
     const notes   = document.getElementById('tree-rel-notes')?.value?.trim();
     const parent2 = document.getElementById('tree-rel-parent2')?.value || '';
+
+    const INVERSE = {
+      'Child': 'Parent', 'Parent': 'Child',
+      'Adopted Child': 'Adoptive Parent', 'Adoptive Parent': 'Adopted Child',
+      'Bastard': 'Parent', 'Sibling': 'Sibling', 'Half-Sibling': 'Half-Sibling',
+      'Spouse': 'Spouse', 'Betrothed': 'Betrothed', 'Former Spouse': 'Former Spouse',
+    };
+
+    const relExists = (s, t, tp) => STORE.relationships.some(r => r.type === tp &&
+      ((r.sourceId === s && r.targetId === t) || (r.sourceId === t && r.targetId === s)));
+
+    const inverseExists = (s, t, tp) => {
+      const inv = INVERSE[tp];
+      return inv ? STORE.relationships.some(r => r.type === inv &&
+        ((r.sourceId === s && r.targetId === t) || (r.sourceId === t && r.targetId === s))) : false;
+    };
+
+    if (relExists(sourceId, targetId, type) || inverseExists(sourceId, targetId, type)) {
+      Toast.error('A relationship of this type already exists between these two.');
+      Modal.close();
+      this.open(this._household);
+      return;
+    }
+
     STORE.addRelationship(sourceId, targetId, type, notes);
     // If a second parent was chosen for a child-type relationship, add that link too
     if (parent2 && ['Child', 'Adopted Child', 'Bastard'].includes(type)) {
-      STORE.addRelationship(sourceId, parent2, type, notes);
+      if (!relExists(sourceId, parent2, type)) {
+        STORE.addRelationship(sourceId, parent2, type, notes);
+      }
     }
     Toast.success('Relationship added');
     this.open(this._household);
   },
 
   _editEdge(relId) {
+    if (!this._canEdit()) return;
     const rel = STORE.relationships.find(r => r.id === relId);
     if (!rel) return;
     const src      = STORE.getNpc(rel.sourceId);
@@ -1636,7 +1674,7 @@ const TabTree = {
 
     const items = [
       { label: '👤 Open NPC Card',    action: () => Components.openNpcCardInTree(npcId) },
-      { label: '✏️  Edit NPC',         action: () => Components.openEditNpc(npcId) },
+      ...(isGM() ? [{ label: '✏️  Edit NPC', action: () => Components.openEditNpc(npcId) }] : []),
       { label: isFounder ? '♛ Remove Founder Mark' : '♛ Set as Dynasty Founder',
         action: () => this._setFounder(npcId) },
       { label: isHead ? '⚜ Remove Head of House' : '⚜ Set as Head of House',

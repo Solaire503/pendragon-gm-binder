@@ -24,7 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '2.4.0'   # keep in sync with js/app.js
+APP_VERSION  = '2.5.0'   # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -772,6 +772,79 @@ def api_save():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/relationships', methods=['POST'])
+@login_required
+def api_save_relationships():
+    """Players save their household's relationships + tree positions/lock.
+    GM may also use this (e.g. future tooling). Players are restricted to
+    relationships that involve at least one NPC from their household."""
+    err = _csrf_check()
+    if err: return err
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'invalid payload'}), 400
+
+    relationships = data.get('relationships')
+    tree_pos  = data.get('treePos')
+    tree_lock = data.get('treeLock')
+
+    if not isinstance(relationships, list):
+        return jsonify({'error': 'relationships must be an array'}), 400
+
+    path = get_save_path()
+    if not path:
+        return jsonify({'error': 'No save file configured'}), 400
+
+    with _save_lock:
+        try:
+            binder = json.loads(path.read_text(encoding='utf-8'))
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+        if session.get('role') != 'gm':
+            user_hh = (session.get('household') or '').lower()
+            if not user_hh:
+                return jsonify({'error': 'No household assigned'}), 403
+
+            hh_npc_ids = {
+                n['id'] for n in binder.get('npcs', binder.get('living', []) + binder.get('dead', []))
+                if (n.get('household') or '').lower() == user_hh
+            }
+
+            # Only accept relationships that involve at least one NPC from this household.
+            # Silently ignore the rest — the client sends the full relationships array
+            # (all households), but players may only modify their own.
+            hh_relationships = [
+                r for r in relationships
+                if isinstance(r, dict) and (
+                    r.get('sourceId') in hh_npc_ids or r.get('targetId') in hh_npc_ids
+                )
+            ]
+
+            # Preserve relationships that don't touch this household, replace the rest
+            preserved = [
+                r for r in binder.get('relationships', [])
+                if r.get('sourceId') not in hh_npc_ids and r.get('targetId') not in hh_npc_ids
+            ]
+            binder['relationships'] = preserved + hh_relationships
+        else:
+            binder['relationships'] = [r for r in relationships if isinstance(r, dict)]
+
+        if isinstance(tree_pos, dict):
+            existing_pos = binder.get('treePos', {})
+            existing_pos.update(tree_pos)
+            binder['treePos'] = existing_pos
+
+        if isinstance(tree_lock, dict):
+            existing_lock = binder.get('treeLock', {})
+            existing_lock.update(tree_lock)
+            binder['treeLock'] = existing_lock
+
+        _atomic_write(path, json.dumps(binder))
+
+    return jsonify({'ok': True})
+
+
 @app.route('/api/new', methods=['POST'])
 @gm_required
 def api_new():
@@ -1380,4 +1453,7 @@ if __name__ == '__main__':
     if sys.stdin.isatty():
         threading.Thread(target=_console_listener, daemon=True).start()
 
-    app.run(host='0.0.0.0', port=PORT, ssl_context=ssl_context, debug=False)
+    # Behind Cloudflare Tunnel, bind to localhost only — the tunnel handles
+    # all external traffic. Change to '0.0.0.0' only if running without a tunnel.
+    bind_host = '127.0.0.1' if _cf_tunnel else '0.0.0.0'
+    app.run(host=bind_host, port=PORT, ssl_context=ssl_context, debug=False)

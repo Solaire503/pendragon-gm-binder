@@ -10,6 +10,7 @@ const LS = {
   MANORS:        'pb_manors',
   RELATIONSHIPS: 'pb_relationships',  // family tree edges
   TREE_POS:      'pb_tree_pos',       // { npcId: { x, y } } per household key
+  TREE_LOCK:     'pb_tree_lock',      // { householdName: true/false }
   YEAR:          'pb_year',
   CHRONICLE:     'pb_chronicle',      // { "490": [{id, text, cat, ts}] }
   VERSION:       'pb_version',
@@ -47,6 +48,7 @@ const STORE = {
   manors:        {},
   relationships: [],
   treePos:       {},
+  treeLock:      {},
   chronicle:     {},
   year:          498,
 
@@ -160,6 +162,7 @@ const STORE = {
     this.year       = (typeof SEED_YEAR    !== 'undefined') ? SEED_YEAR : 498;
     this.relationships = [];
     this.treePos    = {};
+    this.treeLock   = {};
     this._save();
   },
 
@@ -170,6 +173,7 @@ const STORE = {
     try { this.manors     = JSON.parse(localStorage.getItem(LS.MANORS))     || {}; } catch(e) { this.manors     = {}; }
     try { this.relationships = JSON.parse(localStorage.getItem(LS.RELATIONSHIPS)) || []; } catch(e) { this.relationships = []; }
     try { this.treePos    = JSON.parse(localStorage.getItem(LS.TREE_POS))   || {}; } catch(e) { this.treePos    = {}; }
+    try { this.treeLock   = JSON.parse(localStorage.getItem(LS.TREE_LOCK))  || {}; } catch(e) { this.treeLock   = {}; }
     try { this.chronicle  = JSON.parse(localStorage.getItem(LS.CHRONICLE))  || {}; } catch(e) { this.chronicle  = {}; }
     try { this.year       = parseInt(localStorage.getItem(LS.YEAR), 10)     || 498; } catch(e) { this.year      = 498; }
   },
@@ -182,6 +186,7 @@ const STORE = {
       localStorage.setItem(LS.MANORS,        JSON.stringify(this.manors));
       localStorage.setItem(LS.RELATIONSHIPS, JSON.stringify(this.relationships));
       localStorage.setItem(LS.TREE_POS,      JSON.stringify(this.treePos));
+      localStorage.setItem(LS.TREE_LOCK,     JSON.stringify(this.treeLock));
       localStorage.setItem(LS.CHRONICLE,     JSON.stringify(this.chronicle));
       localStorage.setItem(LS.YEAR,          String(this.year));
     } catch(e) {
@@ -647,6 +652,26 @@ const STORE = {
     return result;
   },
 
+  _dedupeRelationships() {
+    const INVERSE = {
+      'Child': 'Parent', 'Parent': 'Child',
+      'Adopted Child': 'Adoptive Parent', 'Adoptive Parent': 'Adopted Child',
+      'Bastard': 'Parent',
+      'Sibling': 'Sibling', 'Half-Sibling': 'Half-Sibling',
+      'Spouse': 'Spouse', 'Betrothed': 'Betrothed', 'Former Spouse': 'Former Spouse',
+    };
+    const seen = new Set();
+    this.relationships = this.relationships.filter(r => {
+      const pair = [r.sourceId, r.targetId].sort().join('|');
+      // Normalise to the canonical type so inverse pairs share a key
+      const canonical = [r.sourceId, r.targetId].sort()[0] === r.sourceId ? r.type : (INVERSE[r.type] || r.type);
+      const key = `${canonical}|${pair}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  },
+
   addRelationship(sourceId, targetId, type, notes) {
     const id = 'rel-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
     this.relationships.push({ id, sourceId, targetId, type: type || 'Other', notes: notes || '' });
@@ -698,6 +723,7 @@ const STORE = {
       manors: this.manors,
       relationships: this.relationships,
       treePos: this.treePos,
+      treeLock: this.treeLock,
       chronicle: this.chronicle,
     }, null, 2);
   },
@@ -712,7 +738,9 @@ const STORE = {
       this.manors        = data.manors || {};
       this.relationships = data.relationships || [];
       this.treePos       = data.treePos || {};
+      this.treeLock      = data.treeLock || {};
       this.chronicle     = data.chronicle || {};
+      this._dedupeRelationships();
       this.year          = data.year || 498;
 
       // Run any pending migrations against the loaded data.
@@ -762,10 +790,15 @@ const STORE = {
     clearTimeout(this._syncTimer);
     FileSync.setStatus('saving');
     try {
-      const res = await fetch('/api/save', {
+      const isPlayer = window.__USER__?.role !== 'gm';
+      const url  = isPlayer ? '/api/relationships' : '/api/save';
+      const body = isPlayer
+        ? JSON.stringify({ relationships: this.relationships, treePos: this.treePos, treeLock: this.treeLock })
+        : this.exportJSON();
+      const res = await fetch(url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    this.exportJSON(),
+        body,
       });
       if (res.ok) {
         this._dirty = false;
