@@ -113,10 +113,41 @@ New server endpoints needed:
 
 ---
 
+---
+
+## Notification System
+**Status: Not started — planned alongside Notes and Horses**
+
+### Design (confirmed)
+- Bell icon with unread badge in header — visible to both GM and players
+- Default view: unread notifications only
+- "View history" toggle to see all past notifications
+- GM dashboard attention item: "X pending chronicle submissions" → links directly to Chronicle tab
+- Per-user storage: `player_data/{username}/notifications.json`
+- GM storage: `player_data/gm/notifications.json`
+
+### Triggers
+| Event | Who gets notified |
+|-------|------------------|
+| GM approves chronicle submission | Player who submitted |
+| GM dismisses chronicle submission | Player who submitted |
+| GM writes a note to a player | That player |
+| Player submits a chronicle entry | GM (attention item) |
+| GM adds a horse to a player's stable | That player |
+| (extensible for future player actions) | — |
+
+### New endpoints needed
+- `GET /api/notifications` — returns unread count + list for current user
+- `POST /api/notifications/read` — marks one or all as read
+- Server writes a notification entry on each trigger event
+
+---
+
 ## Steps in Order
-1. Create `player_data/` directory structure + shared read/write endpoints
-2. Build Notes system (storage, player UI, GM view)
-3. Receive horse survival tables from Steve
-4. Build Horse tracking (player sub-tab, add/edit horses)
-5. Build survival roll UI (tables, roll record per horse)
-6. Build GM stable overview in Manors tab
+1. Create `player_data/` directory structure + shared read/write endpoints + notification endpoints
+2. Build Notification system (storage, bell badge UI, unread/history toggle)
+3. Build Notes system (storage, player UI, GM view) — notes emit notifications
+4. Receive horse survival tables from Steve
+5. Build Horse tracking (player sub-tab, add/edit horses)
+6. Build survival roll UI (tables, roll record per horse)
+7. Build GM stable overview in Manors tab

@@ -147,7 +147,7 @@ const Multiplayer = {
     const widget = document.createElement('div');
     widget.className = 'presence-widget';
     widget.id = 'presenceWidget';
-    widget.innerHTML = '<span class="presence-dot"></span><span class="presence-count">0</span>';
+    widget.innerHTML = '<span class="presence-dot"></span><span class="presence-count">…</span>';
     widget.title = 'Online users';
     widget.addEventListener('click', () => {
       this._presenceExpanded = !this._presenceExpanded;

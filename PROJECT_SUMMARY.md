@@ -1,5 +1,5 @@
 # Pendragon GM's Binder — Project Summary
-*Last updated: 2026-04-06 | Current version: v2.2.0 | Status: Stable, running on Ubuntu Server 24.04 (Proxmox VM), LAN + Cloudflare Tunnel pending*
+*Last updated: 2026-04-07 | Current version: v2.2.1 | Status: Stable, running on Ubuntu Server 24.04 (Proxmox VM), LAN + Cloudflare Tunnel pending*
 
 > **📦 Source of truth:** https://github.com/Solaire503/pendragon-gm-binder (private repo)
 > Clone with `git clone https://github.com/Solaire503/pendragon-gm-binder.git` on any machine.
@@ -327,6 +327,7 @@ ESC: pops one layer if stack has entries; otherwise closes.
 | **v2.1.0** | 2026-04-05 | **Live session features:** GM broadcast messages, player presence/who's-online indicator, heartbeat polling |
 | **v2.1.1** | 2026-04-05 | **QA pass + security hardening:** C-1/C-2 critical bugs (pronoun, chronicle data structure), H-1 through H-6 highs (open redirect, cert backups, gm_required gaps, sendBeacon check, version mismatch, `App`→`APP` typo), plus ~10 medium fixes — see QA_REVIEW.md |
 | **v2.2.0** | 2026-04-06 | **Ubuntu migration + player tools:** Migrated to Ubuntu Server 24.04 on Proxmox (systemd service), Fate nav dropdown (Winter + Mausoleum grouped), Archive header dropdown (Export + Import grouped), player chronicle submissions (submit → GM review/approve), mobile layout pass for ~360px screens, year arrows GM-only |
+| **v2.2.1** | 2026-04-07 | **Security hardening + player UX polish:** XSS escaping (global `esc()` + chronicle/submissions), `backups/` blocked from static route, `/api/player-load` scoped endpoint (players no longer use GM's `/api/load`), CSRF checks on all state-changing POSTs, Cloudflare rate-limiter fix (`CF-Connecting-IP`), `/api/ai` proxy hardened, `/setup` localhost-only, min password 10 chars. UX: Families tab hidden from players, Came of Age button GM-only, Dame/Sir greeting from pronoun, sync widget hidden for players, page title corrected, player banner rewritten, "All is well" attention state, Guide filters GM features for players, Patch Notes hidden for players, alert→Toast in succession, btn-succession class, Submit Entry button moved above events, chronicle category badges on dashboard, year hint in submit modal, succession grid responsive, mausoleum word-boundary truncation, "Play Another Knight" rename, login year from save, household colour tint raised |
 
 ---
 
@@ -385,7 +386,7 @@ If an AI assistant is picking this up in a new conversation and needs to underst
 
 ## Conversation Handoff Notes (what to know after a context reset)
 
-- **Latest session (2026-04-06):** Updated all documentation, patch notes, and features guide to reflect v2.2.0. Previous session (2026-04-05): Full QA audit via subagent, all critical + high + most medium fixes (v2.1.1). Multiplayer broadcast + presence (v2.1). Migrated to Ubuntu Server on Proxmox (v2.2.0), delivered Fate/Archive dropdowns, player chronicle submissions, mobile layout pass, year arrows GM-only.
+- **Latest session (2026-04-07):** Security hardening pass + player UX polish (v2.2.1). Full audit by two subagents — see QA_REVIEW.md for the original findings. Anthropic API key rotated by Steve this session. Previous session (2026-04-05): Full QA audit via subagent, all critical + high + most medium fixes (v2.1.1). Multiplayer broadcast + presence (v2.1). Migrated to Ubuntu Server on Proxmox (v2.2.0), delivered Fate/Archive dropdowns, player chronicle submissions, mobile layout pass, year arrows GM-only.
 - **Working mode:** Steve often says "go ahead and implement all fixes" — trust him and batch them efficiently. He prefers one summary message at the end over step-by-step narration. When he launches parallel work, respect it: don't duplicate effort across agents.
 - **Terminology:** "The binder" = this app. "Phase 1/2/3" = major release milestones. "PK" = Player Knight. "Solos" = solo/yearly/kin event rolls.
 - **Common gotchas encountered:**

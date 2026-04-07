@@ -318,7 +318,7 @@ const TabChronicle = {
       return `
         <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 14px;background:var(--vellum-mid);border:1px solid var(--vellum-deep);border-left:3px solid ${c.colour}88;border-radius:var(--radius);">
           <span style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.07em;color:#fff;background:${c.colour};padding:2px 8px;border-radius:10px;white-space:nowrap;margin-top:2px;flex-shrink:0;">${c.label}</span>
-          <div style="flex:1;font-size:0.88rem;line-height:1.55;color:var(--ink);font-weight:500;">${e.text}</div>
+          <div style="flex:1;font-size:0.88rem;line-height:1.55;color:var(--ink);font-weight:500;">${AtMention.render(e.text)}</div>
           ${isGM() ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.65rem;flex-shrink:0;opacity:0.6;"
             onclick="TabChronicle.deleteEvent(${year},'${safeId}')">✕</button>` : ''}
         </div>`;
@@ -327,6 +327,11 @@ const TabChronicle = {
     return `
       <div style="margin-bottom:28px;">
         ${this._sectionHeader('📜', 'Chronicle Events', events.length || '', '#a07020')}
+        ${!isGM() ? `
+        <div style="margin-bottom:12px;">
+          <button class="btn btn-verdigris" style="font-size:0.78rem;padding:6px 18px;"
+            onclick="TabChronicle.submitEntry()">📜 Submit Chronicle Entry</button>
+        </div>` : ''}
         ${rows || `<div style="font-size:0.8rem;color:var(--ink-soft);font-style:italic;padding:6px 2px;margin-bottom:10px;">No entries yet for this year.</div>`}
         ${isGM() ? `
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
@@ -339,11 +344,7 @@ const TabChronicle = {
             onkeydown="if(event.key==='Enter')TabChronicle.addEvent()">
           <button class="btn btn-primary" style="font-size:0.75rem;padding:6px 14px;"
             onclick="TabChronicle.addEvent()">+ Add</button>
-        </div>` : `
-        <div style="margin-top:14px;text-align:right;">
-          <button class="btn btn-ghost" style="font-size:0.75rem;padding:6px 16px;"
-            onclick="TabChronicle.submitEntry()">📜 Submit Entry</button>
-        </div>`}
+        </div>` : ''}
       </div>`;
   },
 
@@ -370,9 +371,9 @@ const TabChronicle = {
         <div style="padding:12px 16px;background:var(--vellum);border:1px solid rgba(184,134,11,0.3);border-left:3px solid ${cat.colour};border-radius:var(--radius);margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
             <span style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.07em;color:#fff;background:${cat.colour};padding:2px 8px;border-radius:10px;">${cat.label}</span>
-            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-soft);letter-spacing:0.06em;">${s.playerUsername}</span>
+            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-soft);letter-spacing:0.06em;">${esc(s.playerUsername)}</span>
             <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-mid);">·</span>
-            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-soft);">${s.subjectName || '(no subject)'}</span>
+            <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-soft);">${esc(s.subjectName || '(no subject)')}</span>
             <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-mid);">·</span>
             <span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--gold-pale);">${s.year} AD</span>
           </div>
@@ -493,7 +494,8 @@ const TabChronicle = {
         </div>
         <div>
           <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">YEAR</label>
-          <input class="edit-input" type="number" id="sub-year" value="${STORE.year}" style="width:100%;">
+          <input class="edit-input" type="number" id="sub-year" value="${STORE.year}" min="400" max="700" style="width:100%;">
+          <div style="font-size:0.65rem;color:var(--ink-soft);margin-top:3px;font-style:italic;">current campaign year: ${STORE.year} AD</div>
         </div>
       </div>
       <div style="margin-bottom:12px;">

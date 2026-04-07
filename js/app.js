@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.2.1';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -1223,7 +1223,9 @@ const APP = {
       }).catch(() => {});
     }
 
-    document.title = `Pendragon GM's Binder — ${STORE.year} AD`;
+    document.title = isGM()
+      ? `Pendragon GM's Binder — ${STORE.year} AD`
+      : `Pendragon Binder — ${STORE.year} AD`;
     STORE.startPeriodicSync();
 
     // Multiplayer: broadcasts, presence, heartbeat
@@ -1593,7 +1595,13 @@ const APP = {
 
   // ── FEATURES GUIDE ────────────────────────────────────────
   showFeatures() {
-    const featuresHtml = FEATURES.map(f => {
+    // For players, only show entries up to (but not including) the GM divider
+    let featureList = FEATURES;
+    if (!isGM()) {
+      const gmDividerIdx = FEATURES.findIndex(f => f.divider && f.label && f.label.includes('GM Feature'));
+      if (gmDividerIdx !== -1) featureList = FEATURES.slice(0, gmDividerIdx);
+    }
+    const featuresHtml = featureList.map(f => {
       if (f.divider) return `
         <div style="display:flex;align-items:center;gap:12px;margin:28px 0 18px;">
           <div style="flex:1;height:1px;background:var(--gold);opacity:0.3;"></div>

@@ -5,6 +5,15 @@
 // Role helper — used throughout to gate GM-only UI
 const isGM = () => window.__USER__?.role === 'gm';
 
+// HTML escape helper — use whenever interpolating untrusted data into innerHTML
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+window.esc = esc;
+
 // ── TOAST ─────────────────────────────────────────────────────
 const Toast = {
   show(msg, type = 'info', duration = 3000) {
@@ -483,7 +492,7 @@ function buildNpcCardHtml(npc, opts = {}) {
     : ageFlag === 'adult'
     ? `<div class="npc-age-flag npc-age-flag-verdigris">
          ⚑ Came of Age — age ${calcAgeNow}
-         <button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._confirmCameOfAge('${npc.id}')">✓ Confirm</button>
+         ${isGM() ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._confirmCameOfAge('${npc.id}')">✓ Confirm</button>` : ''}
        </div>`
     : npc.came_of_age
     ? `<div class="npc-age-flag npc-age-flag-done">✓ Came of Age${calcAgeNow ? ' (age ' + calcAgeNow + ')' : ''}</div>`

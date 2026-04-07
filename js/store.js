@@ -792,7 +792,9 @@ const STORE = {
       if (!cfg.configured) return 'no_config';
       if (!cfg.exists)     return 'file_missing';
 
-      const res = await fetch('/api/load');
+      // Players use the scoped endpoint; GM uses the full endpoint
+      const loadUrl = (window.__USER__?.role === 'gm') ? '/api/load' : '/api/player-load';
+      const res = await fetch(loadUrl);
       if (!res.ok) return 'offline';
 
       const text = await res.text();

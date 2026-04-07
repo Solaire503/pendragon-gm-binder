@@ -54,7 +54,7 @@ const TabDashboard = {
 
       // Age transitions
       if (age !== null) {
-        if ((n.role === 'Baby' || n.role === 'Child') && age >= 7)
+        if ((n.role === 'Baby' || n.role === 'Child') && age >= 7 && !n.page_placed)
           ageFlags.push({ n, label: `${n.name}${hh} — age ${age}, ready for page training` });
         if (n.role === 'Page' && age >= 15)
           ageFlags.push({ n, label: `${n.name}${hh} — age ${age}, ready to become a Squire` });
@@ -221,7 +221,12 @@ const TabDashboard = {
     // Player knight name
     const lordNpc   = manor?.lord_id ? STORE.getNpc(manor.lord_id) : null;
     const knightName = lordNpc?.name || manor?.knight || household;
-    const title     = (lordNpc?.role || '').toLowerCase().includes('lady') ? 'Dame' : 'Sir';
+    // Derive Sir/Dame from pronoun first, fall back to role name check
+    const pkForTitle = members.find(n => n.role === 'Player Knight') || lordNpc;
+    const pkPronoun  = (pkForTitle?.pronoun || '').toLowerCase();
+    const title      = pkPronoun.startsWith('she') ? 'Dame'
+                     : pkPronoun.startsWith('they') ? ''
+                     : (lordNpc?.role || '').toLowerCase().includes('lady') ? 'Dame' : 'Sir';
 
     // Cycling greeting (changes daily)
     const GREETINGS = [
@@ -338,7 +343,7 @@ const TabDashboard = {
 
     members.forEach(n => {
       const age = n.year_born ? year - n.year_born : null;
-      if ((n.role === 'Baby' || n.role === 'Child') && age !== null && age >= 7)
+      if ((n.role === 'Baby' || n.role === 'Child') && age !== null && age >= 7 && !n.page_placed)
         attentionItems.push({ icon:'🧒', text:`${n.name} is ${age} — old enough to begin page training`, urgent:false });
       if (n.role === 'Page'   && age !== null && age >= 15)
         attentionItems.push({ icon:'⚔', text:`${n.name} is ${age} — old enough to become a Squire`, urgent:false });
@@ -370,7 +375,13 @@ const TabDashboard = {
             <span style="flex-shrink:0;">${a.icon}</span>
             <span style="font-size:0.85rem;color:${a.urgent?'var(--crimson-mid)':'var(--ink)'};">${a.text}</span>
           </div>`).join('')}
-      </div>` : '';
+      </div>`
+    : `<div class="card" style="border-top:3px solid var(--verdigris-mid);opacity:0.8;">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+          <span style="color:var(--verdigris-mid);">✓</span>
+          <span style="font-size:0.85rem;color:var(--ink-soft);font-style:italic;">No matters requiring your attention, ${lordTitle}.</span>
+        </div>
+      </div>`;
 
     // ── HOUSEHOLD ROSTER ──────────────────────────────────────
     const ROLE_ORDER = ['Player Knight','Knight Banneret','Vassal Knight','Bachelor Knight','Mercenary Knight','Knight','Lady','Baron','Estate Holder','Esquire','Steward','Squire','Page','Priest','Merchant','Other','Baby'];
@@ -440,13 +451,15 @@ const TabDashboard = {
     const chronicleHtml = recentEvents.length ? `
       <div class="card">
         <div class="section-title" style="margin-bottom:12px;">📖 Recent Chronicle</div>
-        ${recentEvents.map(e => `
-          <div style="padding:6px 0;border-bottom:1px dotted var(--vellum-deep);">
-            <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px;">${e.year} AD</div>
+        ${recentEvents.map(e => {
+          const cat = (typeof CHRONICLE_CATS !== 'undefined' && CHRONICLE_CATS[e.cat]) || { colour: '#707070' };
+          return `<div style="padding:6px 0 6px 8px;border-bottom:1px dotted var(--vellum-deep);border-left:3px solid ${cat.colour}33;margin-bottom:2px;">
+            <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:${cat.colour};margin-bottom:2px;">${e.year} AD</div>
             <div style="font-size:0.82rem;color:var(--ink);">${e.text}</div>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
         <div style="margin-top:10px;">
-          <button class="btn btn-ghost" style="width:100%;" onclick="APP.switchTab('chronicle')">Full Chronicle →</button>
+          <button class="btn btn-ghost" style="width:100%;" onclick="APP.switchTab('chronicle')">Go to Chronicle →</button>
         </div>
       </div>` : '';
 
@@ -454,7 +467,7 @@ const TabDashboard = {
       <div style="height:100%;overflow-y:auto;padding:24px;background:var(--vellum);">
 
         <!-- WELCOME HEADER -->
-        <div style="margin-bottom:24px;padding:20px 24px;background:linear-gradient(135deg,${col}18 0%,transparent 100%);
+        <div style="margin-bottom:24px;padding:20px 24px;background:linear-gradient(135deg,${col}28 0%,transparent 100%);
              border:1px solid ${col}44;border-left:4px solid ${col};border-radius:var(--radius);">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
             <div>
@@ -462,8 +475,7 @@ const TabDashboard = {
               <div style="font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.18em;text-transform:uppercase;color:${col};margin-bottom:12px;">${household} · Anno Domini ${year}</div>
               <div style="font-family:'EB Garamond',serif;font-style:italic;font-size:1rem;color:var(--ink-soft);line-height:1.6;">${greeting}</div>
             </div>
-            <button class="btn" style="background:rgba(139,20,20,0.12);border-color:rgba(180,40,40,0.5);color:#c05050;font-size:0.58rem;letter-spacing:0.08em;white-space:nowrap;flex-shrink:0;"
-              onclick="TabDashboard.openSuccession()">⚔ Change Player Knight</button>
+            <button class="btn btn-succession" onclick="TabDashboard.openSuccession()">⚔ Change Player Knight</button>
           </div>
         </div>
 
@@ -495,7 +507,7 @@ const TabDashboard = {
       <div style="margin-top:6px;font-family:'EB Garamond',serif;font-style:italic;font-size:0.95rem;color:var(--ink-soft);margin-bottom:20px;">
         What has become of <strong style="font-style:normal;">${pkName}</strong>?
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;">
         <button onclick="TabDashboard._successionStep2('died')" style="
             display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 12px;
             background:rgba(139,20,20,0.07);border:1px solid rgba(139,20,20,0.3);border-radius:var(--radius);
@@ -520,8 +532,8 @@ const TabDashboard = {
             cursor:pointer;font-family:var(--font-heading);letter-spacing:0.05em;color:var(--verdigris-mid);
             transition:background 0.15s;">
           <span style="font-size:1.6rem;">⚔</span>
-          <span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;">Just Switching</span>
-          <span style="font-size:0.6rem;opacity:0.6;font-family:var(--font-body);text-transform:none;letter-spacing:0;">No change to records</span>
+          <span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;">Play Another Knight</span>
+          <span style="font-size:0.6rem;opacity:0.6;font-family:var(--font-body);text-transform:none;letter-spacing:0;">No fate recorded — simply switch characters</span>
         </button>
       </div>`);
   },
@@ -680,7 +692,7 @@ const TabDashboard = {
   async _successionConfirm() {
     const { action, pk, newPkId, deathData, lifeEvent } = this._successionData;
 
-    if (!newPkId) { alert('Please select a successor first.'); return; }
+    if (!newPkId) { Toast.show('Please select a successor first.', 'error'); return; }
 
     const body = {
       old_pk_id:  pk?.id  || null,
@@ -698,7 +710,7 @@ const TabDashboard = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert('Succession failed: ' + (err.error || `HTTP ${res.status}`));
+        Toast.show('Succession failed: ' + (err.error || `HTTP ${res.status}`), 'error');
         return;
       }
       Modal.close();
@@ -706,7 +718,7 @@ const TabDashboard = {
       await STORE.loadFromFile();
       this.render();
     } catch (e) {
-      alert('Network error: ' + e.message);
+      Toast.show('Network error: ' + e.message, 'error');
     }
   },
 };

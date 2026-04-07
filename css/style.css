@@ -406,6 +406,10 @@ html.is-gm button.gm-only    { display: inline-flex !important; }
 /* Player read-only: hide edit controls inside tab panels */
 html.is-player .rel-edit-btn      { display: none !important; }
 html.is-player .solo-chr-edit-btn { display: none !important; }
+/* Sync status is meaningless for players (they never save) */
+html.is-player #syncStatus        { display: none !important; }
+/* Patch notes contain GM-only implementation details */
+html.is-player #btnPatchNotes     { display: none !important; }
 
 /* Player read-only banner */
 .player-readonly-banner {
@@ -838,6 +842,16 @@ html.is-player .player-readonly-banner {
   color: var(--crimson-mid);
 }
 .btn-danger:hover { background: rgba(122,28,28,0.1); }
+.btn-succession {
+  background: rgba(139,20,20,0.12);
+  border-color: rgba(180,40,40,0.5);
+  color: #c05050;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-succession:hover { background: rgba(139,20,20,0.22); }
 .btn-verdigris {
   background: rgba(45,90,74,0.15);
   border-color: rgba(45,90,74,0.4);
@@ -1669,6 +1683,11 @@ html.is-player .player-readonly-banner {
   line-height: 1;
   transition: opacity 0.15s;
   flex-shrink: 0;
+  min-width: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .broadcast-dismiss:hover { opacity: 1; }
 

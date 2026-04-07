@@ -10,6 +10,9 @@ const TabFamilies = {
     const panel = document.getElementById('tab-families');
     if (!panel) return;
 
+    // Families tab is GM-only — players should never reach this
+    if (!isGM()) { panel.innerHTML = ''; return; }
+
     if (!this._current && STORE.households.length) {
       this._current = STORE.households[0].name;
     }

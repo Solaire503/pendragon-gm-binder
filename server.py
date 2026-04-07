@@ -101,6 +101,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # Mark cookies Secure when we're actually serving HTTPS. Disabled under
 # FORCE_HTTP=1 because Secure cookies would never be sent over plain HTTP.
 app.config['SESSION_COOKIE_SECURE'] = (SECRETS.get('FORCE_HTTP') != '1')
+# Limit request body to 16 MB — prevents disk exhaustion via player endpoints.
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # ── RATE LIMITING ─────────────────────────────────────────────────────────────
 
@@ -127,6 +129,23 @@ def _record_attempt(ip: str) -> None:
 
 def _clear_attempts(ip: str) -> None:
     _login_attempts.pop(ip, None)
+
+# ── CSRF PROTECTION ───────────────────────────────────────────────────────────
+
+def _csrf_check():
+    """Verify request Origin matches the app's own Host.
+    Skipped for localhost requests (LAN / systemd internal calls).
+    Returns a (response, status) tuple on failure, or None on pass."""
+    if request.remote_addr in ('127.0.0.1', '::1'):
+        return None  # always allow localhost
+    origin  = request.headers.get('Origin', '')
+    host    = request.headers.get('Host', '')
+    if origin and host:
+        # Strip protocol from origin for comparison
+        origin_host = origin.split('://', 1)[-1].rstrip('/')
+        if origin_host != host:
+            return jsonify({'error': 'CSRF check failed'}), 403
+    return None
 
 # ── AUTH DECORATORS ───────────────────────────────────────────────────────────
 
@@ -359,7 +378,7 @@ ACCOUNT_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE + """
     <label>Current Passphrase</label>
     <input type="password" name="current" autocomplete="current-password" required>
     <label>New Passphrase</label>
-    <input type="password" name="new" autocomplete="new-password" required minlength="6">
+    <input type="password" name="new" autocomplete="new-password" required minlength="10">
     <label>Confirm New Passphrase</label>
     <input type="password" name="confirm" autocomplete="new-password" required>
     <button class="btn" type="submit">Update Passphrase</button>
@@ -374,6 +393,10 @@ ACCOUNT_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE + """
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
+    # Setup is only accessible from localhost — prevents remote takeover if
+    # users.json is accidentally deleted on a public-facing deployment.
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'Setup only accessible from localhost'}), 403
     if not needs_setup():
         return redirect(url_for('login'))
 
@@ -387,8 +410,8 @@ def setup():
             field = f"pw_{user['username']}"
             pw = request.form.get(field, '').strip()
             if pw:
-                if len(pw) < 6:
-                    error = f"Password for {user['username']} must be at least 6 characters."
+                if len(pw) < 10:
+                    error = f"Password for {user['username']} must be at least 10 characters."
                     break
                 user['password_hash'] = generate_password_hash(pw)
                 updated = True
@@ -413,7 +436,9 @@ def login():
     prefill = ''
 
     if request.method == 'POST':
-        ip = request.remote_addr
+        # Use Cloudflare's real-IP header when behind a tunnel; fall back to
+        # direct remote addr for LAN use.
+        ip = request.headers.get('CF-Connecting-IP') or request.remote_addr
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         prefill = username
@@ -437,8 +462,14 @@ def login():
                 _record_attempt(ip)
                 error = "Invalid username or passphrase."
 
-    cfg = load_config()
     year = 498  # fallback; real year lives in the save file
+    try:
+        save_path = get_save_path()
+        if save_path and save_path.exists():
+            save_data = json.loads(save_path.read_text(encoding='utf-8'))
+            year = save_data.get('year', 498)
+    except Exception:
+        pass
     return render_template_string(LOGIN_HTML, error=error, username=prefill, year=year)
 
 
@@ -462,8 +493,8 @@ def account():
         user = get_user(session['username'])
         if not user or not check_password_hash(user['password_hash'], current):
             error = "Current passphrase is incorrect."
-        elif len(new_pw) < 6:
-            error = "New passphrase must be at least 6 characters."
+        elif len(new_pw) < 10:
+            error = "New passphrase must be at least 10 characters."
         elif new_pw != confirm:
             error = "New passphrases do not match."
         else:
@@ -524,6 +555,9 @@ def static_files(filename):
         return jsonify({'error': 'Forbidden'}), 403
     if any(p.lower().endswith(BLOCKED_SUFFIXES) for p in parts):
         return jsonify({'error': 'Forbidden'}), 403
+    # Block the backups directory entirely — contains full campaign save history.
+    if parts and parts[0] == 'backups':
+        return jsonify({'error': 'Forbidden'}), 403
     return send_from_directory(str(BASE_DIR), filename)
 
 # ── ROUTES: API ───────────────────────────────────────────────────────────────
@@ -556,13 +590,22 @@ def api_get_config():
 @gm_required
 def api_set_config():
     try:
+        err = _csrf_check()
+        if err: return err
         data = request.get_json(force=True)
         cfg  = load_config()
 
         if 'saveFile' in data:
-            path = data['saveFile'].strip()
-            if not path:
+            raw_path = data['saveFile'].strip()
+            if not raw_path:
                 return jsonify({'error': 'No path provided'}), 400
+            # Validate the path stays within the home directory and is a .json file.
+            resolved = Path(raw_path).resolve()
+            if not str(resolved).startswith(str(Path.home())):
+                return jsonify({'error': 'Save path must be within your home directory'}), 400
+            if resolved.suffix.lower() != '.json':
+                return jsonify({'error': 'Save file must be a .json file'}), 400
+            path = str(resolved)
             cfg['saveFile'] = path
             print(f'  [Config] Save file set to: {path}')
 
@@ -577,7 +620,7 @@ def api_set_config():
 
 
 @app.route('/api/load')
-@login_required
+@gm_required
 def api_load():
     path = get_save_path()
     if not path:
@@ -593,10 +636,31 @@ def api_load():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/player-load')
+@login_required
+def api_player_load():
+    """Scoped data endpoint for player clients.
+    Returns the same save data as /api/load for now; this is the controlled
+    path we can filter down in Phase 3 without touching the GM endpoint."""
+    path = get_save_path()
+    if not path:
+        return jsonify({'status': 'no_config'})
+    if not path.exists():
+        return jsonify({'status': 'file_missing', 'path': str(path)})
+    try:
+        data = path.read_text(encoding='utf-8')
+        json.loads(data)  # validate
+        return app.response_class(data, mimetype='application/json')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/save', methods=['POST'])
 @gm_required
 def api_save():
     try:
+        err = _csrf_check()
+        if err: return err
         body = request.get_data(as_text=True)
         if not body:
             return jsonify({'error': 'empty body'}), 400
@@ -652,15 +716,29 @@ def api_new():
 @app.route('/api/ai', methods=['POST'])
 @gm_required
 def api_ai():
-    """Proxy to Anthropic API. GM only."""
+    """Proxy to Anthropic API. GM only.
+    Only forwards specific safe fields — prevents model/token abuse via
+    a stolen GM session or crafted request body."""
     api_key = SECRETS.get('ANTHROPIC_KEY', '').strip()
     if not api_key:
         return jsonify({'error': 'No Anthropic API key configured'}), 400
 
-    body = request.get_data()
-    if not body:
+    raw = request.get_json(force=True)
+    if not raw:
         return jsonify({'error': 'Empty request body'}), 400
 
+    # Reconstruct a safe payload — hardcode the model, cap max_tokens.
+    try:
+        payload = {
+            'model':      'claude-haiku-4-5-20251001',
+            'max_tokens': min(int(raw.get('max_tokens', 300)), 500),
+            'system':     str(raw.get('system', '')),
+            'messages':   raw.get('messages', []),
+        }
+    except (ValueError, TypeError) as e:
+        return jsonify({'error': 'Invalid request: ' + str(e)}), 400
+
+    body = json.dumps(payload).encode('utf-8')
     try:
         req = urllib.request.Request(
             'https://api.anthropic.com/v1/messages',
@@ -701,6 +779,8 @@ def api_drives():
 @login_required
 def api_succession():
     """Player Knight succession — players may act on their own household only."""
+    err = _csrf_check()
+    if err: return err
     data    = request.get_json(force=True)
     user_hh = session.get('household', '').lower()
     is_gm   = session.get('role') == 'gm'
@@ -745,7 +825,7 @@ def api_succession():
             npc = living.pop(idx)
             npc['status']        = 'Dead'
             npc['year_died']     = death_data.get('year', save_data.get('year', 499))
-            cause = death_data.get('cause', '')
+            cause = str(death_data.get('cause', ''))[:2000]  # clamp to prevent disk abuse
             if cause:
                 npc['notes'] = ((npc.get('notes') or '') + f'\n\n† {cause}').strip()
             dead.append(npc)
@@ -761,10 +841,10 @@ def api_succession():
                         'id':         f'evt_{ts}',
                         'year':        life_event.get('year', save_data.get('year', 499)),
                         'season':      life_event.get('season', 'winter'),
-                        'title':       life_event.get('title', 'Retired from Questing'),
-                        'mechDesc':    life_event.get('mechDesc', ''),
+                        'title':       str(life_event.get('title', 'Retired from Questing'))[:200],
+                        'mechDesc':    str(life_event.get('mechDesc', ''))[:2000],
                         'flavorText':  None,
-                        'userNotes':   life_event.get('userNotes', ''),
+                        'userNotes':   str(life_event.get('userNotes', ''))[:2000],
                     })
                 break
 
@@ -825,6 +905,8 @@ def api_browse():
 @gm_required
 def api_broadcast():
     """GM sends a broadcast message to all connected players."""
+    err = _csrf_check()
+    if err: return err
     data = request.get_json(force=True)
     msg  = (data.get('message') or '').strip()
     if not msg:
@@ -858,7 +940,9 @@ def api_get_submissions():
 @app.route('/api/submissions', methods=['POST'])
 @login_required
 def api_post_submission():
-    if session.get('is_gm'):
+    err = _csrf_check()
+    if err: return err
+    if session.get('role') == 'gm':
         return jsonify({'error': 'GMs add directly to the Chronicle'}), 400
     data = request.get_json(force=True) or {}
     text = data.get('text', '').strip()
