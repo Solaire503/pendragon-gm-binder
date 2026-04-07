@@ -1583,10 +1583,21 @@ const TabTree = {
     const parent2 = document.getElementById('tree-rel-parent2')?.value || '';
 
     const INVERSE = {
-      'Child': 'Parent', 'Parent': 'Child',
+      'Child': 'Parent',           'Parent': 'Child',
       'Adopted Child': 'Adoptive Parent', 'Adoptive Parent': 'Adopted Child',
-      'Bastard': 'Parent', 'Sibling': 'Sibling', 'Half-Sibling': 'Half-Sibling',
-      'Spouse': 'Spouse', 'Betrothed': 'Betrothed', 'Former Spouse': 'Former Spouse',
+      'Bastard': 'Parent',
+      'Sibling': 'Sibling',        'Half-Sibling': 'Half-Sibling',
+      'Spouse': 'Spouse',          'Betrothed': 'Betrothed',
+      'Lover': 'Lover',            'Former Spouse': 'Former Spouse',
+      'Aunt/Uncle': 'Niece/Nephew','Niece/Nephew': 'Aunt/Uncle',
+      'Cousin': 'Cousin',
+      'Grandparent': 'Grandchild', 'Grandchild': 'Grandparent',
+      'Sworn Brother/Sister': 'Sworn Brother/Sister',
+      'Squire': 'Squire',          'Former Squire': 'Former Squire',
+      'Page': 'Page',
+      'Vassal': 'Vassal',
+      'Ward': 'Guardian',          'Guardian': 'Ward',
+      'Other': 'Other',
     };
 
     const relExists = (s, t, tp) => STORE.relationships.some(r => r.type === tp &&

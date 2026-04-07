@@ -24,7 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '2.5.0'   # keep in sync with js/app.js
+APP_VERSION  = '2.6.0'   # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -811,15 +811,25 @@ def api_save_relationships():
                 if (n.get('household') or '').lower() == user_hh
             }
 
-            # Only accept relationships that involve at least one NPC from this household.
-            # Silently ignore the rest — the client sends the full relationships array
-            # (all households), but players may only modify their own.
-            hh_relationships = [
-                r for r in relationships
-                if isinstance(r, dict) and (
-                    r.get('sourceId') in hh_npc_ids or r.get('targetId') in hh_npc_ids
-                )
-            ]
+            # Validate and filter: only accept well-formed relationships involving this household
+            VALID_REL_TYPES = {
+                'Spouse','Betrothed','Lover','Former Spouse',
+                'Child','Adopted Child','Bastard','Parent','Adoptive Parent',
+                'Sibling','Half-Sibling','Aunt/Uncle','Niece/Nephew','Cousin',
+                'Grandparent','Grandchild','Sworn Brother/Sister',
+                'Squire','Former Squire','Page','Vassal','Ward','Guardian','Other',
+            }
+            hh_relationships = []
+            for r in relationships:
+                if not isinstance(r, dict): continue
+                src = r.get('sourceId', '')
+                tgt = r.get('targetId', '')
+                rel_type = r.get('type', '')
+                if not isinstance(src, str) or not isinstance(tgt, str): continue
+                if rel_type not in VALID_REL_TYPES: continue
+                if len(r.get('notes', '')) > 500: continue
+                if src not in hh_npc_ids and tgt not in hh_npc_ids: continue
+                hh_relationships.append(r)
 
             # Preserve relationships that don't touch this household, replace the rest
             preserved = [
@@ -832,12 +842,23 @@ def api_save_relationships():
 
         if isinstance(tree_pos, dict):
             existing_pos = binder.get('treePos', {})
-            existing_pos.update(tree_pos)
+            if session.get('role') != 'gm':
+                # Players may only update positions for NPCs in their own household
+                filtered_pos = {k: v for k, v in tree_pos.items() if k in hh_npc_ids}
+                existing_pos.update(filtered_pos)
+            else:
+                existing_pos.update(tree_pos)
             binder['treePos'] = existing_pos
 
         if isinstance(tree_lock, dict):
             existing_lock = binder.get('treeLock', {})
-            existing_lock.update(tree_lock)
+            if session.get('role') != 'gm':
+                # Players may only update lock state for their own household
+                filtered_lock = {k: v for k, v in tree_lock.items()
+                                 if (session.get('household') or '').lower() == k.lower()}
+                existing_lock.update(filtered_lock)
+            else:
+                existing_lock.update(tree_lock)
             binder['treeLock'] = existing_lock
 
         _atomic_write(path, json.dumps(binder))
@@ -1312,6 +1333,367 @@ def api_save_pins():
         return jsonify({'error': 'Invalid payload'}), 400
     pins = [str(p) for p in data['pins'] if isinstance(p, str)]
     _write_pins(session['username'], pins)
+    return jsonify({'ok': True})
+
+
+# ── NOTES ─────────────────────────────────────────────────────────────────────
+
+_NOTES_DEFAULTS = {'general': '', 'manor_notes': '', 'impressions': {}}
+
+
+def _read_notes(username: str) -> dict:
+    """Returns notes dict with defaults if missing."""
+    path = PLAYER_DATA_DIR / username / 'notes.json'
+    if not path.exists():
+        return dict(_NOTES_DEFAULTS)
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return {
+            'general':     data.get('general', ''),
+            'manor_notes': data.get('manor_notes', ''),
+            'impressions': data.get('impressions', {}),
+        }
+    except Exception:
+        return dict(_NOTES_DEFAULTS)
+
+
+def _write_notes(username: str, data: dict) -> None:
+    """Atomic write to player_data/{username}/notes.json."""
+    d = PLAYER_DATA_DIR / username
+    d.mkdir(parents=True, exist_ok=True)
+    _atomic_write(d / 'notes.json', json.dumps(data, indent=2))
+
+
+@app.route('/api/notes')
+@login_required
+def api_get_notes():
+    """Any logged-in user: read own notes."""
+    return jsonify(_read_notes(session['username']))
+
+
+@app.route('/api/notes', methods=['POST'])
+@login_required
+def api_save_notes():
+    """Any logged-in user: save own notes."""
+    err = _csrf_check()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+    general     = data.get('general', '')
+    manor_notes = data.get('manor_notes', '')
+    impressions = data.get('impressions', {})
+    if not isinstance(general, str) or len(general) > 10000:
+        return jsonify({'error': 'general must be a string ≤10000 chars'}), 400
+    if not isinstance(manor_notes, str) or len(manor_notes) > 10000:
+        return jsonify({'error': 'manor_notes must be a string ≤10000 chars'}), 400
+    if not isinstance(impressions, dict):
+        return jsonify({'error': 'impressions must be an object'}), 400
+    _write_notes(session['username'], {
+        'general': general,
+        'manor_notes': manor_notes,
+        'impressions': impressions,
+    })
+    return jsonify({'ok': True})
+
+
+@app.route('/api/notes/<username>')
+@gm_required
+def api_get_notes_gm(username):
+    """GM: read any player's notes."""
+    if not get_user(username):
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify(_read_notes(username))
+
+
+@app.route('/api/notes/<username>', methods=['POST'])
+@gm_required
+def api_save_notes_gm(username):
+    """GM: save to any player's notes and push a notification."""
+    err = _csrf_check()
+    if err: return err
+    if not get_user(username):
+        return jsonify({'error': 'User not found'}), 404
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+    general     = data.get('general', '')
+    manor_notes = data.get('manor_notes', '')
+    impressions = data.get('impressions', {})
+    if not isinstance(general, str) or len(general) > 10000:
+        return jsonify({'error': 'general must be a string ≤10000 chars'}), 400
+    if not isinstance(manor_notes, str) or len(manor_notes) > 10000:
+        return jsonify({'error': 'manor_notes must be a string ≤10000 chars'}), 400
+    if not isinstance(impressions, dict):
+        return jsonify({'error': 'impressions must be an object'}), 400
+    _write_notes(username, {
+        'general': general,
+        'manor_notes': manor_notes,
+        'impressions': impressions,
+    })
+    _push_notification(username, 'note', 'The GM updated your notes')
+    return jsonify({'ok': True})
+
+
+# ── COMMENTS ──────────────────────────────────────────────────────────────────
+
+COMMENTS_FILE = BASE_DIR / 'comments.json'
+_comments_lock = threading.Lock()
+
+
+def _read_comments() -> list:
+    """Returns comments list from comments.json."""
+    with _comments_lock:
+        if not COMMENTS_FILE.exists():
+            return []
+        try:
+            return json.loads(COMMENTS_FILE.read_text(encoding='utf-8'))
+        except Exception:
+            return []
+
+
+def _write_comments(comments: list) -> None:
+    """Atomic write to comments.json."""
+    with _comments_lock:
+        _atomic_write(COMMENTS_FILE, json.dumps(comments, indent=2))
+
+
+def _serialize_comment(c: dict, is_gm: bool) -> dict:
+    """Flatten comment for API responses — adds convenience fields the client expects."""
+    out = dict(c)
+    history = out.get('history') or []
+    latest  = history[-1] if history else {}
+    out['author']    = out.get('authorUsername', '')
+    out['text']      = latest.get('text', '')
+    out['timestamp'] = latest.get('ts', '')
+    if not is_gm:
+        out['history'] = [latest] if latest else []
+    return out
+
+
+@app.route('/api/comments/<npc_id>')
+@login_required
+def api_get_comments(npc_id):
+    """Any logged-in user: get comments for an NPC.
+    Players see only the latest history entry; GM sees full history."""
+    is_gm = session.get('role') == 'gm'
+    all_comments = _read_comments()
+    result = [_serialize_comment(c, is_gm) for c in all_comments if c.get('npcId') == npc_id]
+    return jsonify({'comments': result})
+
+
+@app.route('/api/comments', methods=['POST'])
+@login_required
+def api_post_comment():
+    """Any logged-in user: create a new comment."""
+    err = _csrf_check()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+    npc_id = data.get('npcId', '')
+    text   = data.get('text', '')
+    parent_id = data.get('parentId', None)
+    if not isinstance(npc_id, str) or not npc_id:
+        return jsonify({'error': 'npcId is required'}), 400
+    if not isinstance(text, str) or not text or len(text) > 2000:
+        return jsonify({'error': 'text must be a non-empty string ≤2000 chars'}), 400
+    if parent_id is not None and not isinstance(parent_id, str):
+        return jsonify({'error': 'parentId must be a string or null'}), 400
+
+    import secrets as _secrets
+    comment_id = 'cmt-' + _secrets.token_hex(6)
+    ts = datetime.utcnow().isoformat() + 'Z'
+    author = session['username']
+    new_comment = {
+        'id':             comment_id,
+        'npcId':          npc_id,
+        'authorUsername': author,
+        'parentId':       parent_id,
+        'history':        [{'text': text, 'ts': ts}],
+        'deleted':        False,
+        'deletedBy':      None,
+    }
+
+    all_comments = _read_comments()
+    all_comments.append(new_comment)
+    _write_comments(all_comments)
+
+    # Notify all other users
+    all_users = load_users()
+    for u in all_users:
+        uname = u['username']
+        if uname != author:
+            _push_notification(
+                uname, 'comment',
+                f'{author} commented on {npc_id}',
+                link=npc_id,
+            )
+
+    return jsonify({'ok': True, 'comment': _serialize_comment(new_comment, session.get('role') == 'gm')})
+
+
+@app.route('/api/comments/<comment_id>', methods=['PATCH'])
+@login_required
+def api_edit_comment(comment_id):
+    """Owner or GM: edit a comment (appends to history)."""
+    err = _csrf_check()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+    text = data.get('text', '')
+    if not isinstance(text, str) or not text or len(text) > 2000:
+        return jsonify({'error': 'text must be a non-empty string ≤2000 chars'}), 400
+
+    all_comments = _read_comments()
+    target = next((c for c in all_comments if c['id'] == comment_id), None)
+    if not target:
+        return jsonify({'error': 'Comment not found'}), 404
+    is_gm   = session.get('role') == 'gm'
+    is_owner = target['authorUsername'] == session['username']
+    if not is_owner and not is_gm:
+        return jsonify({'error': 'Forbidden'}), 403
+    if target.get('deleted'):
+        return jsonify({'error': 'Cannot edit a deleted comment'}), 400
+
+    ts = datetime.utcnow().isoformat() + 'Z'
+    target['history'].append({'text': text, 'ts': ts})
+    _write_comments(all_comments)
+    is_gm = session.get('role') == 'gm'
+    return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
+
+
+@app.route('/api/comments/<comment_id>', methods=['DELETE'])
+@login_required
+def api_delete_comment(comment_id):
+    """Owner or GM: soft-delete a comment."""
+    err = _csrf_check()
+    if err: return err
+
+    all_comments = _read_comments()
+    target = next((c for c in all_comments if c['id'] == comment_id), None)
+    if not target:
+        return jsonify({'error': 'Comment not found'}), 404
+    is_gm   = session.get('role') == 'gm'
+    is_owner = target['authorUsername'] == session['username']
+    if not is_owner and not is_gm:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    target['deleted']   = True
+    target['deletedBy'] = session['username']
+    _write_comments(all_comments)
+    is_gm = session.get('role') == 'gm'
+    return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
+
+
+@app.route('/api/comments/<comment_id>/shred', methods=['POST'])
+@gm_required
+def api_shred_comment(comment_id):
+    """GM only: permanently remove a comment."""
+    err = _csrf_check()
+    if err: return err
+    all_comments = _read_comments()
+    original_len = len(all_comments)
+    all_comments = [c for c in all_comments if c['id'] != comment_id]
+    if len(all_comments) == original_len:
+        return jsonify({'error': 'Comment not found'}), 404
+    _write_comments(all_comments)
+    return jsonify({'ok': True, 'shredded': comment_id})
+
+
+@app.route('/api/comments/<comment_id>/restore', methods=['POST'])
+@login_required
+def api_restore_comment(comment_id):
+    """GM always; players may restore only if they deleted their own comment."""
+    err = _csrf_check()
+    if err: return err
+    all_comments = _read_comments()
+    target = next((c for c in all_comments if c['id'] == comment_id), None)
+    if not target:
+        return jsonify({'error': 'Comment not found'}), 404
+    is_gm    = session.get('role') == 'gm'
+    username = session['username']
+    is_own   = target.get('authorUsername') == username
+    deleted_by_self = target.get('deletedBy') == username
+    if not is_gm and not (is_own and deleted_by_self):
+        return jsonify({'error': 'Forbidden'}), 403
+    target['deleted']   = False
+    target['deletedBy'] = None
+    _write_comments(all_comments)
+    return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
+
+
+# ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+
+def _read_notifications(username: str) -> list:
+    """Returns notifications list (newest first)."""
+    path = PLAYER_DATA_DIR / username / 'notifications.json'
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _push_notification(username: str, notif_type: str, text: str, link: str = '') -> None:
+    """Append a notification to player_data/{username}/notifications.json. Cap at 100."""
+    import secrets as _secrets
+    d = PLAYER_DATA_DIR / username
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / 'notifications.json'
+    notifs = _read_notifications(username)
+    notif = {
+        'id':   'notif-' + _secrets.token_hex(6),
+        'type': notif_type,
+        'text': text,
+        'link': link,
+        'read': False,
+        'ts':   datetime.utcnow().isoformat() + 'Z',
+    }
+    notifs.insert(0, notif)
+    notifs = notifs[:100]
+    _atomic_write(path, json.dumps(notifs, indent=2))
+
+
+@app.route('/api/notifications')
+@login_required
+def api_get_notifications():
+    """Any logged-in user: read own notifications (last 50, newest first)."""
+    notifs = _read_notifications(session['username'])
+    return jsonify({'notifications': notifs[:50]})
+
+
+@app.route('/api/notifications/read', methods=['POST'])
+@login_required
+def api_mark_notifications_read():
+    """Any logged-in user: mark notifications as read by id list or all."""
+    err = _csrf_check()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    username = session['username']
+    notifs   = _read_notifications(username)
+
+    if data.get('all') is True:
+        for n in notifs:
+            n['read'] = True
+    else:
+        ids = data.get('ids')
+        if not isinstance(ids, list):
+            return jsonify({'error': 'Provide ids list or all:true'}), 400
+        id_set = set(ids)
+        for n in notifs:
+            if n['id'] in id_set:
+                n['read'] = True
+
+    d = PLAYER_DATA_DIR / username
+    d.mkdir(parents=True, exist_ok=True)
+    _atomic_write(d / 'notifications.json', json.dumps(notifs, indent=2))
     return jsonify({'ok': True})
 
 

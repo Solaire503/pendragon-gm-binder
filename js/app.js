@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.6.0';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -247,6 +247,64 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.6.0',
+    date:    '2026-04-07',
+    sections: [
+      {
+        heading: 'Journal — Private Notes',
+        items: [
+          'A new Journal tab (under the Records dropdown) gives every user a private scratchpad — General Notes and Manor Notes, visible only to you.',
+          'Notes auto-save as you type (2-second debounce). A live preview renders @NPC mentions as clickable links.',
+          'GMs can write a private note directly to any player\'s journal from the "Write to Player" section — the player receives a notification and sees the note on their next visit.',
+          'NPC cards now include a My Impressions section in the sidebar — private, per-NPC notes tied to that character. Auto-saves and fully private.',
+        ],
+      },
+      {
+        heading: 'Public NPC Comments',
+        items: [
+          'Any logged-in user can leave a public comment on any NPC card. Comments are visible to everyone.',
+          'Full @NPC mention support — type @ to search and link characters.',
+          'Threaded replies: click Reply on any comment to respond one level deep.',
+          'Edit your own comments. The GM can view the full edit history of any comment.',
+          'Delete your own comments (soft-delete — GM still sees content marked [deleted]). GM can delete any comment.',
+          'Restore: players can restore a comment they deleted themselves. GMs can restore any deleted comment.',
+          'Shred (GM only): permanently remove a comment from the record. Cannot be undone.',
+        ],
+      },
+      {
+        heading: 'Notifications Bell',
+        items: [
+          'A 🔔 bell in the header shows a badge when you have unread notifications.',
+          'Notifications are pushed when someone comments on an NPC or the GM writes you a private note.',
+          'Click the bell to open the panel. Click any notification to jump to the relevant NPC card. Mark individual or all as read.',
+        ],
+      },
+      {
+        heading: 'Navigation — Records Dropdown',
+        items: [
+          'Chronicle and Journal are now grouped under a Records dropdown in the nav bar, keeping the header tidy.',
+          'The existing Fate dropdown (Winter + Mausoleum) remains. Both dropdowns are mutually exclusive — opening one closes the other.',
+        ],
+      },
+      {
+        heading: 'NPC Card — Notes & Comments Sidebar',
+        items: [
+          'On desktop, NPC cards now display a sidebar panel on the right showing My Impressions and the public Comments section.',
+          'On mobile, the sidebar slides in as a drawer — tap the "📝 Notes & Comments" button at the bottom of the card to open it.',
+        ],
+      },
+      {
+        heading: 'UI Fixes',
+        items: [
+          'Modal close button (✕) no longer overlaps content — modal top padding increased to clear the button.',
+          'Double scrollbars on NPC card modal eliminated — sidebar scrolls independently, modal is the single outer scroller.',
+          'Nav dropdowns now close when a modal or card popup opens.',
+          'Records and Fate dropdowns are now mutually exclusive.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.5.0',
     date:    '2026-04-07',
@@ -1298,6 +1356,8 @@ const APP = {
   _boot() {
     // Pre-load pins so the dashboard widget and NPC card pin buttons are ready.
     if (typeof PinsManager !== 'undefined') PinsManager.load();
+    if (typeof Notes !== 'undefined') Notes.load();
+    if (typeof Notifications !== 'undefined') Notifications.startPolling();
     // Wire nav tabs
     document.querySelectorAll('.nav-tab').forEach(btn => {
       if (btn.dataset.tab) btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
@@ -1309,7 +1369,9 @@ const APP = {
     if (fateTrigger && fateMenu) {
       fateTrigger.addEventListener('click', e => {
         e.stopPropagation();
+        const opening = !fateMenu.classList.contains('open');
         fateMenu.classList.toggle('open');
+        if (opening) document.getElementById('navRecordsMenu')?.classList.remove('open');
       });
       fateMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -1318,6 +1380,25 @@ const APP = {
         });
       });
       document.addEventListener('click', () => fateMenu.classList.remove('open'));
+    }
+
+    // Wire Records dropdown
+    const recordsTrigger = document.getElementById('navRecordsBtn');
+    const recordsMenu    = document.getElementById('navRecordsMenu');
+    if (recordsTrigger && recordsMenu) {
+      recordsTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        const opening = !recordsMenu.classList.contains('open');
+        recordsMenu.classList.toggle('open');
+        if (opening) document.getElementById('navFateMenu')?.classList.remove('open');
+      });
+      recordsMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
+        item.addEventListener('click', () => {
+          this.switchTab(item.dataset.tab);
+          recordsMenu.classList.remove('open');
+        });
+      });
+      document.addEventListener('click', () => recordsMenu.classList.remove('open'));
     }
 
     // Wire Archive dropdown
@@ -1715,9 +1796,14 @@ const APP = {
     // Fate dropdown button: active when winter or mausoleum is showing
     const fateBtn = document.getElementById('navFateBtn');
     if (fateBtn) fateBtn.classList.toggle('active', name === 'winter' || name === 'mausoleum');
-    // Close the dropdown on any tab switch
+    // Records dropdown button: active when chronicle or journal is showing
+    const recordsBtn = document.getElementById('navRecordsBtn');
+    if (recordsBtn) recordsBtn.classList.toggle('active', name === 'chronicle' || name === 'journal');
+    // Close dropdowns on any tab switch
     const fateMenu = document.getElementById('navFateMenu');
     if (fateMenu) fateMenu.classList.remove('open');
+    const recordsMenu = document.getElementById('navRecordsMenu');
+    if (recordsMenu) recordsMenu.classList.remove('open');
 
     // Show/hide panels
     document.querySelectorAll('.tab-panel').forEach(p => {
@@ -1737,6 +1823,7 @@ const APP = {
       case 'winter':     TabWinter.render();     break;
       case 'mausoleum':  TabMausoleum.render();   break;
       case 'chronicle':  TabChronicle.render();   break;
+      case 'journal':    if (typeof TabJournal !== 'undefined') TabJournal.render(); break;
     }
   },
 

@@ -516,6 +516,7 @@ const TabDashboard = {
           ${attentionHtml}
           ${manorHtml}
           ${this._buildPoiWidget(year)}
+          ${typeof Notes !== 'undefined' ? Notes.buildDashboardWidget() : ''}
           ${membersHtml}
           ${deathsHtml}
           ${chronicleHtml}

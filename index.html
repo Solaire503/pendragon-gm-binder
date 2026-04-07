@@ -53,12 +53,27 @@
           </button>
         </div>
       </div>
-      <button class="nav-tab" data-tab="chronicle">
-        <span class="nav-icon">📖</span>
-        <span class="nav-label">Chronicle</span>
-      </button>
+      <div class="nav-dropdown" id="navRecords">
+        <button class="nav-tab nav-dropdown-trigger" id="navRecordsBtn" title="Chronicle &amp; Journal">
+          <span class="nav-icon">📖</span>
+          <span class="nav-label">Records</span>
+          <span class="nav-caret">▾</span>
+        </button>
+        <div class="nav-dropdown-menu" id="navRecordsMenu">
+          <button class="nav-dropdown-item" data-tab="chronicle">
+            <span class="nav-icon">📜</span> Chronicle
+          </button>
+          <button class="nav-dropdown-item" data-tab="journal">
+            <span class="nav-icon">📝</span> Journal
+          </button>
+        </div>
+      </div>
     </nav>
     <div class="header-right">
+      <button class="hdr-btn hdr-btn-notif" id="notifBtn" title="Notifications" onclick="Notifications.openPanel()" style="position:relative;">
+        🔔
+        <span id="notif-badge" class="notif-badge" hidden></span>
+      </button>
       <div class="sync-status" id="syncStatus" title="File sync status">
         <span class="sync-icon" id="syncIcon">◌</span>
         <span class="sync-label" id="syncLabel">—</span>
@@ -96,6 +111,7 @@
     <div class="tab-panel" id="tab-winter"></div>
     <div class="tab-panel" id="tab-mausoleum"></div>
     <div class="tab-panel" id="tab-chronicle"></div>
+    <div class="tab-panel" id="tab-journal"></div>
   </main>
 
 </div>
@@ -143,6 +159,10 @@
 <script src="js/tabs/mausoleum.js"></script>
 <script src="js/tabs/chronicle.js"></script>
 <script src="js/pins.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/notes.js"></script>
+<script src="js/comments.js"></script>
+<script src="js/tabs/journal.js"></script>
 <script src="js/multiplayer.js"></script>
 <script src="js/app.js"></script>
 

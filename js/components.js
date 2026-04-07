@@ -76,6 +76,8 @@ const Modal = {
   _closeCallback: null,
 
   open(contentHtml, options = {}) {
+    document.getElementById('navFateMenu')?.classList.remove('open');
+    document.getElementById('navRecordsMenu')?.classList.remove('open');
     const overlay = document.getElementById('modalOverlay');
     const box     = document.getElementById('modalBox');
     const content = document.getElementById('modalContent');
@@ -332,8 +334,8 @@ function buildNpcCardHtml(npc, opts = {}) {
     'Guardian':        ['Guardian of',              'Ward of'],
   };
 
-  // Squire/Page rels are shown in Training History once came_of_age — hide from main rels then
-  const TRAINING_TYPES = new Set(['Squire', 'Page']);
+  // Squire/Page/Former Squire rels shown in Training History once came_of_age — hide from main rels then
+  const TRAINING_TYPES = new Set(['Squire', 'Former Squire', 'Page']);
   const rels = STORE.getRelationships(npc.id)
     .filter(r => !(npc.came_of_age && TRAINING_TYPES.has(r.type)))
     .slice()
@@ -504,22 +506,26 @@ function buildNpcCardHtml(npc, opts = {}) {
   // ── Training history block ───────────────────────────────────
   // Only show Squire/Page in Training History after came_of_age — before that they live in Relationships
   const trainingRels = npc.came_of_age
-    ? STORE.getRelationships(npc.id).filter(r => r.type === 'Squire' || r.type === 'Page')
+    ? STORE.getRelationships(npc.id).filter(r => r.type === 'Squire' || r.type === 'Former Squire' || r.type === 'Page')
     : [];
 
   const trainingRelHtml = trainingRels.map(r => {
-    const isJunior = r.targetId === npc.id;
-    const otherId  = isJunior ? r.sourceId : r.targetId;
-    const other    = STORE.getNpc(otherId);
-    const label    = isJunior
-      ? (r.type === 'Squire' ? 'Squire under' : 'Page at')
-      : (r.type === 'Squire' ? 'Squire' : 'Page');
-    const name     = other ? other.name : (r.notes || '—');
-    const sub      = other ? other.role : '';
-    const noteText = r.notes ? `<span style="font-size:0.78rem;color:var(--ink-soft);font-style:italic;"> — ${AtMention.render(r.notes)}</span>` : '';
+    const isJunior  = r.targetId === npc.id;
+    const otherId   = isJunior ? r.sourceId : r.targetId;
+    const other     = STORE.getNpc(otherId);
+    const isDead    = other?.status === 'Dead';
+    const label     = isJunior
+      ? (r.type === 'Squire' || r.type === 'Former Squire' ? 'Squire under' : 'Page at')
+      : (r.type === 'Squire' || r.type === 'Former Squire' ? 'Squire' : 'Page');
+    const name      = other ? other.name : (r.notes || '—');
+    const sub       = other ? other.role : '';
+    const nameStyle = isDead ? 'color:var(--ink-soft);text-decoration:line-through;' : '';
+    const deathNote = isDead ? `<span class="rel-death-note">† ${other.year_died || 'deceased'}</span>` : '';
+    const noteText  = r.notes ? `<span style="font-size:0.78rem;color:var(--ink-soft);font-style:italic;"> — ${AtMention.render(r.notes)}</span>` : '';
     return `<div class="family-member-item" ${other ? `onclick="Components.openNpcCard('${other.id}')"` : ''}>
       <span class="family-member-role" style="background:var(--violet-mid);color:#fff;">${label}</span>
-      <span class="family-member-name">${name}${noteText}</span>
+      <span class="family-member-name" style="${nameStyle}">${name}${noteText}</span>
+      ${deathNote}
       <span class="family-member-age">${sub}</span>
     </div>`;
   }).join('');
@@ -565,7 +571,10 @@ function buildNpcCardHtml(npc, opts = {}) {
     ? `<div style="color:var(--crimson-mid);font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.15em;margin-top:4px;">† DECEASED ${npc.year_died ? npc.year_died + ' AD' : ''}</div>`
     : '';
 
+  const impressionText = typeof Notes !== 'undefined' ? Notes.getImpression(npc.id) : '';
+
   return `
+    <div class="npc-card-layout">
     <div class="npc-detail">
       <div class="npc-detail-header">
         <div class="npc-avatar" style="background:${col}22;border-color:${col};">${icon}</div>
@@ -635,6 +644,42 @@ function buildNpcCardHtml(npc, opts = {}) {
           ? `<button class="btn btn-ghost" style="margin-left:auto;" onclick="TabRoster.deselect()">Close</button>`
           : `<button class="btn btn-ghost" style="margin-left:auto;" onclick="CardPopup.closeTop()">Close</button>`}
       </div>
+    </div>
+
+    <!-- SIDEBAR: Impressions + Comments -->
+    <div class="npc-card-sidebar" id="npc-sidebar-${esc(npc.id)}">
+      <button class="npc-sidebar-close" onclick="Components._closeSidebar('${esc(npc.id)}')" title="Close">✕</button>
+
+      <div class="npc-sidebar-section">
+        <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span>My Impressions</span>
+          <span style="font-size:0.65rem;color:var(--ink-soft);font-style:italic;font-weight:400;font-family:var(--font-body);">private</span>
+        </div>
+        <textarea
+          id="impression-ta-${esc(npc.id)}"
+          class="journal-textarea"
+          style="min-height:100px;"
+          placeholder="Your private thoughts on ${esc(npc.name)}\u2026"
+          oninput="Components._onImpressionInput('${esc(npc.id)}', this.value)"
+        >${esc(impressionText)}</textarea>
+        <div style="text-align:right;font-size:0.65rem;color:var(--ink-soft);font-style:italic;margin-top:3px;">
+          auto-saves &nbsp;<span id="impression-status-${esc(npc.id)}" class="journal-save-status"></span>
+        </div>
+      </div>
+
+      <div class="npc-sidebar-section">
+        <div class="section-title" style="margin-bottom:8px;">Comments</div>
+        <div id="comments-${esc(npc.id)}" class="comments-section">
+          ${typeof Comments !== 'undefined' ? Comments.buildHtml(npc.id) : '<div class="text-muted">Loading\u2026</div>'}
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile sidebar toggle -->
+    <button class="npc-sidebar-toggle" id="npc-sidebar-toggle-${esc(npc.id)}" onclick="Components._openSidebar('${esc(npc.id)}')">
+      📝 Notes &amp; Comments${(() => { const cached = typeof Comments !== 'undefined' && Comments._cache[npc.id]; const count = cached ? cached.filter(c => !c.deleted).length : 0; return count > 0 ? ` (${count})` : ''; })()}
+    </button>
+
     </div>`;
 }
 
@@ -997,6 +1042,20 @@ function buildSoloChronicleHtml(npc) {
 
 // ── COMPONENTS NAMESPACE ──────────────────────────────────────
 const Components = {
+  _onImpressionInput(npcId, value) {
+    if (typeof Notes !== 'undefined') Notes.setImpression(npcId, value, `impression-status-${npcId}`);
+  },
+
+  _openSidebar(npcId) {
+    const sidebar = document.getElementById(`npc-sidebar-${npcId}`);
+    if (sidebar) sidebar.classList.add('npc-sidebar-open');
+  },
+
+  _closeSidebar(npcId) {
+    const sidebar = document.getElementById(`npc-sidebar-${npcId}`);
+    if (sidebar) sidebar.classList.remove('npc-sidebar-open');
+  },
+
   openNpcCard(id) {
     const npc = STORE.getNpc(id);
     if (!npc) return;
@@ -1007,6 +1066,7 @@ const Components = {
     } else {
       Modal.open(buildNpcCardHtml(npc), { wide: true });
     }
+    if (typeof Comments !== 'undefined') Comments.loadForNpc(id);
   },
 
   // Called by the family tree — always uses the popup overlay.
@@ -1014,6 +1074,7 @@ const Components = {
     const npc = STORE.getNpc(id);
     if (!npc) return;
     CardPopup.open(buildNpcCardHtml(npc));
+    if (typeof Comments !== 'undefined') Comments.loadForNpc(id);
   },
 
   // Always opens in CardPopup — used by Persons of Interest dashboard widget.
@@ -1021,6 +1082,7 @@ const Components = {
     const npc = STORE.getNpc(id);
     if (!npc) return;
     CardPopup.open(buildNpcCardHtml(npc));
+    if (typeof Comments !== 'undefined') Comments.loadForNpc(id);
   },
 
   openEditNpc(id) {
@@ -1037,6 +1099,8 @@ const Components = {
           const hiddenEl = document.getElementById('ef-training-npc-id');
           if (searchEl) searchEl.value = linked.name;
           if (hiddenEl) hiddenEl.value = linked.id;
+        } else {
+          Toast.show(`${npc.name}'s linked trainer no longer exists in the binder — link cleared on next save.`, 'warning');
         }
       }
     }});
