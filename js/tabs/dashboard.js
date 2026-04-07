@@ -205,7 +205,7 @@ const TabDashboard = {
     const rows = pinnedNpcs.map(n => {
       const col = n.household ? hhColour(n.household) : roleColour(n.role);
       const age = n.year_born ? year - n.year_born : null;
-      const dead = !n.alive;
+      const dead = n.status === 'Dead';
       return `<div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCardPopup('${n.id}')">
         <span class="pk-stat-label" style="color:${col};${dead ? 'opacity:0.55;' : ''}">${dead ? '† ' : ''}${esc(n.name)}</span>
         <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.7;">${esc(n.role||'—')}${age !== null ? ' · ' + age : ''}</span>

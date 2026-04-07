@@ -13,6 +13,9 @@ announcements.json
 submissions.json
 presence.json
 
+# ===== Per-player data (horses, pins, notes) =====
+player_data/
+
 # ===== Local backups =====
 backups/
 
