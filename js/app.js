@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -47,6 +47,16 @@ const FEATURES = [
       'The Manors tab opens to a full read-only overview of your manor — all the same detail the GM sees, without the edit controls.',
       'Summary tiles at the top show all active manors so you can see where your household stands relative to others.',
       'Your manor\'s tile has a coloured left border in your household colour.',
+    ],
+  },
+  {
+    heading: 'Persons of Interest',
+    icon: '★',
+    items: [
+      'Open any NPC card and click the ☆ Pin button to add them to your Persons of Interest list.',
+      'Pinned NPCs appear in a ★ Persons of Interest widget on your dashboard. Clicking any name opens their card without leaving the dashboard.',
+      'The pin button turns gold (★) when an NPC is pinned. Click it again to unpin.',
+      'Your list is personal — each player and the GM has their own independent list. No limit on how many you can pin.',
     ],
   },
   {
@@ -106,6 +116,17 @@ const FEATURES = [
     ],
   },
   {
+    heading: 'NPC Stat Block Templates',
+    icon: '📋',
+    items: [
+      '19 pre-built stat block templates from the Pendragon 6e GM\'s Handbook — Saxon Ceorls, Saxon Thegns, Irish Warriors, Ordinary Knights, Veteran Knights, and more across four categories.',
+      'Access via the "📋 Attach Template Stat Block" button when adding or editing an NPC. Opens a picker showing all templates grouped by category.',
+      'Clicking a template pre-fills Stats, Passions & Traits, and Skills in the edit form. The template name is saved with the NPC and shown as a badge on their card.',
+      'All fields remain fully editable after applying — templates are a starting point, not a lock.',
+      'Passions & Traits, Skills, and Stats are GM-only fields — players cannot see them on NPC cards.',
+    ],
+  },
+  {
     heading: 'Households & Family Trees',
     icon: '🌳',
     items: [
@@ -129,6 +150,16 @@ const FEATURES = [
       'Improvements track fixed and dice income. Record Year pre-fills improvement income automatically.',
       'Personnel fields (Lord/Lady, Steward, Heir) use the NPC search widget.',
       'Export any recorded year as a parchment summary PNG to share with players.',
+    ],
+  },
+  {
+    heading: 'Persons of Interest',
+    icon: '★',
+    items: [
+      'Any user can pin NPCs to their personal Persons of Interest list using the ☆ Pin button on any NPC card.',
+      'Each user\'s pinned characters appear in a ★ Persons of Interest widget on their own dashboard. Clicking opens the NPC card without leaving the dashboard.',
+      'Pins are per-user and independent — the GM\'s list is separate from each player\'s. No cap on pins.',
+      'GM pins are stored alongside player pins in player_data/{username}/pins.json.',
     ],
   },
   {
@@ -217,6 +248,22 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '2.3.1',
+    date:    '2026-04-07',
+    sections: [
+      {
+        heading: 'Persons of Interest',
+        items: [
+          'Any user (GM or player) can now pin NPCs as Persons of Interest — a CK3-style watchlist of characters you want to keep an eye on.',
+          'Open any NPC card and click the ☆ Pin button to pin them. The button turns gold (★) when pinned. Click again to unpin.',
+          'Pinned characters appear in a ★ Persons of Interest widget on your dashboard. Clicking any name opens their NPC card without leaving the dashboard.',
+          'Pins are per-user — each player and the GM has their own independent list. No cap on number of pins.',
+          'Pin data is stored server-side in player_data/{username}/pins.json.',
+        ],
+      },
+    ],
+  },
+  {
     version: '2.3.0',
     date:    '2026-04-07',
     sections: [
@@ -235,6 +282,24 @@ const PATCH_NOTES = [
           'Horses can be manually marked Dead or Ruined outside of a roll, or deleted entirely.',
           'GM can manage any household\'s stable from the Stables section tab in the GM manor view.',
           'Horse data is stored per-player in player_data/{username}/horses.json — completely separate from the shared binder save.',
+        ],
+      },
+      {
+        heading: 'NPC Stat Block Templates',
+        items: [
+          '19 pre-built stat block templates drawn from the Pendragon 6e GM\'s Handbook, covering Saxon Ceorls, Saxon Thegns, Irish Warriors, Ordinary Knights, Veteran Knights, and more across four categories.',
+          'When adding or editing an NPC, click "Attach Template Stat Block" to open the template picker. Browse templates by category and click any card to apply it.',
+          'Applying a template pre-fills the Stats, Passions & Traits, and Skills fields in the edit form. The applied template name is saved with the NPC record.',
+          'Templates are a starting point — all fields remain freely editable after applying.',
+          'The applied template name is shown as a badge on the GM\'s NPC card view.',
+        ],
+      },
+      {
+        heading: 'NPC Cards — Player Privacy',
+        items: [
+          'Players can no longer see the Passions & Traits, Skills, and Stats sections on NPC cards — these are now GM-only.',
+          'Players still see everything else: name, role, household, notes, relationships, life events, and solo chronicle.',
+          'This keeps mechanical details and GM intel out of player hands while leaving flavour and story information visible.',
         ],
       },
     ],
@@ -1165,6 +1230,8 @@ const APP = {
   // Shared boot — wires up controls, renders first tab.
   // Called after data is ready (either from file, localStorage, or post-welcome).
   _boot() {
+    // Pre-load pins so the dashboard widget and NPC card pin buttons are ready.
+    if (typeof PinsManager !== 'undefined') PinsManager.load();
     // Wire nav tabs
     document.querySelectorAll('.nav-tab').forEach(btn => {
       if (btn.dataset.tab) btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));

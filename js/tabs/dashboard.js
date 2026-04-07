@@ -171,6 +171,8 @@ const TabDashboard = {
             </div>`).join('')}
         </div>` : ''}
 
+        ${this._buildPoiWidget(year)}
+
         <div class="card">
           <div class="section-title">Quick Actions</div>
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
@@ -184,6 +186,36 @@ const TabDashboard = {
         ${typeof Multiplayer !== 'undefined' ? Multiplayer.gmBroadcastHtml() : ''}
 
       </div>`;
+  },
+
+  // ── PERSONS OF INTEREST WIDGET ────────────────────────────
+  _buildPoiWidget(year) {
+    if (typeof PinsManager === 'undefined') return '';
+    const pins = PinsManager._pins;
+    if (pins === null) {
+      // Not loaded yet — trigger load and re-render when ready
+      PinsManager.load().then(() => TabDashboard.render());
+      return '';
+    }
+    if (pins.length === 0) return '';
+
+    const pinnedNpcs = pins.map(id => STORE.getNpc(id)).filter(Boolean);
+    if (pinnedNpcs.length === 0) return '';
+
+    const rows = pinnedNpcs.map(n => {
+      const col = n.household ? hhColour(n.household) : roleColour(n.role);
+      const age = n.year_born ? year - n.year_born : null;
+      const dead = !n.alive;
+      return `<div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCardPopup('${n.id}')">
+        <span class="pk-stat-label" style="color:${col};${dead ? 'opacity:0.55;' : ''}">${dead ? '† ' : ''}${esc(n.name)}</span>
+        <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.7;">${esc(n.role||'—')}${age !== null ? ' · ' + age : ''}</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="card" style="border-top:3px solid var(--gold);">
+      <div class="section-title" style="margin-bottom:12px;">★ Persons of Interest</div>
+      ${rows}
+    </div>`;
   },
 
   // ── PLAYER DASHBOARD STATE ─────────────────────────────────
@@ -483,6 +515,7 @@ const TabDashboard = {
         <div class="dashboard-layout">
           ${attentionHtml}
           ${manorHtml}
+          ${this._buildPoiWidget(year)}
           ${membersHtml}
           ${deathsHtml}
           ${chronicleHtml}

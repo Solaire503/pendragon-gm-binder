@@ -1128,6 +1128,45 @@ def api_save_horses_gm(household):
     return jsonify({'ok': True})
 
 
+# ── PINS ─────────────────────────────────────────────────────────────────────
+
+def _read_pins(username: str) -> list:
+    path = PLAYER_DATA_DIR / username / 'pins.json'
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return []
+
+
+def _write_pins(username: str, pins: list) -> None:
+    d = PLAYER_DATA_DIR / username
+    d.mkdir(parents=True, exist_ok=True)
+    (d / 'pins.json').write_text(json.dumps(pins, indent=2), encoding='utf-8')
+
+
+@app.route('/api/pins')
+@login_required
+def api_get_pins():
+    """Any logged-in user: read own pinned NPC IDs."""
+    return jsonify({'pins': _read_pins(session['username'])})
+
+
+@app.route('/api/pins', methods=['POST'])
+@login_required
+def api_save_pins():
+    """Any logged-in user: save own pinned NPC IDs."""
+    err = _csrf_check()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('pins'), list):
+        return jsonify({'error': 'Invalid payload'}), 400
+    pins = [str(p) for p in data['pins'] if isinstance(p, str)]
+    _write_pins(session['username'], pins)
+    return jsonify({'ok': True})
+
+
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def _rotate_backup(save_path: Path) -> None:

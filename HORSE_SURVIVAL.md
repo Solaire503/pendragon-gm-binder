@@ -62,7 +62,7 @@ Shown as italic helper text below the Age field, based on horse type selected:
 
 | Type group | Hint text |
 |-----------|-----------|
-| War Horses (any) | *"Combat horses are typically fully-fledged at age 8."* |
+| War Horses (any) | *"Combat horses are typically fully-fledged at age 6."* |
 | Riding Horses (any) | *"Riding horses are typically fully-fledged at age 5."* |
 | Work Horses (any) | *"Work horses are typically ready at age 4."* |
 

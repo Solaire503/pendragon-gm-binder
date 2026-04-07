@@ -2838,6 +2838,20 @@ html.is-player .player-readonly-banner {
   margin-bottom: 4px;
 }
 
+/* ── STAT BLOCK TEMPLATE PICKER ──────────────────────────── */
+.statblock-card {
+  background: var(--vellum-mid);
+  border: 1px solid var(--vellum-deep);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.statblock-card:hover {
+  border-color: var(--cobalt);
+  background: rgba(30,58,95,0.07);
+}
+
 /* ── STABLES ──────────────────────────────────────────────── */
 .horse-card {
   background: var(--vellum-mid);
@@ -2870,4 +2884,16 @@ html.is-player .player-readonly-banner {
 .horse-type-work {
   background: rgba(90,80,64,0.14);
   color: var(--ink-soft);
+}
+
+/* ── PERSONS OF INTEREST — PIN BUTTON ────────────────────── */
+.pin-btn {
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s;
+}
+.pin-btn:hover { opacity: 1; }
+.pin-btn.pin-active {
+  color: var(--gold);
+  opacity: 1;
+  font-weight: 600;
 }

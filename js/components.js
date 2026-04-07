@@ -598,9 +598,10 @@ function buildNpcCardHtml(npc, opts = {}) {
 
       ${ageFlagHtml}
       ${npc.notes    ? `<div class="detail-block"><div class="detail-label">Notes</div><div class="detail-value atm-rendered">${AtMention.render(npc.notes)}</div></div>` : ''}
-      ${npc.passions ? `<div class="detail-block"><div class="detail-label">Passions &amp; Traits</div><div class="detail-value atm-rendered">${AtMention.render(npc.passions)}</div></div>` : ''}
-      ${npc.skills   ? `<div class="detail-block"><div class="detail-label">Skills</div><div class="detail-value atm-rendered">${AtMention.render(npc.skills)}</div></div>` : ''}
-      ${npc.stats    ? `<div class="detail-block"><div class="detail-label">Stats</div><div class="detail-value atm-rendered">${AtMention.render(npc.stats)}</div></div>` : ''}
+      ${isGM() && npc.passions ? `<div class="detail-block"><div class="detail-label">Passions &amp; Traits</div><div class="detail-value atm-rendered">${AtMention.render(npc.passions)}</div></div>` : ''}
+      ${isGM() && npc.skills   ? `<div class="detail-block"><div class="detail-label">Skills</div><div class="detail-value atm-rendered">${AtMention.render(npc.skills)}</div></div>` : ''}
+      ${isGM() && npc.stats    ? `<div class="detail-block"><div class="detail-label">Stats</div><div class="detail-value atm-rendered">${AtMention.render(npc.stats)}</div></div>` : ''}
+      ${isGM() && npc.statblock_template ? `<div class="detail-block" style="border-left:3px solid var(--cobalt);"><div class="detail-label" style="color:var(--cobalt-mid);">📋 Template</div><div class="detail-value" style="font-family:var(--font-heading);font-size:0.78rem;">${esc(npc.statblock_template)}</div></div>` : ''}
       ${headHtml}${blessedHtml}${fateTouchedHtml}
       ${trainingHistoryHtml}
 
@@ -620,6 +621,11 @@ function buildNpcCardHtml(npc, opts = {}) {
             ? `<button class="btn btn-danger" onclick="Components.confirmKill('${npc.id}')">Mark Deceased</button>`
             : `<button class="btn btn-ghost" onclick="Components.confirmRestore('${npc.id}')">Restore to Living</button>`}
         ` : ''}
+        <button class="btn btn-ghost pin-btn${typeof PinsManager !== 'undefined' && PinsManager.isPinned(npc.id) ? ' pin-active' : ''}"
+                onclick="PinsManager.toggleAndRefreshCard('${npc.id}')"
+                title="${typeof PinsManager !== 'undefined' && PinsManager.isPinned(npc.id) ? 'Remove from Persons of Interest' : 'Add to Persons of Interest'}">
+          ${typeof PinsManager !== 'undefined' && PinsManager.isPinned(npc.id) ? '★' : '☆'} Pin
+        </button>
         ${opts.inline
           ? `<button class="btn btn-ghost" style="margin-left:auto;" onclick="TabRoster.deselect()">Close</button>`
           : `<button class="btn btn-ghost" style="margin-left:auto;" onclick="CardPopup.closeTop()">Close</button>`}
@@ -718,6 +724,12 @@ function buildNpcEditHtml(npc, isNew = false) {
       <div class="detail-field mb-8">
         <div class="detail-label">Stats</div>
         <textarea class="edit-input edit-textarea" id="ef-stats">${npc.stats || ''}</textarea>
+      </div>
+      <input type="hidden" id="ef-statblock-template" value="${esc(npc.statblock_template || '')}">
+      <div style="margin-bottom:12px;">
+        <button class="btn btn-ghost" style="font-size:0.68rem;width:100%;border-style:dashed;" onclick="Components.openStatblockPicker()">
+          📋 ${npc.statblock_template ? 'Template: ' + esc(npc.statblock_template) + ' — Change' : 'Attach Template Stat Block'}
+        </button>
       </div>
       <div class="detail-field mb-8">
         <div class="detail-label">Training History (free text)</div>
@@ -997,6 +1009,13 @@ const Components = {
     CardPopup.open(buildNpcCardHtml(npc));
   },
 
+  // Always opens in CardPopup — used by Persons of Interest dashboard widget.
+  openNpcCardPopup(id) {
+    const npc = STORE.getNpc(id);
+    if (!npc) return;
+    CardPopup.open(buildNpcCardHtml(npc));
+  },
+
   openEditNpc(id) {
     const npc = STORE.getNpc(id);
     if (!npc) return;
@@ -1203,9 +1222,10 @@ const Components = {
       out_of_story:     g('ef-out-of-story')?.checked ?? false,
       out_of_story_note: g('ef-oos-note')?.value?.trim() || '',
       round_table:      g('ef-round-table')?.checked ?? false,
-      page_court:       g('ef-page-court')?.value?.trim() || '',
-      training_path:    g('ef-training-path')?.value?.trim() || '',
-      training_where: g('ef-training-where')?.value?.trim() || '',
+      page_court:         g('ef-page-court')?.value?.trim() || '',
+      training_path:      g('ef-training-path')?.value?.trim() || '',
+      training_where:     g('ef-training-where')?.value?.trim() || '',
+      statblock_template: g('ef-statblock-template')?.value?.trim() || '',
     };
     STORE.updateNpc(id, changes);
     Toast.success('Saved');
@@ -1481,8 +1501,9 @@ const Components = {
       out_of_story_note: g('ef-oos-note')?.value?.trim() || '',
       round_table:      g('ef-round-table')?.checked ?? false,
       page_court:       g('ef-page-court')?.value?.trim() || '',
-      training_where:   g('ef-training-where')?.value?.trim() || '',
-      training_path:    g('ef-training-path')?.value?.trim() || '',
+      training_where:     g('ef-training-where')?.value?.trim() || '',
+      training_path:      g('ef-training-path')?.value?.trim() || '',
+      statblock_template: g('ef-statblock-template')?.value?.trim() || '',
     };
     const id = STORE.addNpc(npc);
     Toast.success(`${name} added to the roster`);
@@ -1497,6 +1518,7 @@ const Components = {
       pronoun: 'He/him', household: '', manor: '',
       eligibility: 'No', dowry: '', notes: '',
       passions: '', skills: '', stats: '',
+      statblock_template: '',
       blessed: false, blessed_note: '', fate_touched: false,
       page_placed: false, page_court: '',
       training_path: '', training_where: '',
@@ -1504,6 +1526,78 @@ const Components = {
       treeX: null, treeY: null,
     };
     Modal.open(buildNpcEditHtml(template, true), { wide: true });
+  },
+
+  // ── STAT BLOCK TEMPLATE PICKER ────────────────────────────
+
+  openStatblockPicker() {
+    const existing = document.getElementById('ef-statblock-template')?.value?.trim();
+    if (existing) {
+      // Warn before showing the picker — confirm step happens here
+      CardPopup.open(`
+        <div style="min-width:320px;padding:4px 0;">
+          <div style="font-family:var(--font-display);font-size:0.95rem;margin-bottom:10px;">📋 Replace Template?</div>
+          <div style="font-size:0.82rem;color:var(--ink-soft);margin-bottom:18px;">
+            This NPC already has <strong>${esc(existing)}</strong> attached.<br><br>
+            Selecting a new template will overwrite the Stats, Passions &amp; Traits, and Skills fields.<br>
+            <span style="color:var(--verdigris-mid);">Notes are never touched.</span>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-verdigris" onclick="Components._showStatblockGrid()">Browse Templates</button>
+            <button class="btn btn-ghost" onclick="CardPopup.closeTop()">Cancel</button>
+          </div>
+        </div>`);
+    } else {
+      this._showStatblockGrid();
+    }
+  },
+
+  _showStatblockGrid() {
+    const categories = [...new Set(STAT_BLOCK_TEMPLATES.map(t => t.category))];
+    const gridHtml = categories.map(cat => {
+      const templates = STAT_BLOCK_TEMPLATES.filter(t => t.category === cat);
+      const cards = templates.map(t => `
+        <div class="statblock-card" onclick="Components._applyStatblockTemplate('${esc(t.name)}')">
+          <div style="font-family:var(--font-display);font-size:0.85rem;color:var(--ink);margin-bottom:3px;">${esc(t.name)}</div>
+          <div style="font-size:0.72rem;color:var(--ink-soft);font-style:italic;margin-bottom:6px;">${esc(t.description)}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${t.glory !== '—' ? `<span style="font-family:var(--font-heading);font-size:0.55rem;color:var(--gold);background:rgba(184,134,11,0.1);border:1px solid rgba(184,134,11,0.3);padding:1px 6px;border-radius:8px;">Glory ${t.glory}</span>` : ''}
+            <span style="font-family:var(--font-heading);font-size:0.55rem;color:var(--ink-soft);background:var(--vellum-deep);padding:1px 6px;border-radius:8px;">${esc(t.naturalAge)}</span>
+            ${t.magicalTalents ? `<span style="font-family:var(--font-heading);font-size:0.55rem;color:#4a8a5a;background:rgba(74,138,90,0.12);border:1px solid rgba(74,138,90,0.3);padding:1px 6px;border-radius:8px;">✦ Magical</span>` : ''}
+          </div>
+        </div>`).join('');
+      return `
+        <div style="margin-bottom:16px;">
+          <div style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--vellum-deep);">${esc(cat)}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">${cards}</div>
+        </div>`;
+    }).join('');
+
+    CardPopup.open(`
+      <div style="min-width:480px;max-width:720px;">
+        <div style="font-family:var(--font-display);font-size:1rem;margin-bottom:16px;">📋 Choose a Template</div>
+        ${gridHtml}
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn btn-ghost" onclick="CardPopup.closeTop()">Cancel</button>
+        </div>
+      </div>`);
+  },
+
+  _applyStatblockTemplate(name) {
+    const t = STAT_BLOCK_TEMPLATES.find(x => x.name === name);
+    if (!t) return;
+    const g = id => document.getElementById(id);
+    let skills = t.skills || '';
+    if (t.magicalTalents) skills += (skills ? '\n' : '') + 'Magical Talents: ' + t.magicalTalents;
+    if (g('ef-stats'))    g('ef-stats').value    = t.stats    || '';
+    if (g('ef-passions')) g('ef-passions').value = t.passions || '';
+    if (g('ef-skills'))   g('ef-skills').value   = skills;
+    if (g('ef-statblock-template')) g('ef-statblock-template').value = name;
+    // Update the button label in the edit form
+    const btn = document.querySelector('button[onclick="Components.openStatblockPicker()"]');
+    if (btn) btn.textContent = `📋 Template: ${name} — Change`;
+    CardPopup.closeTop();
+    Toast.success(`Applied: ${name}`);
   },
 
   _toggleBastardOpts(type, divId) {
