@@ -13,7 +13,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
+APP_VERSION  = '2.4.0'   # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -99,9 +101,13 @@ class _StderrFilter:
 sys.stderr = _StderrFilter(sys.stderr)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-# Mark cookies Secure when we're actually serving HTTPS. Disabled under
-# FORCE_HTTP=1 because Secure cookies would never be sent over plain HTTP.
-app.config['SESSION_COOKIE_SECURE'] = (SECRETS.get('FORCE_HTTP') != '1')
+# Secure cookies: always True behind Cloudflare Tunnel (CF_TUNNEL=1 in secrets.env)
+# because clients see HTTPS even though the local leg is plain HTTP.
+# Disabled under FORCE_HTTP=1 for plain-LAN use without a tunnel.
+_cf_tunnel = SECRETS.get('CF_TUNNEL') == '1'
+app.config['SESSION_COOKIE_SECURE'] = _cf_tunnel or (SECRETS.get('FORCE_HTTP') != '1')
+# Sessions expire after 24 hours of inactivity (reset on every request).
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 # Limit request body to 16 MB — prevents disk exhaustion via player endpoints.
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
@@ -134,19 +140,39 @@ def _clear_attempts(ip: str) -> None:
 # ── CSRF PROTECTION ───────────────────────────────────────────────────────────
 
 def _csrf_check():
-    """Verify request Origin matches the app's own Host.
-    Skipped for localhost requests (LAN / systemd internal calls).
-    Returns a (response, status) tuple on failure, or None on pass."""
-    if request.remote_addr in ('127.0.0.1', '::1'):
-        return None  # always allow localhost
-    origin  = request.headers.get('Origin', '')
-    host    = request.headers.get('Host', '')
-    if origin and host:
-        # Strip protocol from origin for comparison
+    """Verify that state-changing requests originate from this app's own origin.
+
+    Strategy (in order):
+    1. Compare Origin header to Host — the standard check for fetch/XHR.
+    2. If no Origin, compare Referer to Host — fallback for same-origin POSTs
+       where some browsers omit Origin.
+    3. If neither header is present, reject the request outright.
+
+    The old localhost bypass is intentionally removed: behind Cloudflare Tunnel
+    every request arrives from 127.0.0.1, which would skip all CSRF checks.
+    Modern browsers always include Origin or Referer on same-origin POSTs.
+    """
+    host = request.headers.get('Host', '')
+    if not host:
+        return jsonify({'error': 'CSRF check failed'}), 403
+
+    origin = request.headers.get('Origin', '')
+    if origin:
         origin_host = origin.split('://', 1)[-1].rstrip('/')
         if origin_host != host:
             return jsonify({'error': 'CSRF check failed'}), 403
-    return None
+        return None
+
+    # No Origin — try Referer
+    referer = request.headers.get('Referer', '')
+    if referer:
+        referer_host = referer.split('://', 1)[-1].split('/', 1)[0]
+        if referer_host != host:
+            return jsonify({'error': 'CSRF check failed'}), 403
+        return None
+
+    # Neither header present — reject
+    return jsonify({'error': 'CSRF check failed'}), 403
 
 # ── AUTH DECORATORS ───────────────────────────────────────────────────────────
 
@@ -170,6 +196,24 @@ def gm_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# ── SECURITY HEADERS ──────────────────────────────────────────────────────────
+
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Frame-Options']        = 'DENY'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Referrer-Policy']        = 'same-origin'
+    return response
+
+# ── ATOMIC FILE WRITES ────────────────────────────────────────────────────────
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Write text to a file atomically: write to .tmp then rename.
+    os.replace() is atomic on Linux — no partial/truncated files on crash."""
+    tmp = path.with_suffix(path.suffix + '.tmp')
+    tmp.write_text(text, encoding='utf-8')
+    os.replace(str(tmp), str(path))
+
 # ── USER MANAGEMENT ───────────────────────────────────────────────────────────
 
 _users_lock = threading.Lock()
@@ -182,7 +226,7 @@ def load_users() -> list:
 
 def save_users(users: list) -> None:
     with _users_lock:
-        USERS_FILE.write_text(json.dumps(users, indent=2), encoding='utf-8')
+        _atomic_write(USERS_FILE, json.dumps(users, indent=2))
 
 def get_user(username: str) -> dict | None:
     for u in load_users():
@@ -209,7 +253,7 @@ def _read_horses(username: str) -> list:
 def _write_horses(username: str, horses: list) -> None:
     d = PLAYER_DATA_DIR / username
     d.mkdir(parents=True, exist_ok=True)
-    (d / 'horses.json').write_text(json.dumps(horses, indent=2), encoding='utf-8')
+    _atomic_write(d / 'horses.json', json.dumps(horses, indent=2))
 
 def needs_setup() -> bool:
     """True if any user account has no password set yet."""
@@ -227,7 +271,7 @@ def load_config() -> dict:
         return {}
 
 def save_config(cfg: dict) -> None:
-    CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
+    _atomic_write(CONFIG_FILE, json.dumps(cfg, indent=2))
 
 def load_submissions():
     try:
@@ -238,7 +282,7 @@ def load_submissions():
     return []
 
 def save_submissions_data(subs):
-    SUBMISSIONS_FILE.write_text(json.dumps(subs, indent=2), encoding='utf-8')
+    _atomic_write(SUBMISSIONS_FILE, json.dumps(subs, indent=2))
 
 def get_save_path() -> Path | None:
     p = load_config().get('saveFile')
@@ -472,6 +516,7 @@ def login():
             if user and user.get('password_hash') and check_password_hash(user['password_hash'], password):
                 _clear_attempts(ip)
                 session.clear()
+                session.permanent    = True   # enables PERMANENT_SESSION_LIFETIME
                 session['username']  = user['username']
                 session['role']      = user['role']
                 session['household'] = user.get('household')
@@ -563,6 +608,13 @@ def index():
         f'document.documentElement.classList.add(r==="gm"?"is-gm":"is-player")}})()</script>\n'
     )
     html = html.replace('<head>', '<head>\n' + early_script, 1)
+    # Cache busting: append ?v=VERSION to all .js and .css asset URLs so
+    # browsers and Cloudflare fetch fresh files after each deployment.
+    html = re.sub(
+        r'(src|href)="([^"]+\.(js|css))"',
+        lambda m: f'{m.group(1)}="{m.group(2)}?v={APP_VERSION}"',
+        html,
+    )
     return html
 
 
@@ -593,6 +645,14 @@ def api_me():
         'role':      session['role'],
         'household': session.get('household'),
     })
+
+
+@app.route('/api/keep-alive', methods=['POST'])
+@login_required
+def api_keep_alive():
+    """Extend the session lifetime. Called by the client-side idle warning."""
+    session.modified = True
+    return jsonify({'ok': True})
 
 
 @app.route('/api/config', methods=['GET'])
@@ -696,7 +756,7 @@ def api_save():
         with _save_lock:
             if path.exists():
                 _rotate_backup(path)
-            path.write_text(body, encoding='utf-8')
+            _atomic_write(path, body)
 
         now = datetime.now().strftime('%H:%M:%S')
         print(f'  [Save]  {path.name} — {len(body):,} bytes at {now}')
@@ -715,24 +775,32 @@ def api_save():
 @app.route('/api/new', methods=['POST'])
 @gm_required
 def api_new():
+    err = _csrf_check()
+    if err: return err
     try:
         data = request.get_json(force=True)
         raw  = data.get('saveFile', '').strip()
         if not raw:
             return jsonify({'error': 'No path'}), 400
-        path = Path(raw)
+        path = Path(raw).resolve()
+        home = Path.home()
+        # Restrict to home directory and require .json extension
+        if not (str(path).startswith(str(home) + '/') or path == home):
+            return jsonify({'error': 'Path must be within your home directory'}), 400
+        if path.suffix != '.json':
+            return jsonify({'error': 'Save file must have a .json extension'}), 400
         path.parent.mkdir(parents=True, exist_ok=True)
         empty = json.dumps({'version': 1, 'year': 498,
                             'living': [], 'dead': [], 'households': [],
                             'manors': {}, 'relationships': [], 'treePos': {}})
-        path.write_text(empty, encoding='utf-8')
+        _atomic_write(path, empty)
         cfg = load_config()
         cfg['saveFile'] = str(path)
         save_config(cfg)
         print(f'  [New]   Created {path}')
         return jsonify({'ok': True, 'saveFile': str(path)})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Could not create save file'}), 500
 
 
 @app.route('/api/ai', methods=['POST'])
@@ -811,79 +879,78 @@ def api_succession():
     if not path or not path.exists():
         return jsonify({'error': 'No save file configured'}), 400
 
-    save_data = json.loads(path.read_text(encoding='utf-8'))
-    living    = save_data.get('living', [])
-    dead      = save_data.get('dead', [])
-
     old_pk_id  = data.get('old_pk_id')
     new_pk_id  = data.get('new_pk_id')
     old_action = data.get('old_action')   # 'died' | 'retired' | 'na'
     life_event = data.get('life_event')   # dict for retired
     death_data = data.get('death_data')   # dict for died
 
-    def hh_of(npc_id, pool):
-        npc = next((n for n in pool if n.get('id') == npc_id), None)
-        return (npc.get('household') or '').lower() if npc else None
-
-    # Players may only act on their own household.
-    # new_pk_id is always validated — a request with no old_pk_id must still
-    # not be able to promote an NPC from a different household.
-    if not is_gm:
-        if not new_pk_id:
-            return jsonify({'error': 'new_pk_id is required'}), 400
-        for npc_id in filter(None, [old_pk_id, new_pk_id]):
-            hh = hh_of(npc_id, living)
-            if hh is None:
-                return jsonify({'error': 'NPC not found'}), 404
-            if hh != user_hh:
-                return jsonify({'error': 'Forbidden'}), 403
-
     ts = int(datetime.now().timestamp() * 1000)
 
-    # Handle old PK
-    if old_action == 'died' and old_pk_id and death_data:
-        idx = next((i for i, n in enumerate(living) if n.get('id') == old_pk_id), None)
-        if idx is not None:
-            npc = living.pop(idx)
-            npc['status']        = 'Dead'
-            npc['year_died']     = death_data.get('year', save_data.get('year', 499))
-            cause = str(death_data.get('cause', ''))[:2000]  # clamp to prevent disk abuse
-            if cause:
-                npc['notes'] = ((npc.get('notes') or '') + f'\n\n† {cause}').strip()
-            dead.append(npc)
-
-    elif old_action == 'retired' and old_pk_id:
-        for npc in living:
-            if npc.get('id') == old_pk_id:
-                npc['role'] = 'Knight'
-                if life_event:
-                    if 'soloEvents' not in npc:
-                        npc['soloEvents'] = []
-                    npc['soloEvents'].insert(0, {
-                        'id':         f'evt_{ts}',
-                        'year':        life_event.get('year', save_data.get('year', 499)),
-                        'season':      life_event.get('season', 'winter'),
-                        'title':       str(life_event.get('title', 'Retired from Questing'))[:200],
-                        'mechDesc':    str(life_event.get('mechDesc', ''))[:2000],
-                        'flavorText':  None,
-                        'userNotes':   str(life_event.get('userNotes', ''))[:2000],
-                    })
-                break
-
-    # Promote new PK
-    if new_pk_id:
-        for npc in living:
-            if npc.get('id') == new_pk_id:
-                npc['role'] = 'Player Knight'
-                break
-
-    save_data['living'] = living
-    save_data['dead']   = dead
-
+    # Hold _save_lock for the full read-modify-write to prevent TOCTOU races.
     with _save_lock:
+        save_data = json.loads(path.read_text(encoding='utf-8'))
+        living    = save_data.get('living', [])
+        dead      = save_data.get('dead', [])
+
+        def hh_of(npc_id, pool):
+            npc = next((n for n in pool if n.get('id') == npc_id), None)
+            return (npc.get('household') or '').lower() if npc else None
+
+        # Players may only act on their own household.
+        if not is_gm:
+            if not new_pk_id:
+                return jsonify({'error': 'new_pk_id is required'}), 400
+            for npc_id in filter(None, [old_pk_id, new_pk_id]):
+                hh = hh_of(npc_id, living)
+                if hh is None:
+                    return jsonify({'error': 'NPC not found'}), 404
+                if hh != user_hh:
+                    return jsonify({'error': 'Forbidden'}), 403
+
+        # Handle old PK
+        if old_action == 'died' and old_pk_id and death_data:
+            idx = next((i for i, n in enumerate(living) if n.get('id') == old_pk_id), None)
+            if idx is not None:
+                npc = living.pop(idx)
+                npc['status']        = 'Dead'
+                npc['year_died']     = death_data.get('year', save_data.get('year', 499))
+                cause = str(death_data.get('cause', ''))[:2000]
+                if cause:
+                    npc['notes'] = ((npc.get('notes') or '') + f'\n\n† {cause}').strip()
+                dead.append(npc)
+
+        elif old_action == 'retired' and old_pk_id:
+            for npc in living:
+                if npc.get('id') == old_pk_id:
+                    npc['role'] = 'Knight'
+                    if life_event:
+                        if 'soloEvents' not in npc:
+                            npc['soloEvents'] = []
+                        npc['soloEvents'].insert(0, {
+                            'id':         f'evt_{ts}',
+                            'year':        life_event.get('year', save_data.get('year', 499)),
+                            'season':      life_event.get('season', 'winter'),
+                            'title':       str(life_event.get('title', 'Retired from Questing'))[:200],
+                            'mechDesc':    str(life_event.get('mechDesc', ''))[:2000],
+                            'flavorText':  None,
+                            'userNotes':   str(life_event.get('userNotes', ''))[:2000],
+                        })
+                    break
+
+        # Promote new PK
+        if new_pk_id:
+            for npc in living:
+                if npc.get('id') == new_pk_id:
+                    npc['role'] = 'Player Knight'
+                    break
+
+        save_data['living'] = living
+        save_data['dead']   = dead
+
         if path.exists():
             _rotate_backup(path)
-        path.write_text(json.dumps(save_data, indent=2, ensure_ascii=False), encoding='utf-8')
+        _atomic_write(path, json.dumps(save_data, indent=2, ensure_ascii=False))
 
     if _restart_pending.is_set():
         print('  [Console] Save complete — restarting now...')
@@ -895,12 +962,16 @@ def api_succession():
 @app.route('/api/browse')
 @gm_required
 def api_browse():
-    """GM only — filesystem browser for save file picker."""
+    """GM only — filesystem browser for save file picker. Restricted to $HOME."""
     try:
+        home     = Path.home()
         req_path = request.args.get('path', '').strip() or str(BASE_DIR)
-        p = Path(req_path)
+        p = Path(req_path).resolve()
+        # Never browse outside the home directory
+        if not (str(p).startswith(str(home) + '/') or p == home):
+            p = home
         if not p.exists() or not p.is_dir():
-            p = Path.home()
+            p = home
 
         entries = []
         if p.parent != p:
@@ -996,6 +1067,8 @@ def api_post_submission():
 @app.route('/api/submissions/<sub_id>/approve', methods=['POST'])
 @gm_required
 def api_approve_submission(sub_id):
+    err = _csrf_check()
+    if err: return err
     data = request.get_json(force=True) or {}
     with _submissions_lock:
         subs = load_submissions()
@@ -1021,7 +1094,7 @@ def api_approve_submission(sub_id):
             'ts':   int(time.time() * 1000),
         })
         _rotate_backup(save_path)
-        save_path.write_text(json.dumps(binder, indent=2), encoding='utf-8')
+        _atomic_write(save_path, json.dumps(binder, indent=2))
     with _submissions_lock:
         subs = [s for s in load_submissions() if s['id'] != sub_id]
         save_submissions_data(subs)
@@ -1032,6 +1105,8 @@ def api_approve_submission(sub_id):
 @app.route('/api/submissions/<sub_id>/dismiss', methods=['POST'])
 @gm_required
 def api_dismiss_submission(sub_id):
+    err = _csrf_check()
+    if err: return err
     with _submissions_lock:
         subs = [s for s in load_submissions() if s['id'] != sub_id]
         save_submissions_data(subs)
@@ -1143,7 +1218,7 @@ def _read_pins(username: str) -> list:
 def _write_pins(username: str, pins: list) -> None:
     d = PLAYER_DATA_DIR / username
     d.mkdir(parents=True, exist_ok=True)
-    (d / 'pins.json').write_text(json.dumps(pins, indent=2), encoding='utf-8')
+    _atomic_write(d / 'pins.json', json.dumps(pins, indent=2))
 
 
 @app.route('/api/pins')

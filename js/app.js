@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.3.1';
+const APP_VERSION = '2.4.0';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -247,6 +247,39 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.4.0',
+    date:    '2026-04-07',
+    sections: [
+      {
+        heading: 'Security Hardening — Pre-Cloudflare Pass',
+        items: [
+          'CSRF protection reworked: removed the localhost bypass that would have disabled all CSRF checks behind Cloudflare Tunnel. Now uses Origin + Referer headers reliably in all network configurations.',
+          'CSRF checks added to three previously unprotected endpoints: create new save file, approve chronicle submission, dismiss chronicle submission.',
+          'Path traversal fix: the "create new binder" endpoint now validates that the chosen file path is within your home directory and has a .json extension.',
+          'Filesystem browser restricted to home directory — can no longer navigate to /etc, /root, etc.',
+          'All file writes are now atomic (write to .tmp then rename) — prevents data corruption if the server crashes mid-write.',
+          'Succession flow race condition fixed: the full read-modify-write is now held under the save lock, preventing data loss if another save happens simultaneously.',
+          'Security headers added: X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy same-origin.',
+          'Cloudflare Tunnel cookie flag: set CF_TUNNEL=1 in secrets.env to enable Secure cookies for the tunnel deployment.',
+        ],
+      },
+      {
+        heading: 'Session Expiry & Idle Warning',
+        items: [
+          'Sessions now expire after 24 hours of inactivity (reset on every request).',
+          'After 4 hours of no keyboard, mouse, or touch activity, a banner appears: "Still at the table? Your session will expire soon." Click Stay Logged In to reset the clock.',
+          'If the session does expire mid-session, just log back in — no data is lost.',
+        ],
+      },
+      {
+        heading: 'Cache Busting',
+        items: [
+          'All JavaScript and CSS files are now served with a version query string (?v=2.4.0). After a server update, browsers and Cloudflare will always fetch fresh code rather than stale cached files.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.3.1',
     date:    '2026-04-07',
@@ -1833,3 +1866,64 @@ const APP = {
 
 // ── BOOT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => APP.init());
+
+// ── IDLE SESSION WARNING ───────────────────────────────────────
+// After 4 hours of no keyboard/mouse/touch activity, show a banner
+// prompting the user to stay logged in. Clicking it hits /api/keep-alive
+// to reset the server-side 24-hour session lifetime.
+(function () {
+  const IDLE_WARN_MS  = 4 * 60 * 60 * 1000;  // 4 hours
+  const CHECK_EVERY   = 60 * 1000;             // check every minute
+
+  let _lastActivity = Date.now();
+  let _warnShown    = false;
+
+  function _resetActivity() {
+    _lastActivity = Date.now();
+    if (_warnShown) {
+      _warnShown = false;
+      const el = document.getElementById('_idleBanner');
+      if (el) el.remove();
+    }
+  }
+
+  ['mousemove', 'keydown', 'click', 'touchstart'].forEach(ev =>
+    document.addEventListener(ev, _resetActivity, { passive: true }));
+
+  function _showBanner() {
+    if (document.getElementById('_idleBanner')) return;
+    const el = document.createElement('div');
+    el.id = '_idleBanner';
+    el.style.cssText = [
+      'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+      'background:var(--ink)', 'color:var(--vellum)', 'border:1px solid var(--gold)',
+      'border-radius:var(--radius)', 'padding:14px 20px', 'z-index:9998',
+      'font-family:var(--font-body)', 'font-size:0.95rem',
+      'display:flex', 'align-items:center', 'gap:14px',
+      'box-shadow:0 4px 24px rgba(0,0,0,0.55)',
+    ].join(';');
+    el.innerHTML = `
+      <span>⏳ Still at the table? Your session will expire soon.</span>
+      <button onclick="window._keepAlive()" style="
+        background:var(--gold);color:var(--ink);border:none;
+        border-radius:var(--radius);padding:7px 16px;cursor:pointer;
+        font-family:var(--font-heading);font-size:0.7rem;
+        letter-spacing:0.08em;font-weight:600;
+      ">Stay Logged In</button>`;
+    document.body.appendChild(el);
+  }
+
+  window._keepAlive = async function () {
+    try {
+      await fetch('/api/keep-alive', { method: 'POST' });
+    } catch { /* silent */ }
+    _resetActivity();
+  };
+
+  setInterval(() => {
+    if (!_warnShown && Date.now() - _lastActivity >= IDLE_WARN_MS) {
+      _warnShown = true;
+      _showBanner();
+    }
+  }, CHECK_EVERY);
+})();
