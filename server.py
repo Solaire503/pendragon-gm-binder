@@ -28,6 +28,7 @@ CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
 USERS_FILE   = BASE_DIR / 'users.json'
 BACKUP_DIR   = BASE_DIR / 'backups'
+PLAYER_DATA_DIR  = BASE_DIR / 'player_data'
 SUBMISSIONS_FILE = BASE_DIR / 'submissions.json'
 CERT_FILE    = BASE_DIR / 'cert.pem'
 KEY_FILE     = BASE_DIR / 'key.pem'
@@ -188,6 +189,27 @@ def get_user(username: str) -> dict | None:
         if u['username'].lower() == username.lower():
             return u
     return None
+
+def get_username_for_household(household: str) -> str | None:
+    """Return the username whose household matches the given name (case-insensitive)."""
+    for u in load_users():
+        if (u.get('household') or '').lower() == household.lower():
+            return u['username']
+    return None
+
+def _read_horses(username: str) -> list:
+    path = PLAYER_DATA_DIR / username / 'horses.json'
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return []
+
+def _write_horses(username: str, horses: list) -> None:
+    d = PLAYER_DATA_DIR / username
+    d.mkdir(parents=True, exist_ok=True)
+    (d / 'horses.json').write_text(json.dumps(horses, indent=2), encoding='utf-8')
 
 def needs_setup() -> bool:
     """True if any user account has no password set yet."""
@@ -1057,6 +1079,55 @@ def api_presence():
     return jsonify({'users': result})
 
 
+# ── HORSES ────────────────────────────────────────────────────────────────────
+
+@app.route('/api/horses')
+@login_required
+def api_get_horses():
+    """Player: read own horses."""
+    horses = _read_horses(session['username'])
+    return jsonify({'horses': horses})
+
+
+@app.route('/api/horses', methods=['POST'])
+@login_required
+def api_save_horses():
+    """Player: save own horses."""
+    err = _csrf_check()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('horses'), list):
+        return jsonify({'error': 'Invalid payload'}), 400
+    _write_horses(session['username'], data['horses'])
+    return jsonify({'ok': True})
+
+
+@app.route('/api/horses/<household>')
+@gm_required
+def api_get_horses_gm(household):
+    """GM: read any household's horses."""
+    username = get_username_for_household(household)
+    if not username:
+        return jsonify({'horses': []})
+    return jsonify({'horses': _read_horses(username)})
+
+
+@app.route('/api/horses/<household>', methods=['POST'])
+@gm_required
+def api_save_horses_gm(household):
+    """GM: save any household's horses."""
+    err = _csrf_check()
+    if err: return err
+    username = get_username_for_household(household)
+    if not username:
+        return jsonify({'error': 'No player found for that household'}), 404
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('horses'), list):
+        return jsonify({'error': 'Invalid payload'}), 400
+    _write_horses(username, data['horses'])
+    return jsonify({'ok': True})
+
+
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def _rotate_backup(save_path: Path) -> None:
@@ -1148,6 +1219,9 @@ def _console_listener():
 
 if __name__ == '__main__':
     os.chdir(BASE_DIR)
+
+    # Ensure player data directory exists
+    PLAYER_DATA_DIR.mkdir(exist_ok=True)
 
     # Create users.json if it doesn't exist
     if not USERS_FILE.exists():

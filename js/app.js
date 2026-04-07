@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.2.1';
+const APP_VERSION = '2.3.0';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -47,6 +47,21 @@ const FEATURES = [
       'The Manors tab opens to a full read-only overview of your manor — all the same detail the GM sees, without the edit controls.',
       'Summary tiles at the top show all active manors so you can see where your household stands relative to others.',
       'Your manor\'s tile has a coloured left border in your household colour.',
+    ],
+  },
+  {
+    heading: 'Stables',
+    icon: '🐴',
+    items: [
+      'The Stables subtab lives inside your manor detail. Switch between Overview and Stables using the buttons above your manor section.',
+      'Add horses to your stable: give each a name, choose its type (War Horse, Riding Horse, or Work Horse), set its age, assign a rider from your household, and add optional notes.',
+      'Age is tracked automatically — set it once at creation and it ages up with the campaign year.',
+      'War Horses and Riding Horses require a survival roll each winter. Click the 🎲 Roll button during the Winter Phase after Economic Circumstances have been recorded.',
+      'Work Horses don\'t require a survival roll — but you may roll voluntarily if you wish.',
+      'The survival roll is 1d20 plus modifiers. Modifiers include an age penalty (−1 per year over age 7), a lifestyle penalty (−3 Poor, −15 Impoverished), and a cumulative streak penalty (−3 per consecutive year of poverty). All modifiers are calculated and displayed automatically.',
+      'Roll results: 1 or less — the horse dies. 2 — the horse is ruined (no longer serviceable). 3–20 — healthy, survives the winter.',
+      'Every roll is recorded in the horse\'s history so you can see exactly what happened and when.',
+      'Horses that die or are ruined move to the Pet Cemetery below the active stable. The 30 most recent are shown; mark up to 10 as favourites (★) to keep them visible permanently.',
     ],
   },
   {
@@ -114,6 +129,18 @@ const FEATURES = [
       'Improvements track fixed and dice income. Record Year pre-fills improvement income automatically.',
       'Personnel fields (Lord/Lady, Steward, Heir) use the NPC search widget.',
       'Export any recorded year as a parchment summary PNG to share with players.',
+    ],
+  },
+  {
+    heading: 'Stables',
+    icon: '🐴',
+    items: [
+      'Each manor has a Stables section tab (alongside Overview, History, and Improvements). The GM can add, edit, and manage horses for any household.',
+      'Horses belong to the player whose household owns the manor — data is stored per-player on the server, separate from the main binder save.',
+      'Add horses with full details: name, type, age, rider (assigned from household members), and notes. Year Born is calculated automatically from the age entered.',
+      'Mark a living horse as Dead (✝) or Ruined (⚠) manually if needed outside a survival roll, or delete it entirely.',
+      'All horse types are supported. War Horses and Riding Horses get the 🎲 Roll button for survival. Work Horses appear in the stable but have no required roll.',
+      'Pet Cemetery shows the 30 most recent dead/ruined horses per stable. Starred favourites always appear regardless of position.',
     ],
   },
   {
@@ -189,6 +216,29 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.3.0',
+    date:    '2026-04-07',
+    sections: [
+      {
+        heading: 'Stables — Horse Tracking & Survival Rolls',
+        items: [
+          'Players can now manage their own stable from the Manors tab. Switch between Overview and Stables using the section buttons above your manor detail.',
+          'Add horses with a name, type (War / Riding / Work), age, optional rider assignment (household members only, Player Knight at the top of the list), and notes.',
+          'Age is tracked automatically — enter it once at creation and it ages with the campaign year. Year Born is stored; age is always derived live.',
+          'War Horses and Riding Horses require a winter survival roll (1d20). Click the 🎲 Roll button on any eligible horse during the Winter Phase.',
+          'Survival modifiers calculated automatically from manor history: −1 per year over age 7, −3 Poor, −15 Impoverished, −3 per consecutive year of poverty or impoverishment since the horse was acquired. Full breakdown shown in the roll modal.',
+          'Roll results: 1 or less = Dead, 2 = Ruined, 3–20 = Healthy. Dead and ruined horses move to the Pet Cemetery automatically.',
+          'If Economic Circumstances haven\'t been recorded yet for the current year, the roll button warns you — with an option to roll anyway (for testing) or wait.',
+          'Every survival roll is logged in the horse\'s record: raw roll, each modifier, modified total, and result.',
+          'Pet Cemetery shows the 30 most recent dead/ruined horses. Mark up to 10 as ★ favourites to pin them permanently.',
+          'Horses can be manually marked Dead or Ruined outside of a roll, or deleted entirely.',
+          'GM can manage any household\'s stable from the Stables section tab in the GM manor view.',
+          'Horse data is stored per-player in player_data/{username}/horses.json — completely separate from the shared binder save.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.2.0',
     date:    '2026-04-06',

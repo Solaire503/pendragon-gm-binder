@@ -19,9 +19,16 @@ const HARVEST_TABLE = {
 
 const LIFESTYLE_COST = { Impoverished:0, Poor:2, Normal:4, Rich:8, Extravagant:18 };
 
+const HORSE_WAR    = ['Hobby','Charger (Small)','Charger (Normal)','Fairy Horse'];
+const HORSE_RIDING = ['Jennet','Rouncey (Inferior)','Rouncy (Small)','Rouncy (Normal)','Rouncy (Large)','Courser','Dales/Irish/Cambrian Pony'];
+const HORSE_WORK   = ['Cart Horse','Cob','Nag','Sumpter','Sumpter (Strong)','Hackney','Donkey','Mule'];
+const HORSE_ALL    = [...HORSE_WAR, ...HORSE_RIDING, ...HORSE_WORK];
+
 const TabManors = {
   _current:  null,
-  _section:  'overview',   // overview | history | improvements
+  _section:  'overview',        // overview | history | improvements | stables
+  _playerSection: 'overview',   // overview | stables for player view
+  _horsesCache: {},             // cacheKey → array of horse objects
   _expanded: new Set(),    // set of expanded history year keys
   _summaryExpanded: new Set(),    // manors with full history summary visible
   _summaryRowExpanded: new Set(), // individual year rows expanded in overview summary
@@ -110,10 +117,19 @@ const TabManors = {
       const m   = STORE.getManor(ownKey);
       const hh  = STORE.getHousehold(ownKey);
       const col = hh ? hh.colour : '#5a5040';
+      const playerSecBtns = ['overview','stables'].map(s =>
+        `<button class="btn ${this._playerSection===s?'btn-primary':'btn-ghost'}" style="font-size:0.58rem;" onclick="TabManors.setPlayerSection('${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
+      ).join('');
+      const playerContent = this._playerSection === 'stables'
+        ? this._renderStables(m, ownKey, col, true)
+        : this._renderOverview(m, ownKey, col, true);
       ownDetail = `
         <div style="margin-top:24px;">
-          <div class="section-title" style="margin-bottom:12px;color:var(--gold);">Your Manor — Full Detail</div>
-          ${this._renderOverview(m, ownKey, col, true)}
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div class="section-title" style="color:var(--gold);margin-bottom:0;">Your Manor — Full Detail</div>
+            <div style="display:flex;gap:6px;">${playerSecBtns}</div>
+          </div>
+          ${playerContent}
         </div>`;
     }
 
@@ -148,7 +164,7 @@ const TabManors = {
     const col  = hh ? hh.colour : '#5a5040';
     const icon = hh ? hh.icon  : '🏰';
 
-    const sections = ['overview','history','improvements'];
+    const sections = ['overview','history','improvements','stables'];
     const secBtns  = sections.map(s =>
       `<button class="btn ${this._section===s?'btn-primary':'btn-ghost'}" style="font-size:0.58rem;" onclick="TabManors.setSection('${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
     ).join('');
@@ -157,6 +173,7 @@ const TabManors = {
     if      (this._section === 'overview')     content = this._renderOverview(m, key, col);
     else if (this._section === 'history')      content = this._renderHistory(m, key);
     else if (this._section === 'improvements') content = this._renderImprovementsSection(m, key);
+    else if (this._section === 'stables')      content = this._renderStables(m, key, col, false);
 
     body.innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;padding:14px 20px 0;flex-wrap:wrap;flex-shrink:0;">
@@ -1705,6 +1722,11 @@ const TabManors = {
     this._renderManor();
   },
 
+  setPlayerSection(s) {
+    this._playerSection = s;
+    this.render();
+  },
+
   // ── PERSONNEL PICKER ──────────────────────────────────────
   _pickPersonnel(key, field) {
     const labels  = { lord_id: 'Lord / Lady', steward_id: 'Steward', heir_id: 'Heir' };
@@ -2353,5 +2375,538 @@ const TabManors = {
     Toast.success('Damage logged');
     Modal.close();
     this._renderManor();
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // STABLES — horse tracking & survival rolls
+  // ══════════════════════════════════════════════════════════
+
+  _stablesCacheKey(key) {
+    // GM uses manor key; player always uses 'self'
+    return isGM() ? `gm:${key}` : 'self';
+  },
+
+  async _loadHorses(key) {
+    const url = isGM() ? `/api/horses/${encodeURIComponent(key)}` : '/api/horses';
+    try {
+      const r = await fetch(url);
+      const d = await r.json();
+      this._horsesCache[this._stablesCacheKey(key)] = d.horses || [];
+    } catch {
+      this._horsesCache[this._stablesCacheKey(key)] = [];
+    }
+    this.render();
+  },
+
+  async _persistHorses(key) {
+    const horses = this._horsesCache[this._stablesCacheKey(key)] || [];
+    const url = isGM() ? `/api/horses/${encodeURIComponent(key)}` : '/api/horses';
+    try {
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ horses }),
+      });
+    } catch (e) {
+      Toast.error('Failed to save horses');
+    }
+  },
+
+  _renderStables(m, key, col, readOnly = false) {
+    const cacheKey = this._stablesCacheKey(key);
+    if (!this._horsesCache[cacheKey]) {
+      this._loadHorses(key);
+      return '<div style="padding:32px;text-align:center;opacity:0.5;font-style:italic;">Loading stables…</div>';
+    }
+
+    const year   = STORE.year;
+    const horses = this._horsesCache[cacheKey];
+    const living = horses.filter(h => h.alive !== false);
+    const dead   = horses.filter(h => h.alive === false)
+                         .sort((a, b) => (b.year_died || 0) - (a.year_died || 0));
+
+    // Cemetery: show 30 most recent + always show favorites
+    const shown30ids = new Set(dead.slice(0, 30).map(h => h.id));
+    const cemeteryHorses = dead.filter(h => shown30ids.has(h.id) || h.favorite);
+    const favCount = dead.filter(h => h.favorite).length;
+
+    const riderName = h => {
+      if (!h.rider) return null;
+      const npc = STORE.getNpc(h.rider);
+      return npc ? npc.name : null;
+    };
+
+    const horseCardHtml = h => {
+      const age      = year - (h.year_born || year);
+      const typeTag  = HORSE_WAR.includes(h.type) ? 'war' : HORSE_RIDING.includes(h.type) ? 'riding' : 'work';
+      const needsRoll = HORSE_WAR.includes(h.type) || HORSE_RIDING.includes(h.type);
+      const ageOver  = Math.max(0, age - 7);
+      const lastRoll = h.survivalHistory?.length ? h.survivalHistory[h.survivalHistory.length - 1] : null;
+      const rider    = riderName(h);
+
+      const lastRollHtml = lastRoll ? `
+        <div style="font-size:0.7rem;color:var(--ink-soft);margin-top:5px;">
+          Last roll (${lastRoll.year} AD): rolled <strong>${lastRoll.roll}</strong>
+          ${lastRoll.modified_total !== lastRoll.roll ? `→ modified <strong>${lastRoll.modified_total}</strong>` : ''} —
+          <span style="color:${lastRoll.result==='healthy'?'var(--verdigris-mid)':lastRoll.result==='ruined'?'var(--gold)':'var(--crimson-mid)'};">${lastRoll.result}</span>
+        </div>` : '';
+
+      return `
+        <div class="horse-card" style="border-left:3px solid ${col};">
+          <div style="display:flex;align-items:flex-start;gap:10px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-family:var(--font-display);font-size:0.92rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(h.name)}</div>
+              <div style="display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap;">
+                <span class="horse-type-badge horse-type-${typeTag}">${esc(h.type)}</span>
+                <span style="font-family:var(--font-heading);font-size:0.65rem;color:var(--ink-soft);">Age ${age}</span>
+                ${ageOver > 0 ? `<span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--crimson-mid);">−${ageOver} age</span>` : ''}
+              </div>
+              <div style="margin-top:6px;display:flex;gap:16px;flex-wrap:wrap;">
+                <div><div class="detail-label">Rider</div><div style="font-size:0.8rem;margin-top:1px;">${rider ? esc(rider) : '<span style="opacity:0.4;font-style:italic;">None</span>'}</div></div>
+                ${h.notes ? `<div style="min-width:0;flex:1;"><div class="detail-label">Notes</div><div style="font-size:0.8rem;margin-top:1px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(h.notes)}</div></div>` : ''}
+              </div>
+              ${lastRollHtml}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+              ${needsRoll && !readOnly ? `<button class="btn btn-ghost" style="padding:2px 9px;font-size:0.52rem;" onclick="TabManors.openSurvivalRoll('${key}','${h.id}')">🎲 Roll</button>` : ''}
+              ${!readOnly ? `
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditHorse('${key}','${h.id}')">✎</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;color:var(--crimson-mid);" onclick="TabManors._killHorse('${key}','${h.id}','dead')">✝</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;color:var(--gold);" onclick="TabManors._killHorse('${key}','${h.id}','ruined')">⚠</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;opacity:0.5;" onclick="TabManors._deleteHorse('${key}','${h.id}')">🗑</button>
+              ` : ''}
+            </div>
+          </div>
+        </div>`;
+    };
+
+    const cemHorseHtml = h => {
+      const lifespan    = `${h.year_born ?? '?'} – ${h.year_died ?? '?'} AD`;
+      const reasonLabel = h.death_reason === 'ruined' ? 'Ruined' : 'Dead';
+      const reasonColor = h.death_reason === 'ruined' ? 'var(--gold)' : 'var(--crimson-mid)';
+      const canFav = h.favorite || favCount < 10;
+      const favDisabled = !canFav ? 'disabled title="Remove a favourite to add another (10/10)"' : '';
+      return `
+        <div class="horse-card horse-card-dead">
+          <div style="display:flex;align-items:flex-start;gap:8px;">
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="font-family:var(--font-display);font-size:0.85rem;color:var(--ink-soft);">${esc(h.name)}</span>
+                <span style="font-family:var(--font-heading);font-size:0.6rem;color:${reasonColor};">${reasonLabel}</span>
+                ${h.favorite ? '<span style="font-family:var(--font-heading);font-size:0.55rem;color:var(--gold);">★ Favourite</span>' : ''}
+              </div>
+              <div style="font-family:var(--font-heading);font-size:0.62rem;color:var(--ink-soft);opacity:0.7;margin-top:2px;">${esc(h.type)} · ${lifespan}</div>
+              ${h.notes ? `<div style="font-size:0.72rem;color:var(--ink-soft);font-style:italic;margin-top:2px;">${esc(h.notes.length > 120 ? h.notes.slice(0, 120).replace(/\s+\S*$/, '') + '…' : h.notes)}</div>` : ''}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+              <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.85rem;${!canFav ? 'opacity:0.35;' : ''}"
+                onclick="TabManors._toggleFavorite('${key}','${h.id}')" ${favDisabled}>
+                ${h.favorite ? '★' : '☆'}
+              </button>
+              <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;opacity:0.5;" onclick="TabManors._deleteHorse('${key}','${h.id}')">🗑</button>
+            </div>
+          </div>
+        </div>`;
+    };
+
+    const addBtn = readOnly ? '' :
+      `<button class="btn btn-verdigris" onclick="TabManors.openAddHorse('${key}')" style="font-size:0.72rem;">+ Add Horse</button>`;
+
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0;">Active Stable (${living.length})</div>
+        ${addBtn}
+      </div>
+      ${living.length
+        ? `<div style="display:flex;flex-direction:column;gap:8px;">${living.map(horseCardHtml).join('')}</div>`
+        : `<div class="text-muted italic" style="font-size:0.85rem;margin-bottom:16px;">No horses stabled here yet.</div>`
+      }
+      ${cemeteryHorses.length ? `
+        <div class="section-title mt-20" style="opacity:0.6;margin-bottom:10px;">⚰ Pet Cemetery (${dead.length}${dead.length > 30 ? ', showing ' + cemeteryHorses.length : ''})</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">${cemeteryHorses.map(cemHorseHtml).join('')}</div>
+      ` : ''}`;
+  },
+
+  // ── ADD / EDIT HORSE MODALS ────────────────────────────────
+
+  openAddHorse(key) {
+    const household = STORE.householdMembers(key);
+    const pk = household.find(n => n.role === 'PK');
+    const riderOptions = [
+      pk ? `<option value="${pk.id}">${esc(pk.name)} (PK)</option>` : '',
+      ...household.filter(n => n !== pk).map(n => `<option value="${n.id}">${esc(n.name)}</option>`),
+    ].join('');
+
+    const typeOptions = [
+      `<optgroup label="War Horses">${HORSE_WAR.map(t => `<option value="${t}">${t}</option>`).join('')}</optgroup>`,
+      `<optgroup label="Riding Horses">${HORSE_RIDING.map(t => `<option value="${t}">${t}</option>`).join('')}</optgroup>`,
+      `<optgroup label="Work Horses">${HORSE_WORK.map(t => `<option value="${t}">${t}</option>`).join('')}</optgroup>`,
+    ].join('');
+
+    Modal.open(`
+      <div style="min-width:340px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:16px;">Add Horse — ${esc(key)}</div>
+        <div class="detail-field mb-10">
+          <div class="detail-label">Name *</div>
+          <input id="ah-name" class="form-input" type="text" placeholder="e.g. Shadowmane" autocomplete="off">
+        </div>
+        <div class="detail-field mb-10">
+          <div class="detail-label">Type *</div>
+          <select id="ah-type" class="form-input" onchange="TabManors._onHorseTypeChange()">
+            ${typeOptions}
+          </select>
+        </div>
+        <div id="ah-type-hint" style="font-size:0.75rem;color:var(--ink-soft);font-style:italic;margin:6px 0 12px 0;">Combat horses are typically fully-fledged at age 6.</div>
+        <div class="detail-field mb-10">
+          <div class="detail-label">Age *</div>
+          <input id="ah-age" class="form-input" type="number" min="0" max="30" value="6" oninput="this._touched=true">
+        </div>
+        <div class="detail-field mb-10">
+          <div class="detail-label">Rider</div>
+          <select id="ah-rider" class="form-input">
+            <option value="">— None —</option>
+            ${riderOptions}
+          </select>
+        </div>
+        <div class="detail-field mb-16">
+          <div class="detail-label">Notes (optional)</div>
+          <textarea id="ah-notes" class="form-input" rows="2" placeholder="Markings, history…" style="resize:vertical;"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-verdigris" onclick="TabManors._saveNewHorse('${key}')">Add Horse</button>
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+        </div>
+      </div>`);
+  },
+
+  _onHorseTypeChange() {
+    const type    = document.getElementById('ah-type')?.value || '';
+    const hint    = document.getElementById('ah-type-hint');
+    const ageInput = document.getElementById('ah-age');
+    if (HORSE_WAR.includes(type)) {
+      if (hint) hint.textContent = 'Combat horses are typically fully-fledged at age 6.';
+      if (ageInput && !ageInput._touched) ageInput.value = 6;
+    } else if (HORSE_RIDING.includes(type)) {
+      if (hint) hint.textContent = 'Riding horses are typically fully-fledged at age 5.';
+      if (ageInput && !ageInput._touched) ageInput.value = 5;
+    } else {
+      if (hint) hint.textContent = 'Work horses are typically ready at age 4.';
+      if (ageInput && !ageInput._touched) ageInput.value = 4;
+    }
+  },
+
+  _saveNewHorse(key) {
+    const name  = document.getElementById('ah-name')?.value.trim();
+    const type  = document.getElementById('ah-type')?.value;
+    const age   = parseInt(document.getElementById('ah-age')?.value, 10);
+    const rider = document.getElementById('ah-rider')?.value || null;
+    const notes = document.getElementById('ah-notes')?.value.trim() || '';
+    if (!name)        { Toast.error('Name required'); return; }
+    if (isNaN(age) || age < 0) { Toast.error('Valid age required'); return; }
+
+    const cacheKey = this._stablesCacheKey(key);
+    const horses   = this._horsesCache[cacheKey] || [];
+    horses.push({
+      id:           `horse-${Date.now()}`,
+      name,
+      type,
+      year_born:    STORE.year - age,
+      year_acquired: STORE.year,
+      rider:        rider || null,
+      notes,
+      alive:        true,
+      year_died:    null,
+      death_reason: null,
+      favorite:     false,
+      survivalHistory: [],
+    });
+    this._horsesCache[cacheKey] = horses;
+    this._persistHorses(key);
+    Toast.success(`${name} added to the stable.`);
+    Modal.close();
+    this.render();
+  },
+
+  openEditHorse(key, horseId) {
+    const cacheKey = this._stablesCacheKey(key);
+    const horses   = this._horsesCache[cacheKey] || [];
+    const h        = horses.find(x => x.id === horseId);
+    if (!h) return;
+
+    const age = STORE.year - (h.year_born || STORE.year);
+    const household = STORE.householdMembers(key);
+    const pk = household.find(n => n.role === 'PK');
+    const riderOptions = [
+      `<option value="">— None —</option>`,
+      pk ? `<option value="${pk.id}" ${h.rider===pk.id?'selected':''}>${esc(pk.name)} (PK)</option>` : '',
+      ...household.filter(n => n !== pk).map(n => `<option value="${n.id}" ${h.rider===n.id?'selected':''}>${esc(n.name)}</option>`),
+    ].join('');
+
+    const typeOptions = [
+      `<optgroup label="War Horses">${HORSE_WAR.map(t => `<option value="${t}" ${h.type===t?'selected':''}>${t}</option>`).join('')}</optgroup>`,
+      `<optgroup label="Riding Horses">${HORSE_RIDING.map(t => `<option value="${t}" ${h.type===t?'selected':''}>${t}</option>`).join('')}</optgroup>`,
+      `<optgroup label="Work Horses">${HORSE_WORK.map(t => `<option value="${t}" ${h.type===t?'selected':''}>${t}</option>`).join('')}</optgroup>`,
+    ].join('');
+
+    Modal.open(`
+      <div style="min-width:340px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:16px;">Edit Horse — ${esc(h.name)}</div>
+        <div class="detail-field mb-10">
+          <div class="detail-label">Name *</div>
+          <input id="eh-name" class="form-input" type="text" value="${esc(h.name)}">
+        </div>
+        <div class="detail-field mb-10">
+          <div class="detail-label">Type</div>
+          <select id="eh-type" class="form-input">${typeOptions}</select>
+        </div>
+        <div class="detail-field mb-10">
+          <div class="detail-label">Age (current)</div>
+          <input id="eh-age" class="form-input" type="number" min="0" max="30" value="${age}" title="Adjusts year_born">
+        </div>
+        <div class="detail-field mb-10">
+          <div class="detail-label">Rider</div>
+          <select id="eh-rider" class="form-input">${riderOptions}</select>
+        </div>
+        <div class="detail-field mb-16">
+          <div class="detail-label">Notes</div>
+          <textarea id="eh-notes" class="form-input" rows="2" style="resize:vertical;">${esc(h.notes || '')}</textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-verdigris" onclick="TabManors._saveEditHorse('${key}','${horseId}')">Save</button>
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+          <button class="btn btn-ghost" style="color:var(--crimson-mid);margin-left:auto;" onclick="TabManors._deleteHorse('${key}','${horseId}')">Delete</button>
+        </div>
+      </div>`);
+  },
+
+  _saveEditHorse(key, horseId) {
+    const cacheKey = this._stablesCacheKey(key);
+    const horses   = this._horsesCache[cacheKey] || [];
+    const h        = horses.find(x => x.id === horseId);
+    if (!h) return;
+    const name  = document.getElementById('eh-name')?.value.trim();
+    const age   = parseInt(document.getElementById('eh-age')?.value, 10);
+    const rider = document.getElementById('eh-rider')?.value || null;
+    const notes = document.getElementById('eh-notes')?.value.trim() || '';
+    if (!name)             { Toast.error('Name required'); return; }
+    if (isNaN(age) || age < 0) { Toast.error('Valid age required'); return; }
+    h.name     = name;
+    h.type     = document.getElementById('eh-type')?.value || h.type;
+    h.year_born = STORE.year - age;
+    h.rider    = rider || null;
+    h.notes    = notes;
+    this._persistHorses(key);
+    Toast.success('Horse updated.');
+    Modal.close();
+    this.render();
+  },
+
+  _deleteHorse(key, horseId) {
+    const cacheKey = this._stablesCacheKey(key);
+    const horses   = this._horsesCache[cacheKey] || [];
+    const h        = horses.find(x => x.id === horseId);
+    if (!h) return;
+    if (!confirm(`Permanently delete ${h.name}? This cannot be undone.`)) return;
+    this._horsesCache[cacheKey] = horses.filter(x => x.id !== horseId);
+    this._persistHorses(key);
+    Toast.show(`${h.name} deleted.`, 'error');
+    Modal.close();
+    this.render();
+  },
+
+  // ── SURVIVAL ROLLS ────────────────────────────────────────
+
+  _noRecordYet() {
+    Toast.show(`Re-try once ${STORE.year} AD is recorded for your manor! (Yell at GM Steve if this is late)`, 'error');
+  },
+
+  _calcSurvivalModifiers(h, key) {
+    const year   = STORE.year;
+    const age    = year - (h.year_born || year);
+    const manor  = STORE.getManor(key);
+    const hist   = (manor?.history || []).filter(e => e.year >= (h.year_acquired || 0));
+
+    // Find current year entry
+    const curEntry = hist.find(e => e.year === year);
+    const lifestyle = curEntry?.lifestyle || null;
+
+    // Age penalty
+    const agePenalty = Math.max(0, age - 7) * -1;
+
+    // Current year penalty
+    let poorPenalty = 0;
+    let impovPenalty = 0;
+    if (lifestyle === 'Poor')          poorPenalty   = -3;
+    else if (lifestyle === 'Impoverished') impovPenalty  = -15;
+
+    // Consecutive years (including current) going back through history since year_acquired
+    // Count consecutive Poor OR Impoverished years backward from current year, stopping at Normal+
+    const histByYear = {};
+    hist.forEach(e => { histByYear[e.year] = e.lifestyle; });
+    let consecutive = 0;
+    for (let y = year; y >= (h.year_acquired || 0); y--) {
+      const ls = histByYear[y];
+      if (ls === 'Poor' || ls === 'Impoverished') consecutive++;
+      else if (ls) break;  // Normal/Rich/Extravagant — stop
+      // If no entry for a year, stop (unknown)
+      else break;
+    }
+    // Consecutive modifier is -3 per year (the years themselves, not additional years)
+    const consecutivePenalty = consecutive > 0 ? consecutive * -3 : 0;
+
+    return {
+      year,
+      age,
+      lifestyle,
+      agePenalty,
+      poorPenalty,
+      impovPenalty,
+      consecutive,
+      consecutivePenalty,
+      total: agePenalty + poorPenalty + impovPenalty + consecutivePenalty,
+      missingHistory: !curEntry,
+    };
+  },
+
+  openSurvivalRoll(key, horseId, force = false) {
+    const cacheKey = this._stablesCacheKey(key);
+    const horses   = this._horsesCache[cacheKey] || [];
+    const h        = horses.find(x => x.id === horseId);
+    if (!h) return;
+
+    const mods = this._calcSurvivalModifiers(h, key);
+
+    if (mods.missingHistory && !force) {
+      Modal.open(`
+        <div style="min-width:340px;">
+          <div style="font-family:var(--font-display);font-size:0.95rem;margin-bottom:10px;">⚠ ${STORE.year} AD Not Recorded</div>
+          <div style="font-size:0.82rem;color:var(--ink-soft);margin-bottom:18px;">
+            Economic Circumstances for <strong>${STORE.year} AD</strong> haven't been recorded for this manor yet.<br><br>
+            Are you rolling for a different year, or testing?
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-verdigris" onclick="Modal.close();TabManors.openSurvivalRoll('${key}','${horseId}',true)">Yes, Roll Anyway</button>
+            <button class="btn btn-ghost" onclick="Modal.close();TabManors._noRecordYet()">No, Not Yet</button>
+          </div>
+        </div>`);
+      return;
+    }
+
+    // Roll
+    const roll    = Math.floor(Math.random() * 20) + 1;
+    const modified = roll + mods.total;
+    const result  = modified <= 1 ? 'dead' : modified === 2 ? 'ruined' : 'healthy';
+    const resultLabel = result === 'dead' ? 'Dead' : result === 'ruined' ? 'Ruined' : 'Healthy';
+    const resultColor = result === 'healthy' ? 'var(--verdigris-mid)' : result === 'ruined' ? 'var(--gold)' : 'var(--crimson-mid)';
+
+    const modRow = (label, val) => val !== 0
+      ? `<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;">
+           <span style="color:var(--ink-soft);">${label}</span>
+           <span style="color:${val < 0 ? 'var(--crimson-mid)' : 'var(--verdigris-mid)'};">${val > 0 ? '+' : ''}${val}</span>
+         </div>` : '';
+
+    Modal.open(`
+      <div style="min-width:340px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:4px;">Survival Roll — ${esc(h.name)}</div>
+        <div style="font-family:var(--font-heading);font-size:0.62rem;color:var(--ink-soft);margin-bottom:16px;">${esc(h.type)} · Age ${mods.age} · ${STORE.year} AD</div>
+
+        <div style="text-align:center;margin-bottom:16px;">
+          <div style="font-family:var(--font-display);font-size:2.5rem;color:var(--ink);line-height:1;">${roll}</div>
+          <div style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-soft);margin-top:2px;">d20 roll</div>
+        </div>
+
+        ${mods.total !== 0 ? `
+          <div style="border:1px solid var(--vellum-deep);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;">
+            <div style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;">Modifiers</div>
+            ${modRow(`Age ${mods.age} (over 7 by ${mods.age - 7})`, mods.agePenalty)}
+            ${modRow('Poor this year', mods.poorPenalty)}
+            ${modRow('Impoverished this year', mods.impovPenalty)}
+            ${modRow(`Consecutive poor/impoverished years (${mods.consecutive}×)`, mods.consecutivePenalty)}
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:4px 0 0;border-top:1px solid var(--vellum-deep);margin-top:4px;font-weight:600;">
+              <span>Modified total</span>
+              <span>${modified}</span>
+            </div>
+          </div>
+        ` : `<div style="font-size:0.8rem;color:var(--ink-soft);margin-bottom:12px;font-style:italic;">No modifiers apply.</div>`}
+
+        <div style="text-align:center;margin-bottom:16px;">
+          <div style="font-family:var(--font-display);font-size:1.4rem;color:${resultColor};">${resultLabel}</div>
+          ${result === 'dead'   ? '<div style="font-size:0.78rem;color:var(--ink-soft);margin-top:2px;">The horse has died.</div>' : ''}
+          ${result === 'ruined' ? '<div style="font-size:0.78rem;color:var(--ink-soft);margin-top:2px;">The horse is no longer serviceable.</div>' : ''}
+          ${result === 'healthy' ? '<div style="font-size:0.78rem;color:var(--ink-soft);margin-top:2px;">The horse survives the winter.</div>' : ''}
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-verdigris" onclick="TabManors._confirmSurvivalRoll('${key}','${horseId}',${roll},${modified},'${result}')">Confirm & Record</button>
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel (reroll)</button>
+        </div>
+      </div>`);
+  },
+
+  _confirmSurvivalRoll(key, horseId, roll, modified, result) {
+    const cacheKey = this._stablesCacheKey(key);
+    const horses   = this._horsesCache[cacheKey] || [];
+    const h        = horses.find(x => x.id === horseId);
+    if (!h) return;
+
+    const mods = this._calcSurvivalModifiers(h, key);
+
+    if (!h.survivalHistory) h.survivalHistory = [];
+    h.survivalHistory.push({
+      year:           STORE.year,
+      roll,
+      modifiers: {
+        age_penalty:  mods.agePenalty,
+        poor:         mods.poorPenalty,
+        impoverished: mods.impovPenalty,
+        consecutive:  mods.consecutivePenalty,
+      },
+      modified_total: modified,
+      result,
+    });
+
+    if (result === 'dead' || result === 'ruined') {
+      h.alive        = false;
+      h.year_died    = STORE.year;
+      h.death_reason = result;
+    }
+
+    this._persistHorses(key);
+    Toast.show(
+      result === 'healthy' ? `${h.name} survives the winter.` :
+      result === 'ruined'  ? `${h.name} is ruined — no longer serviceable.` :
+                             `${h.name} has died.`,
+      result === 'healthy' ? 'success' : 'error'
+    );
+    Modal.close();
+    this.render();
+  },
+
+  _killHorse(key, horseId, reason) {
+    const cacheKey = this._stablesCacheKey(key);
+    const horses   = this._horsesCache[cacheKey] || [];
+    const h        = horses.find(x => x.id === horseId);
+    if (!h) return;
+    const label = reason === 'ruined' ? 'ruined' : 'dead';
+    if (!confirm(`Mark ${h.name} as ${label}?`)) return;
+    h.alive        = false;
+    h.year_died    = STORE.year;
+    h.death_reason = reason;
+    this._persistHorses(key);
+    Toast.show(`${h.name} moved to the Pet Cemetery.`, 'error');
+    this.render();
+  },
+
+  _toggleFavorite(key, horseId) {
+    const cacheKey = this._stablesCacheKey(key);
+    const horses   = this._horsesCache[cacheKey] || [];
+    const h        = horses.find(x => x.id === horseId);
+    if (!h) return;
+    const dead     = horses.filter(x => x.alive === false);
+    const favCount = dead.filter(x => x.favorite).length;
+    if (!h.favorite && favCount >= 10) return; // at cap, button should be disabled but guard anyway
+    h.favorite = !h.favorite;
+    this._persistHorses(key);
+    this.render();
   },
 };

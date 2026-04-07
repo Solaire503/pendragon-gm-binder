@@ -2837,3 +2837,37 @@ html.is-player .player-readonly-banner {
   color: var(--crimson-mid);
   margin-bottom: 4px;
 }
+
+/* ── STABLES ──────────────────────────────────────────────── */
+.horse-card {
+  background: var(--vellum-mid);
+  border: 1px solid var(--vellum-deep);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  border-left: 3px solid var(--gold);
+}
+.horse-card-dead {
+  background: var(--vellum);
+  opacity: 0.72;
+  border-left-color: var(--ink-soft) !important;
+}
+.horse-type-badge {
+  font-family: var(--font-heading);
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 8px;
+}
+.horse-type-war {
+  background: rgba(30,58,95,0.14);
+  color: var(--cobalt-mid);
+}
+.horse-type-riding {
+  background: rgba(45,90,74,0.14);
+  color: var(--verdigris-mid);
+}
+.horse-type-work {
+  background: rgba(90,80,64,0.14);
+  color: var(--ink-soft);
+}
