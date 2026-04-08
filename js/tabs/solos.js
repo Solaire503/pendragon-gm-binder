@@ -57,7 +57,7 @@ const TabSolos = {
             `onmouseenter="TabSolos._showPillTooltip(event,'${id}')" ` +
             `onmouseleave="TabSolos._hidePillTooltip()" ` +
             `title="Click to open full card">` +
-            `${this._esc(npc.name)}` +
+            `${esc(npc.name)}` +
           `</span>` +
           `<button class="solos-pill-trait${hasNote?' has-note':''}" onclick="TabSolos._editKnightNote('${id}')" title="${hasNote ? 'Edit personality note' : 'Add personality note'}">✎</button>` +
           `<button class="solos-pill-remove" onclick="TabSolos._removeKnight('${id}')" title="Remove">×</button>` +
@@ -168,8 +168,8 @@ const TabSolos = {
       if (!list.length) { results.style.display = 'none'; return; }
       results.innerHTML = list.slice(0, 12).map(n =>
         `<div class="npc-search-item" data-id="${n.id}">
-          <span class="npc-search-name">${n.name}</span>
-          ${n.role ? `<span class="npc-search-role">${n.role}</span>` : ''}
+          <span class="npc-search-name">${esc(n.name)}</span>
+          ${n.role ? `<span class="npc-search-role">${esc(n.role)}</span>` : ''}
           ${n.household ? `<span class="npc-search-hh" style="color:${STORE.householdColour ? STORE.householdColour(n.household) : ''}">${STORE.householdIcon ? STORE.householdIcon(n.household) : ''}</span>` : ''}
         </div>`
       ).join('');
@@ -929,24 +929,8 @@ const TabSolos = {
 
   _tableLoot() {
     const base = this._rollD6();
-    let m = `Base loot: ${base}£ in goods.`;
-    if (base > 6) {
-      const ext = this._rollD6();
-      const EXT = [
-        null,
-        '+1 to four opposing traits.',
-        '+1 to two opposing traits.',
-        'A courser with tack and harness.',
-        'A palfrey with tack and harness.',
-        'Luck roll — knight may reroll one future roll this year.',
-        'Prisoner taken — possible companion (table 27).',
-        'Roll twice and keep both bonuses.',
-        `+${this._rollD6()}£ in additional goods.`,
-        `+${this._rollD6()}£ in coins.`,
-        `+${this._rollD6x(2)}£ goods and +${this._rollD6()}£ coins.`,
-      ];
-      m += ` Extended: ${EXT[Math.min(ext, 10)] || ''}`;
-    }
+    const m = `Base loot: ${base}£ in goods.`;
+    // LO-2: Extended loot block removed — base is a d6 (1-6) so base > 6 was unreachable.
     return { title: 'Loot', mechDesc: m, flags: [], chainResults: [] };
   },
 
@@ -1444,7 +1428,7 @@ const TabSolos = {
       ? card.flavorLoading
         ? `<div class="solos-flavor solos-flavor-loading">The scribe is writing…</div>`
         : card.flavorText
-          ? `<div class="solos-flavor">${this._esc(card.flavorText)}</div>`
+          ? `<div class="solos-flavor">${esc(card.flavorText)}</div>`
           : `<div class="solos-flavor solos-flavor-nokey">No AI flavor — set an API key via <strong>🔑 AI Key</strong> in the header.</div>`
       : '';
 
@@ -1456,8 +1440,8 @@ const TabSolos = {
       ? `<div class="solos-chain">${card.chainResults.map(cr => `
           <div class="solos-chain-entry">
             <span class="solos-chain-arrow">↳</span>
-            <strong>${this._esc(cr.title)}</strong>
-            <span class="solos-chain-desc">${this._esc(cr.mechDesc || '')}</span>
+            <strong>${esc(cr.title)}</strong>
+            <span class="solos-chain-desc">${esc(cr.mechDesc || '')}</span>
           </div>`).join('')}</div>`
       : '';
 
@@ -1474,22 +1458,22 @@ const TabSolos = {
       <div class="solos-card ${stateClass}" id="solos-card-${card.id}">
         <div class="solos-card-header">
           <div class="solos-card-meta">
-            <span class="solos-card-name">${this._esc(name)}</span>
+            <span class="solos-card-name">${esc(name)}</span>
             <span class="solos-card-year">${card.year} AD</span>
             <span class="solos-card-mode">${rollModeLabel}</span>
             <span class="solos-card-wed">${card.wed === 'wed' ? 'Wed' : 'Unwed'}</span>
           </div>
           <div class="solos-card-roll-badge">
             ${card.tableRolls.topD6
-              ? `<span class="solos-d20">d6: ${card.tableRolls.topD6} → ${this._esc(card.tableRolls.topChain||'')}</span>`
+              ? `<span class="solos-d20">d6: ${card.tableRolls.topD6} → ${esc(card.tableRolls.topChain||'')}</span>`
               : `<span class="solos-d20">d20: ${card.tableRolls.yearly}</span>`}
-            <span class="solos-cat-badge" style="${catBadgeStyle}">${this._esc(card.eventType)}</span>
+            <span class="solos-cat-badge" style="${catBadgeStyle}">${esc(card.eventType)}</span>
           </div>
           ${stampHtml}
         </div>
         <div class="solos-card-body">
-          <div class="solos-event-title">${this._esc(card.eventTitle)}</div>
-          <div class="solos-mech-desc">${this._esc(card.mechDesc)}</div>
+          <div class="solos-event-title">${esc(card.eventTitle)}</div>
+          <div class="solos-mech-desc">${esc(card.mechDesc)}</div>
           ${flavorHtml}
           ${flagsHtml}
           ${chainHtml}
@@ -1767,7 +1751,7 @@ const TabSolos = {
             Note this saga event in the chronicles for future reference.
           </p>
           <div style="background:var(--vellum-dark,#e8dcc8);padding:10px;border-radius:4px;font-style:italic;font-size:0.88rem;margin-bottom:14px;">
-            ${this._esc(card.mechDesc)}
+            ${esc(card.mechDesc)}
           </div>
           <p style="font-size:0.8rem;color:var(--ink-soft);margin:0 0 10px;">
             Tip: copy this to your campaign notes for a future session hook.
@@ -2000,7 +1984,7 @@ const TabSolos = {
         </p>
         <textarea id="solos-chron-text" class="edit-input" rows="5"
           style="width:100%;resize:vertical;font-family:var(--font-body,'EB Garamond',serif);font-size:0.9rem;line-height:1.5;"
-        >${this._esc(name + ' — ' + text)}</textarea>
+        >${esc(name + ' — ' + text)}</textarea>
         <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
           <button class="btn btn-primary" onclick="TabSolos._commitToChronicle(${year})">Commit to Chronicle</button>
@@ -2014,7 +1998,7 @@ const TabSolos = {
     if (!STORE.chronicle) STORE.chronicle = {};
     const key = String(year);
     if (!STORE.chronicle[key]) STORE.chronicle[key] = [];
-    STORE.chronicle[key].push({ id: 'ev-' + Date.now(), text, cat: 'personal', ts: Date.now() });
+    STORE.chronicle[key].push({ id: 'ev-' + crypto.randomUUID(), text, cat: 'personal', ts: Date.now() });
     STORE.save();
     Modal.close();
     Toast.success('Entry committed to the Chronicle of Logres.');
@@ -2028,7 +2012,7 @@ const TabSolos = {
       <div style="min-width:360px;max-width:480px;">
         <div class="modal-header">
           <h2 style="margin:0;font-size:1rem;font-family:var(--font-heading,'Cinzel',serif);">
-            Personality Note — ${this._esc(npc.name)}
+            Personality Note — ${esc(npc.name)}
           </h2>
         </div>
         <div style="padding:16px 20px;">
@@ -2040,7 +2024,7 @@ const TabSolos = {
           <textarea id="knightNoteText" class="edit-input" rows="4"
             style="width:100%;resize:vertical;font-family:var(--font-body,'EB Garamond',serif);font-size:0.9rem;"
             placeholder="e.g. Cruel, short-tempered, covetous of glory. Contemptuous of peasants and clergy alike. Respected for valor, feared for her tongue. Will betray an ally for the right price."
-          >${this._esc(npc.personalityNote || '')}</textarea>
+          >${esc(npc.personalityNote || '')}</textarea>
           <p style="margin:8px 0 14px;font-size:0.72rem;color:var(--ink-soft,#7a6a4a);font-style:italic;">
             Tip: include dominant traits, vices, reputation at court, and any notable grudges or passions.
           </p>
@@ -2102,17 +2086,17 @@ const TabSolos = {
     const personality = npc.personalityNote ? npc.personalityNote.slice(0, 100) + (npc.personalityNote.length > 100 ? '…' : '') : null;
 
     const rows = [
-      npc.role    ? `<div class="spt-row"><span class="spt-key">Role</span><span class="spt-val">${this._esc(npc.role)}</span></div>` : '',
+      npc.role    ? `<div class="spt-row"><span class="spt-key">Role</span><span class="spt-val">${esc(npc.role)}</span></div>` : '',
       age         ? `<div class="spt-row"><span class="spt-key">Age</span><span class="spt-val">${age}</span></div>` : '',
       glory       ? `<div class="spt-row"><span class="spt-key">Glory</span><span class="spt-val">${glory}</span></div>` : '',
-      hh          ? `<div class="spt-row"><span class="spt-key">Household</span><span class="spt-val">${this._esc(hh)}</span></div>` : '',
-      spouseName  ? `<div class="spt-row"><span class="spt-key">Spouse</span><span class="spt-val">${this._esc(spouseName)}</span></div>` : '',
-      personality ? `<div class="spt-personality"><span class="spt-key" style="display:block;margin-bottom:2px;">Traits</span>${this._esc(personality)}</div>` : '',
-      notes       ? `<div class="spt-notes">${this._esc(notes)}</div>` : '',
+      hh          ? `<div class="spt-row"><span class="spt-key">Household</span><span class="spt-val">${esc(hh)}</span></div>` : '',
+      spouseName  ? `<div class="spt-row"><span class="spt-key">Spouse</span><span class="spt-val">${esc(spouseName)}</span></div>` : '',
+      personality ? `<div class="spt-personality"><span class="spt-key" style="display:block;margin-bottom:2px;">Traits</span>${esc(personality)}</div>` : '',
+      notes       ? `<div class="spt-notes">${esc(notes)}</div>` : '',
     ].filter(Boolean).join('');
 
     tt.innerHTML = `
-      <div class="spt-name">${this._esc(npc.name)}</div>
+      <div class="spt-name">${esc(npc.name)}</div>
       ${rows}
       <div class="spt-hint">Click name to open full card</div>`;
     tt.style.display = 'block';
@@ -2138,7 +2122,6 @@ const TabSolos = {
 
   // ── UTILITIES ─────────────────────────────────────────────
   _getCard(id)   { return this._ledger.find(c => c.id === id) || null; },
-  _esc(str)      { return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); },
 
 };
 

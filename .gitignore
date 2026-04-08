@@ -12,6 +12,8 @@ binder-save.json
 announcements.json
 submissions.json
 presence.json
+# GM session notes (runtime, not source-controlled)
+comments.json
 
 # ===== Per-player data (horses, pins, notes) =====
 player_data/

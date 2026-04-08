@@ -19,6 +19,8 @@ const Notifications = {
 
   // ── LOAD ─────────────────────────────────────────────────────
   async load() {
+    // Skip expensive polls when tab is hidden
+    if (document.hidden) return;
     if (this._loading) return;
     this._loading = true;
     try {
@@ -143,6 +145,8 @@ const Notifications = {
   },
 
   // ── RELATIVE TIME ────────────────────────────────────────────
+  // LO-4: _relTime is duplicated in comments.js. If a shared utils.js is
+  // added in future, consolidate both copies there.
   _relTime(ts) {
     if (!ts) return '';
     const diff = Date.now() - new Date(ts).getTime();

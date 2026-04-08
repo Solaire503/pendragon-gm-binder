@@ -3,14 +3,18 @@
 ══════════════════════════════════════════════════════════════ */
 
 const Comments = {
-  _cache:   {},   // npcId → array of comment objects
-  _loading: {},   // npcId → boolean
+  _cache:      {},   // npcId → array of comment objects
+  _loading:    {},   // npcId → boolean
+  _cacheTime:  {},   // npcId → timestamp of last successful fetch (ms)
 
   // ── BUILD HTML (sync — returns placeholder if not cached yet) ──
   buildHtml(npcId) {
-    if (!this._cache[npcId]) {
-      // Kick off async load; placeholder will be replaced
+    const stale = !this._cache[npcId] || (Date.now() - (this._cacheTime[npcId] || 0) > 30000);
+    if (stale) {
+      // Kick off async load; placeholder will be replaced (or stale data shown briefly)
       this.loadForNpc(npcId);
+    }
+    if (!this._cache[npcId]) {
       return `<div id="comments-${esc(npcId)}" class="comments-section">
         <div class="text-muted" style="font-style:italic;padding:8px 0;">Loading comments\u2026</div>
       </div>`;
@@ -163,11 +167,14 @@ const Comments = {
       if (r.ok) {
         const d = await r.json();
         this._cache[npcId] = Array.isArray(d.comments) ? d.comments : [];
+        this._cacheTime[npcId] = Date.now();
       } else {
-        this._cache[npcId] = [];
+        // Keep existing cache if available rather than showing nothing
+        if (!this._cache[npcId]) this._cache[npcId] = [];
       }
     } catch {
-      this._cache[npcId] = [];
+      // Keep existing cache if available rather than showing nothing
+      if (!this._cache[npcId]) this._cache[npcId] = [];
     }
     this._loading[npcId] = false;
     // Replace placeholder in DOM if present
@@ -317,6 +324,8 @@ const Comments = {
   },
 
   // ── HELPERS ──────────────────────────────────────────────────
+  // LO-4: _relTime is duplicated in notifications.js. If a shared utils.js is
+  // added in future, consolidate both copies there.
   _relTime(ts) {
     if (!ts) return '';
     const diff  = Date.now() - new Date(ts).getTime();

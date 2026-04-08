@@ -102,7 +102,7 @@ const TabChronicle = {
     if (!STORE.chronicle) STORE.chronicle = {};
     const key = String(this._year);
     if (!STORE.chronicle[key]) STORE.chronicle[key] = [];
-    STORE.chronicle[key].push({ id: 'ev-' + Date.now(), text, cat, ts: Date.now() });
+    STORE.chronicle[key].push({ id: 'ev-' + crypto.randomUUID(), text, cat, ts: Date.now() });
     STORE.save();
     this.render();
   },

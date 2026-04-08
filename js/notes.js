@@ -43,7 +43,10 @@ const Notes = {
         body: JSON.stringify(this._data),
       });
       this._dirty = false;
-    } catch { /* silent */ }
+    } catch (e) {
+      console.error('Notes save failed:', e);
+      if (typeof Toast !== 'undefined') Toast.error('Notes could not be saved — check your connection');
+    }
   },
 
   // Debounced save — waits 2s after last edit

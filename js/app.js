@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.7.1';
+const APP_VERSION = '2.8.0';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -342,6 +342,69 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.8.0',
+    date:    '2026-04-08',
+    sections: [
+      {
+        heading: 'Security',
+        items: [
+          'CSRF protection on logout (POST)',
+          'Login attempts rate limiting now thread-safe',
+          'Content-Security-Policy headers added',
+          'Session role re-verified against users.json on GM actions',
+          'Impressions size limits enforced server-side',
+          'users.json permissions hardened (600)',
+          '/api/config no longer leaks filesystem paths',
+        ],
+      },
+      {
+        heading: 'Caliburn Bot',
+        items: [
+          '/damage handles negative modifiers, validates dice sides',
+          '/chronicle respects Discord embed limits',
+          '/speak rate-limited (30s cooldown) and input capped at 500 chars',
+          'Fuzzy NPC search optimised with substring pre-pass',
+          'Slash commands auto-sync on startup',
+        ],
+      },
+      {
+        heading: 'Data',
+        items: [
+          'Chronicle and solo event IDs now use UUID (no ms collisions)',
+          'GM save preserves player-written relationships',
+          'NPC deletion cleans up impressions and pins',
+          'Soft-deleted comments purged after 30 days',
+          'Submissions list capped at 200 entries',
+          'Notifications storage capped at 50',
+        ],
+      },
+      {
+        heading: 'UI',
+        items: [
+          'Comment cache refreshes every 30s',
+          'Notes save failure now shows an error toast',
+          'Polling pauses when browser tab is hidden',
+          'Manor names with apostrophes no longer break onclick handlers',
+        ],
+      },
+      {
+        heading: 'Fixes',
+        items: [
+          'NPC names escaped in solos knight search',
+          'Parse errors on save file no longer reset data to defaults',
+        ],
+      },
+      {
+        heading: 'Infrastructure',
+        items: [
+          'backups/ directory permissions fixed',
+          'bcrypt upgraded to 5.0.0',
+          'requirements.txt added for binder and bot (pinned versions)',
+        ],
+      },
+    ],
+  },
   {
     version: '2.7.1',
     date:    '2026-04-08',
@@ -1508,6 +1571,12 @@ const APP = {
       await this._showWelcome(loadResult);
       return; // welcome flow calls location.reload() on confirm, which re-runs init() → _boot()
 
+    } else if (loadResult === 'corrupt') {
+      // Save file failed to parse — fall back to localStorage (same as offline).
+      // Toast already shown by importJSON; do NOT silently continue as if nothing happened.
+      STORE.init();
+      FileSync.setStatus('error');
+
     } else {
       // Server offline — fall back to localStorage silently
       STORE.init();
@@ -1690,7 +1759,9 @@ const APP = {
       userEl.innerHTML =
         `<span class="header-username">${user.username}</span>` +
         `<a href="/account" class="hdr-btn hdr-btn-outline" title="Change passphrase">🗝</a>` +
-        `<a href="/logout"  class="hdr-btn hdr-btn-outline" title="Sign out">Sign out</a>`;
+        `<form method="POST" action="/logout" style="display:inline;margin:0;">
+  <button type="submit" class="hdr-btn hdr-btn-outline" title="Sign out">Sign out</button>
+</form>`;
       headerRight.prepend(userEl);
     }
 
@@ -1705,6 +1776,8 @@ const APP = {
 
   _startPlayerRefresh() {
     setInterval(async () => {
+      // Skip expensive polls when tab is hidden
+      if (document.hidden) return;
       const result = await STORE.loadFromFile();
       if (result === 'loaded') this.refreshCurrentTab();
     }, 30 * 1000);

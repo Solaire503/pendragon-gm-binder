@@ -142,28 +142,32 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 # ── RATE LIMITING ─────────────────────────────────────────────────────────────
 
 _login_attempts: dict[str, list[float]] = {}
+_login_attempts_lock = threading.Lock()
 MAX_ATTEMPTS   = 5
 WINDOW_SECONDS = 300   # 5-minute window
 
 def _is_rate_limited(ip: str) -> bool:
-    now = time.time()
-    attempts = [t for t in _login_attempts.get(ip, []) if now - t < WINDOW_SECONDS]
-    _login_attempts[ip] = attempts
-    return len(attempts) >= MAX_ATTEMPTS
+    with _login_attempts_lock:
+        now = time.time()
+        attempts = [t for t in _login_attempts.get(ip, []) if now - t < WINDOW_SECONDS]
+        _login_attempts[ip] = attempts
+        return len(attempts) >= MAX_ATTEMPTS
 
 def _record_attempt(ip: str) -> None:
-    now = time.time()
-    attempts = [t for t in _login_attempts.get(ip, []) if now - t < WINDOW_SECONDS]
-    attempts.append(now)
-    _login_attempts[ip] = attempts
-    # Opportunistic cleanup: prune any IPs whose most-recent attempt has aged out,
-    # so this dict can't grow unbounded as unique IPs hit the login endpoint.
-    stale = [k for k, v in _login_attempts.items() if not v or now - v[-1] > WINDOW_SECONDS]
-    for k in stale:
-        _login_attempts.pop(k, None)
+    with _login_attempts_lock:
+        now = time.time()
+        attempts = [t for t in _login_attempts.get(ip, []) if now - t < WINDOW_SECONDS]
+        attempts.append(now)
+        _login_attempts[ip] = attempts
+        # Opportunistic cleanup: prune any IPs whose most-recent attempt has aged out,
+        # so this dict can't grow unbounded as unique IPs hit the login endpoint.
+        stale = [k for k, v in _login_attempts.items() if not v or now - v[-1] > WINDOW_SECONDS]
+        for k in stale:
+            _login_attempts.pop(k, None)
 
 def _clear_attempts(ip: str) -> None:
-    _login_attempts.pop(ip, None)
+    with _login_attempts_lock:
+        _login_attempts.pop(ip, None)
 
 # ── CSRF PROTECTION ───────────────────────────────────────────────────────────
 
@@ -221,6 +225,11 @@ def gm_required(f):
             return jsonify({'error': 'Not authenticated'}), 401
         if session.get('role') != 'gm':
             return jsonify({'error': 'Forbidden'}), 403
+        # Re-verify the user still exists and still holds the gm role in
+        # users.json — catches role changes that happened after login.
+        live_user = get_user(session['username'])
+        if not live_user or live_user.get('role') != 'gm':
+            return jsonify({'error': 'Forbidden'}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -240,6 +249,14 @@ def add_security_headers(response):
     response.headers['X-Frame-Options']        = 'DENY'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy']        = 'same-origin'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self';"
+    )
     return response
 
 # ── ATOMIC FILE WRITES ────────────────────────────────────────────────────────
@@ -720,7 +737,7 @@ def login():
     return render_template_string(LOGIN_HTML, error=error, username=prefill, year=year)
 
 
-@app.route('/logout')
+@app.route('/logout', methods=['GET', 'POST'])
 def logout():
     session.clear()
     return redirect(url_for('login'))
@@ -876,16 +893,27 @@ def static_files(filename):
 @app.route('/api/me')
 @login_required
 def api_me():
-    """Return current user info for the frontend. Also stamps lastLogin so
-    persistent sessions stay current without requiring a fresh login."""
+    """Return current user info for the frontend. Stamps lastLogin at most
+    once per 60 seconds so persistent sessions stay current without hammering
+    users.json on every page load."""
     users = load_users()
     user  = None
+    dirty = False
+    now   = datetime.utcnow()
     for u in users:
         if u['username'].lower() == session['username'].lower():
-            u['lastLogin'] = datetime.utcnow().isoformat() + 'Z'
             user = u
+            prev = u.get('lastLogin', '')
+            try:
+                prev_dt = datetime.strptime(prev, '%Y-%m-%dT%H:%M:%S.%fZ')
+            except (ValueError, TypeError):
+                prev_dt = None
+            if prev_dt is None or (now - prev_dt).total_seconds() > 60:
+                u['lastLogin'] = now.isoformat() + 'Z'
+                dirty = True
             break
-    save_users(users)
+    if dirty:
+        save_users(users)
     return jsonify({
         'username':  session['username'],
         'role':      session['role'],
@@ -932,7 +960,7 @@ def api_get_config():
     cfg  = load_config()
     path = cfg.get('saveFile')
     return jsonify({
-        'saveFile':   path,
+        'saveFile':   os.path.basename(path) if path else '',
         'exists':     Path(path).exists() if path else False,
         'configured': bool(path),
         'hasApiKey':  bool(SECRETS.get('ANTHROPIC_KEY')),
@@ -1039,8 +1067,36 @@ def api_save():
 
         path.parent.mkdir(parents=True, exist_ok=True)
         with _save_lock:
+            # Merge: preserve any relationships saved by players via /api/relationships
+            # since the GM's in-memory copy may be stale relative to the on-disk version.
             if path.exists():
                 _rotate_backup(path)
+                try:
+                    disk_binder = json.loads(path.read_text(encoding='utf-8'))
+                    gm_binder   = json.loads(body)
+                    # Take the current on-disk relationships as the authoritative base,
+                    # then overlay any relationships the GM explicitly changed/added that
+                    # are not present on disk (keyed by sourceId+targetId+type).
+                    disk_rels = disk_binder.get('relationships', [])
+                    gm_rels   = gm_binder.get('relationships', [])
+                    # Build a set of keys present on disk
+                    disk_keys = {
+                        (r.get('sourceId'), r.get('targetId'), r.get('type'))
+                        for r in disk_rels if isinstance(r, dict)
+                    }
+                    # Keep disk rels; append any GM rels whose exact key is not yet on disk
+                    merged_rels = list(disk_rels)
+                    for r in gm_rels:
+                        if not isinstance(r, dict):
+                            continue
+                        key = (r.get('sourceId'), r.get('targetId'), r.get('type'))
+                        if key not in disk_keys:
+                            merged_rels.append(r)
+                            disk_keys.add(key)
+                    gm_binder['relationships'] = merged_rels
+                    body = json.dumps(gm_binder, ensure_ascii=False)
+                except Exception:
+                    pass  # fall back to writing the GM body as-is
             _atomic_write(path, body)
 
         now = datetime.now().strftime('%H:%M:%S')
@@ -1467,6 +1523,9 @@ def api_post_submission():
     with _submissions_lock:
         subs = load_submissions()
         subs.append(sub)
+        # Cap at 200 entries, keeping most recent
+        if len(subs) > 200:
+            subs = subs[-200:]
         save_submissions_data(subs)
     print(f'  [Submit] {session["username"]} submitted chronicle entry for {year} AD')
     return jsonify({'ok': True, 'id': sub['id']})
@@ -1769,6 +1828,13 @@ def api_save_notes():
         return jsonify({'error': 'manor_notes must be a string ≤10000 chars'}), 400
     if not isinstance(impressions, dict):
         return jsonify({'error': 'impressions must be an object'}), 400
+    if len(impressions) > 100:
+        return jsonify({'error': 'Too many impressions'}), 400
+    for k, v in impressions.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            return jsonify({'error': 'impressions keys and values must be strings'}), 400
+        if len(v) > 2000:
+            return jsonify({'error': 'Each impression must be ≤2000 chars'}), 400
     with _player_lock(session['username']):
         _write_notes(session['username'], {
             'general': general,
@@ -1807,6 +1873,13 @@ def api_save_notes_gm(username):
         return jsonify({'error': 'manor_notes must be a string ≤10000 chars'}), 400
     if not isinstance(impressions, dict):
         return jsonify({'error': 'impressions must be an object'}), 400
+    if len(impressions) > 100:
+        return jsonify({'error': 'Too many impressions'}), 400
+    for k, v in impressions.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            return jsonify({'error': 'impressions keys and values must be strings'}), 400
+        if len(v) > 2000:
+            return jsonify({'error': 'Each impression must be ≤2000 chars'}), 400
     with _player_lock(username):
         _write_notes(username, {
             'general': general,
@@ -1834,7 +1907,22 @@ def _read_comments() -> list:
 
 
 def _write_comments(comments: list) -> None:
-    """Atomic write to comments.json. Caller must hold _comments_lock."""
+    """Atomic write to comments.json. Caller must hold _comments_lock.
+    Opportunistically purges soft-deleted entries whose original creation
+    timestamp is older than 30 days, keeping the file from growing forever."""
+    cutoff_dt = datetime.utcnow() - timedelta(days=30)
+    def _is_purgeable(c: dict) -> bool:
+        if not c.get('deleted'):
+            return False
+        history = c.get('history') or []
+        ts_str  = history[0].get('ts', '') if history else ''
+        try:
+            created = datetime.strptime(ts_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+            return created < cutoff_dt
+        except (ValueError, TypeError):
+            return False
+    if any(_is_purgeable(c) for c in comments):
+        comments = [c for c in comments if not _is_purgeable(c)]
     _atomic_write(COMMENTS_FILE, json.dumps(comments, indent=2))
 
 
@@ -2024,7 +2112,7 @@ def _read_notifications(username: str) -> list:
 
 
 def _push_notification(username: str, notif_type: str, text: str, link: str = '') -> None:
-    """Append a notification to player_data/{username}/notifications.json. Cap at 100."""
+    """Append a notification to player_data/{username}/notifications.json. Cap at 50."""
     import secrets as _secrets
     with _player_lock(username):
         d = PLAYER_DATA_DIR / username
@@ -2040,7 +2128,7 @@ def _push_notification(username: str, notif_type: str, text: str, link: str = ''
             'ts':   datetime.utcnow().isoformat() + 'Z',
         }
         notifs.insert(0, notif)
-        notifs = notifs[:100]
+        notifs = notifs[:50]
         _atomic_write(path, json.dumps(notifs, indent=2))
 
 

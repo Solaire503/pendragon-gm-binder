@@ -74,6 +74,20 @@ const Modal = {
   _stack:        [],
   _formDirty:    false,
   _closeCallback: null,
+  _dirtyHandler:  null,
+
+  _attachDirtyListeners() {
+    const content = document.getElementById('modalContent');
+    if (!content) return;
+    // Remove any previously attached handler before adding a new one
+    if (this._dirtyHandler) {
+      content.removeEventListener('input',  this._dirtyHandler, true);
+      content.removeEventListener('change', this._dirtyHandler, true);
+    }
+    this._dirtyHandler = () => { this._formDirty = true; };
+    content.addEventListener('input',  this._dirtyHandler, true);
+    content.addEventListener('change', this._dirtyHandler, true);
+  },
 
   open(contentHtml, options = {}) {
     document.getElementById('navFateMenu')?.classList.remove('open');
@@ -88,9 +102,8 @@ const Modal = {
     box.className = 'modal-box' + (options.wide ? ' modal-wide' : '') + (options.tree ? ' modal-tree' : '');
     overlay.hidden = false;
 
-    // Track any user edits inside this modal
-    content.addEventListener('input',  () => { this._formDirty = true; }, true);
-    content.addEventListener('change', () => { this._formDirty = true; }, true);
+    // Track any user edits inside this modal (attach only one listener at a time)
+    this._attachDirtyListeners();
 
     this._closeCallback = options.onClose || null;
     if (options.onOpen) options.onOpen(content);
@@ -101,7 +114,15 @@ const Modal = {
     const overlay = document.getElementById('modalOverlay');
     if (overlay) overlay.hidden = true;
     const content = document.getElementById('modalContent');
-    if (content) content.innerHTML = '';
+    if (content) {
+      // Remove dirty-tracking listener before clearing content
+      if (this._dirtyHandler) {
+        content.removeEventListener('input',  this._dirtyHandler, true);
+        content.removeEventListener('change', this._dirtyHandler, true);
+        this._dirtyHandler = null;
+      }
+      content.innerHTML = '';
+    }
     this._stack     = [];
     this._formDirty = false;
     if (this._closeCallback) { this._closeCallback(); this._closeCallback = null; }
@@ -129,9 +150,8 @@ const Modal = {
     box.className = 'modal-box' +
       (options.wide ? ' modal-wide' : '') +
       (options.tree ? ' modal-tree' : '');
-    // Track edits in the new layer
-    content.addEventListener('input',  () => { this._formDirty = true; }, true);
-    content.addEventListener('change', () => { this._formDirty = true; }, true);
+    // Track edits in the new layer (replace any existing dirty listener)
+    this._attachDirtyListeners();
   },
 
   // Restore the previous modal content from the stack.
@@ -997,7 +1017,6 @@ function buildAddRelHtml(npcId) {
 // ── LIFE EVENTS SECTION ──────────────────────────────────────
 function buildSoloChronicleHtml(npc) {
   const events = npc.soloEvents || [];
-  const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const SHOW_FIRST = 3;
 
   const user = window.__USER__;

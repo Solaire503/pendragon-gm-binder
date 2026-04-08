@@ -291,6 +291,20 @@ const STORE = {
     }
     // Remove their relationships
     this.relationships = this.relationships.filter(r => r.sourceId !== id && r.targetId !== id);
+    // Remove the NPC's impression from the per-user Notes store
+    if (typeof Notes !== 'undefined' && Notes._data?.impressions) {
+      delete Notes._data.impressions[id];
+      Notes._dirty = true;
+      Notes._scheduleSave?.();
+    }
+    // Remove the NPC from the Pins list
+    if (typeof PinsManager !== 'undefined' && Array.isArray(PinsManager._pins)) {
+      const pinIdx = PinsManager._pins.indexOf(id);
+      if (pinIdx !== -1) {
+        PinsManager._pins.splice(pinIdx, 1);
+        PinsManager._save();
+      }
+    }
     this.save();
   },
 
@@ -763,8 +777,10 @@ const STORE = {
 
       return true;
     } catch(e) {
-      console.error('Import failed', e);
-      return false;
+      console.error('Failed to parse save file:', e);
+      // Do NOT reset to defaults — keep existing in-memory state
+      if (typeof Toast !== 'undefined') Toast.error('Save file appears corrupted — data not loaded');
+      return 'corrupt';
     }
   },
 
@@ -848,7 +864,8 @@ const STORE = {
       } catch(e) {}
 
       const ok = this.importJSON(text);
-      if (ok) { if (!this._dirty) FileSync.setStatus('saved'); return 'loaded'; }
+      if (ok === true) { if (!this._dirty) FileSync.setStatus('saved'); return 'loaded'; }
+      if (ok === 'corrupt') return 'corrupt';
       return 'offline';
 
     } catch(e) {
