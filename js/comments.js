@@ -187,7 +187,7 @@ const Comments = {
     if (typeof AtMention !== 'undefined') {
       const container = document.getElementById(`comments-${npcId}`);
       if (container) {
-        container.querySelectorAll('textarea').forEach(ta => AtMention.wire(ta));
+        container.querySelectorAll('textarea').forEach(ta => AtMention._attach(ta));
       }
     }
   },

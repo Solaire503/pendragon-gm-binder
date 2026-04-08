@@ -3,6 +3,7 @@ Pendragon GM's Binder — Flask Server
 Handles auth, sessions, role-based access, and all API endpoints.
 """
 
+import hmac
 import json
 import os
 import shutil
@@ -227,7 +228,7 @@ def bot_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.headers.get('Authorization', '')
-        if not BOT_KEY or auth != f'Bearer {BOT_KEY}':
+        if not BOT_KEY or not hmac.compare_digest(auth, f'Bearer {BOT_KEY}'):
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated
@@ -599,11 +600,11 @@ def _send_reset_email(to_addr: str, token: str) -> bool:
     smtp_pass = SECRETS.get('SMTP_PASS', '')
     if not smtp_user or not smtp_pass:
         return False
-    # Use forwarded headers so the link points to the public URL (Cloudflare Tunnel),
-    # not Flask's internal 127.0.0.1 address.
-    host  = request.headers.get('X-Forwarded-Host') or request.headers.get('Host', '127.0.0.1:8765')
-    proto = request.headers.get('X-Forwarded-Proto', 'https' if SECRETS.get('CF_TUNNEL') else 'http')
-    reset_url = f"{proto}://{host}/reset/{token}"
+    if SECRETS.get('CF_TUNNEL'):
+        base_url = 'https://pendragon-binder.com'
+    else:
+        base_url = request.host_url.rstrip('/')
+    reset_url = f"{base_url}/reset/{token}"
     body = f"""Hello,
 
 Someone requested a password reset for your Pendragon GM's Binder account.
@@ -631,10 +632,10 @@ If you didn't request this, you can safely ignore this email.
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
-    # Setup is only accessible from localhost — prevents remote takeover if
-    # users.json is accidentally deleted on a public-facing deployment.
     if request.remote_addr not in ('127.0.0.1', '::1'):
         return jsonify({'error': 'Setup only accessible from localhost'}), 403
+    if _cf_tunnel and load_users():
+        return jsonify({'error': 'Setup disabled while tunnel is active'}), 403
     if not needs_setup():
         return redirect(url_for('login'))
 
@@ -732,6 +733,10 @@ def forgot_password():
 
 @app.route('/api/forgot-password', methods=['POST'])
 def api_forgot_password():
+    ip = request.remote_addr or 'unknown'
+    if _is_rate_limited(f'reset:{ip}'):
+        return jsonify({'ok': True, 'message': 'If that email is registered, a reset link has been sent.'}), 200
+    _record_attempt(f'reset:{ip}')
     data  = request.get_json(force=True, silent=True) or {}
     email = (data.get('email') or '').strip().lower()
     users = load_users()
@@ -1000,12 +1005,18 @@ def api_player_load():
         binder = json.loads(data)
         # Strip GM-only fields from every NPC before sending to players
         _GM_NPC_FIELDS = {'stats', 'passions', 'skills', 'notes', 'statblock_template'}
-        npcs = binder.get('npcs')
-        if isinstance(npcs, dict):
-            for npc in npcs.values():
-                if isinstance(npc, dict):
-                    for f in _GM_NPC_FIELDS:
-                        npc.pop(f, None)
+        for key in ('living', 'dead'):
+            npc_list = binder.get(key, [])
+            if isinstance(npc_list, list):
+                for npc in npc_list:
+                    if isinstance(npc, dict):
+                        for f in _GM_NPC_FIELDS:
+                            npc.pop(f, None)
+            elif isinstance(npc_list, dict):
+                for npc in npc_list.values():
+                    if isinstance(npc, dict):
+                        for f in _GM_NPC_FIELDS:
+                            npc.pop(f, None)
         return app.response_class(json.dumps(binder), mimetype='application/json')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1171,6 +1182,33 @@ def api_new():
         return jsonify({'error': 'Could not create save file'}), 500
 
 
+def _validate_ai_messages(messages) -> list:
+    """Validate and sanitize messages array for Anthropic API proxy."""
+    if not isinstance(messages, list):
+        raise ValueError('messages must be a list')
+    if len(messages) > 10:
+        raise ValueError('Too many messages (max 10)')
+    clean = []
+    for m in messages:
+        if not isinstance(m, dict):
+            raise ValueError('Each message must be an object')
+        role = m.get('role', '')
+        content = m.get('content', '')
+        if role not in ('user', 'assistant'):
+            raise ValueError(f'Invalid role: {role}')
+        if isinstance(content, str):
+            if len(content) > 10000:
+                raise ValueError('Message content too long (max 10000 chars)')
+        elif isinstance(content, list):
+            total = sum(len(str(c.get('text', ''))) for c in content if isinstance(c, dict))
+            if total > 10000:
+                raise ValueError('Message content too long (max 10000 chars)')
+        else:
+            raise ValueError('Message content must be string or list')
+        clean.append({'role': role, 'content': content})
+    return clean
+
+
 @app.route('/api/ai', methods=['POST'])
 @gm_required
 def api_ai():
@@ -1191,7 +1229,7 @@ def api_ai():
             'model':      'claude-haiku-4-5-20251001',
             'max_tokens': min(int(raw.get('max_tokens', 300)), 500),
             'system':     str(raw.get('system', '')),
-            'messages':   raw.get('messages', []),
+            'messages':   _validate_ai_messages(raw.get('messages', [])),
         }
     except (ValueError, TypeError) as e:
         return jsonify({'error': 'Invalid request: ' + str(e)}), 400
@@ -1213,9 +1251,11 @@ def api_ai():
             print('  [AI]    Flavor text generated')
             return app.response_class(resp_body, status=r.status, mimetype='application/json')
     except urllib.error.HTTPError as e:
-        return app.response_class(e.read(), status=e.code, mimetype='application/json')
+        print(f'  [AI]    API error: {e.code}')
+        return jsonify({'error': 'AI service returned an error'}), e.code
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f'  [AI]    Error: {e}')
+        return jsonify({'error': 'AI request failed'}), 500
 
 
 @app.route('/api/drives')
@@ -1616,6 +1656,17 @@ def api_save_horses_gm(household):
     return jsonify({'ok': True})
 
 
+# ── PER-USER LOCK (protects pins, notes, notifications for each user) ────────
+
+_player_locks: dict = {}
+_player_locks_lock = threading.Lock()
+
+def _player_lock(username: str) -> threading.Lock:
+    with _player_locks_lock:
+        if username not in _player_locks:
+            _player_locks[username] = threading.Lock()
+        return _player_locks[username]
+
 # ── PINS ─────────────────────────────────────────────────────────────────────
 
 def _read_pins(username: str) -> list:
@@ -1660,7 +1711,8 @@ def api_save_pins():
         if len(p) > 60:
             return jsonify({'error': f'Pin {i} exceeds max length of 60 characters'}), 400
         pins.append(p)
-    _write_pins(session['username'], pins)
+    with _player_lock(session['username']):
+        _write_pins(session['username'], pins)
     return jsonify({'ok': True})
 
 
@@ -1717,11 +1769,12 @@ def api_save_notes():
         return jsonify({'error': 'manor_notes must be a string ≤10000 chars'}), 400
     if not isinstance(impressions, dict):
         return jsonify({'error': 'impressions must be an object'}), 400
-    _write_notes(session['username'], {
-        'general': general,
-        'manor_notes': manor_notes,
-        'impressions': impressions,
-    })
+    with _player_lock(session['username']):
+        _write_notes(session['username'], {
+            'general': general,
+            'manor_notes': manor_notes,
+            'impressions': impressions,
+        })
     return jsonify({'ok': True})
 
 
@@ -1754,12 +1807,13 @@ def api_save_notes_gm(username):
         return jsonify({'error': 'manor_notes must be a string ≤10000 chars'}), 400
     if not isinstance(impressions, dict):
         return jsonify({'error': 'impressions must be an object'}), 400
-    _write_notes(username, {
-        'general': general,
-        'manor_notes': manor_notes,
-        'impressions': impressions,
-    })
-    _push_notification(username, 'note', 'The GM updated your notes')
+    with _player_lock(username):
+        _write_notes(username, {
+            'general': general,
+            'manor_notes': manor_notes,
+            'impressions': impressions,
+        })
+        _push_notification(username, 'note', 'The GM updated your notes')
     return jsonify({'ok': True})
 
 
@@ -1770,20 +1824,18 @@ _comments_lock = threading.Lock()
 
 
 def _read_comments() -> list:
-    """Returns comments list from comments.json."""
-    with _comments_lock:
-        if not COMMENTS_FILE.exists():
-            return []
-        try:
-            return json.loads(COMMENTS_FILE.read_text(encoding='utf-8'))
-        except Exception:
-            return []
+    """Returns comments list from comments.json. Caller must hold _comments_lock for writes."""
+    if not COMMENTS_FILE.exists():
+        return []
+    try:
+        return json.loads(COMMENTS_FILE.read_text(encoding='utf-8'))
+    except Exception:
+        return []
 
 
 def _write_comments(comments: list) -> None:
-    """Atomic write to comments.json."""
-    with _comments_lock:
-        _atomic_write(COMMENTS_FILE, json.dumps(comments, indent=2))
+    """Atomic write to comments.json. Caller must hold _comments_lock."""
+    _atomic_write(COMMENTS_FILE, json.dumps(comments, indent=2))
 
 
 def _serialize_comment(c: dict, is_gm: bool) -> dict:
@@ -1843,9 +1895,10 @@ def api_post_comment():
         'deletedBy':      None,
     }
 
-    all_comments = _read_comments()
-    all_comments.append(new_comment)
-    _write_comments(all_comments)
+    with _comments_lock:
+        all_comments = _read_comments()
+        all_comments.append(new_comment)
+        _write_comments(all_comments)
 
     # Notify all other users
     all_users = load_users()
@@ -1874,20 +1927,21 @@ def api_edit_comment(comment_id):
     if not isinstance(text, str) or not text or len(text) > 2000:
         return jsonify({'error': 'text must be a non-empty string ≤2000 chars'}), 400
 
-    all_comments = _read_comments()
-    target = next((c for c in all_comments if c['id'] == comment_id), None)
-    if not target:
-        return jsonify({'error': 'Comment not found'}), 404
-    is_gm   = session.get('role') == 'gm'
-    is_owner = target['authorUsername'] == session['username']
-    if not is_owner and not is_gm:
-        return jsonify({'error': 'Forbidden'}), 403
-    if target.get('deleted'):
-        return jsonify({'error': 'Cannot edit a deleted comment'}), 400
+    with _comments_lock:
+        all_comments = _read_comments()
+        target = next((c for c in all_comments if c['id'] == comment_id), None)
+        if not target:
+            return jsonify({'error': 'Comment not found'}), 404
+        is_gm   = session.get('role') == 'gm'
+        is_owner = target['authorUsername'] == session['username']
+        if not is_owner and not is_gm:
+            return jsonify({'error': 'Forbidden'}), 403
+        if target.get('deleted'):
+            return jsonify({'error': 'Cannot edit a deleted comment'}), 400
 
-    ts = datetime.utcnow().isoformat() + 'Z'
-    target['history'].append({'text': text, 'ts': ts})
-    _write_comments(all_comments)
+        ts = datetime.utcnow().isoformat() + 'Z'
+        target['history'].append({'text': text, 'ts': ts})
+        _write_comments(all_comments)
     is_gm = session.get('role') == 'gm'
     return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
 
@@ -1899,18 +1953,19 @@ def api_delete_comment(comment_id):
     err = _csrf_check()
     if err: return err
 
-    all_comments = _read_comments()
-    target = next((c for c in all_comments if c['id'] == comment_id), None)
-    if not target:
-        return jsonify({'error': 'Comment not found'}), 404
-    is_gm   = session.get('role') == 'gm'
-    is_owner = target['authorUsername'] == session['username']
-    if not is_owner and not is_gm:
-        return jsonify({'error': 'Forbidden'}), 403
+    with _comments_lock:
+        all_comments = _read_comments()
+        target = next((c for c in all_comments if c['id'] == comment_id), None)
+        if not target:
+            return jsonify({'error': 'Comment not found'}), 404
+        is_gm   = session.get('role') == 'gm'
+        is_owner = target['authorUsername'] == session['username']
+        if not is_owner and not is_gm:
+            return jsonify({'error': 'Forbidden'}), 403
 
-    target['deleted']   = True
-    target['deletedBy'] = session['username']
-    _write_comments(all_comments)
+        target['deleted']   = True
+        target['deletedBy'] = session['username']
+        _write_comments(all_comments)
     is_gm = session.get('role') == 'gm'
     return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
 
@@ -1921,12 +1976,13 @@ def api_shred_comment(comment_id):
     """GM only: permanently remove a comment."""
     err = _csrf_check()
     if err: return err
-    all_comments = _read_comments()
-    original_len = len(all_comments)
-    all_comments = [c for c in all_comments if c['id'] != comment_id]
-    if len(all_comments) == original_len:
-        return jsonify({'error': 'Comment not found'}), 404
-    _write_comments(all_comments)
+    with _comments_lock:
+        all_comments = _read_comments()
+        original_len = len(all_comments)
+        all_comments = [c for c in all_comments if c['id'] != comment_id]
+        if len(all_comments) == original_len:
+            return jsonify({'error': 'Comment not found'}), 404
+        _write_comments(all_comments)
     return jsonify({'ok': True, 'shredded': comment_id})
 
 
@@ -1936,19 +1992,20 @@ def api_restore_comment(comment_id):
     """GM always; players may restore only if they deleted their own comment."""
     err = _csrf_check()
     if err: return err
-    all_comments = _read_comments()
-    target = next((c for c in all_comments if c['id'] == comment_id), None)
-    if not target:
-        return jsonify({'error': 'Comment not found'}), 404
-    is_gm    = session.get('role') == 'gm'
-    username = session['username']
-    is_own   = target.get('authorUsername') == username
-    deleted_by_self = target.get('deletedBy') == username
-    if not is_gm and not (is_own and deleted_by_self):
-        return jsonify({'error': 'Forbidden'}), 403
-    target['deleted']   = False
-    target['deletedBy'] = None
-    _write_comments(all_comments)
+    with _comments_lock:
+        all_comments = _read_comments()
+        target = next((c for c in all_comments if c['id'] == comment_id), None)
+        if not target:
+            return jsonify({'error': 'Comment not found'}), 404
+        is_gm    = session.get('role') == 'gm'
+        username = session['username']
+        is_own   = target.get('authorUsername') == username
+        deleted_by_self = target.get('deletedBy') == username
+        if not is_gm and not (is_own and deleted_by_self):
+            return jsonify({'error': 'Forbidden'}), 403
+        target['deleted']   = False
+        target['deletedBy'] = None
+        _write_comments(all_comments)
     return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
 
 
@@ -1969,21 +2026,22 @@ def _read_notifications(username: str) -> list:
 def _push_notification(username: str, notif_type: str, text: str, link: str = '') -> None:
     """Append a notification to player_data/{username}/notifications.json. Cap at 100."""
     import secrets as _secrets
-    d = PLAYER_DATA_DIR / username
-    d.mkdir(parents=True, exist_ok=True)
-    path = d / 'notifications.json'
-    notifs = _read_notifications(username)
-    notif = {
-        'id':   'notif-' + _secrets.token_hex(6),
-        'type': notif_type,
-        'text': text,
-        'link': link,
-        'read': False,
-        'ts':   datetime.utcnow().isoformat() + 'Z',
-    }
-    notifs.insert(0, notif)
-    notifs = notifs[:100]
-    _atomic_write(path, json.dumps(notifs, indent=2))
+    with _player_lock(username):
+        d = PLAYER_DATA_DIR / username
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / 'notifications.json'
+        notifs = _read_notifications(username)
+        notif = {
+            'id':   'notif-' + _secrets.token_hex(6),
+            'type': notif_type,
+            'text': text,
+            'link': link,
+            'read': False,
+            'ts':   datetime.utcnow().isoformat() + 'Z',
+        }
+        notifs.insert(0, notif)
+        notifs = notifs[:100]
+        _atomic_write(path, json.dumps(notifs, indent=2))
 
 
 @app.route('/api/notifications')

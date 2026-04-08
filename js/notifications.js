@@ -66,10 +66,10 @@ const Notifications = {
     const ids = this._data.filter(n => !n.read).map(n => n.id);
     if (!ids.length) return;
     try {
-      await fetch('/api/notifications/read-all', {
+      await fetch('/api/notifications/read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ all: true }),
       });
       this._data.forEach(n => { n.read = true; });
       this._updateBadge();

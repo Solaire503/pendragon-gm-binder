@@ -365,7 +365,6 @@ const TabChronicle = {
     const rows = subs.map(s => {
       const cat   = CHRONICLE_CATS[s.cat] || CHRONICLE_CATS.other;
       const safeId = s.id.replace(/'/g, "\\'");
-      const escapedText = s.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
       const escapedCat  = (s.cat || 'personal').replace(/'/g, "\\'");
       return `
         <div style="padding:12px 16px;background:var(--vellum);border:1px solid rgba(184,134,11,0.3);border-left:3px solid ${cat.colour};border-radius:var(--radius);margin-bottom:8px;">
@@ -382,7 +381,8 @@ const TabChronicle = {
             <button class="btn btn-primary" style="font-size:0.7rem;padding:4px 14px;"
               onclick="TabChronicle.approveSubmission('${safeId}')">✓ Approve</button>
             <button class="btn btn-ghost" style="font-size:0.7rem;padding:4px 14px;"
-              onclick="TabChronicle.editApproveSubmission('${safeId}', \`${escapedText}\`, '${escapedCat}')">✎ Edit & Approve</button>
+              data-sub-text="${esc(s.text)}"
+              onclick="TabChronicle.editApproveSubmission('${safeId}', this.dataset.subText, '${escapedCat}')">✎ Edit & Approve</button>
             <button class="btn btn-ghost" style="font-size:0.7rem;padding:4px 14px;opacity:0.6;"
               onclick="TabChronicle.dismissSubmission('${safeId}')">✕ Dismiss</button>
           </div>

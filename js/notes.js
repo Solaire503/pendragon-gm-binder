@@ -71,7 +71,7 @@ const Notes = {
   },
 
   getManorNotes() {
-    return (this._data && this._data.manor) ? this._data.manor : '';
+    return (this._data && this._data.manor_notes) ? this._data.manor_notes : '';
   },
 
   getImpression(npcId) {
@@ -88,7 +88,7 @@ const Notes = {
 
   setManorNotes(text, statusId) {
     if (!this._data) this._data = {};
-    this._data.manor = text;
+    this._data.manor_notes = text;
     this._dirty = true;
     this._scheduleSave(statusId);
   },

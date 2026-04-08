@@ -469,7 +469,7 @@ function buildNpcCardHtml(npc, opts = {}) {
   const blessedHtml = npc.blessed
     ? `<div class="detail-block" style="border-left:3px solid var(--gold);">
         <div class="detail-label" style="color:var(--gold);">✦ Blessed Birth</div>
-        <div class="detail-value">${npc.blessed_note || '—'}</div>
+        <div class="detail-value">${esc(npc.blessed_note) || '—'}</div>
        </div>`
     : '';
   const fateTouchedHtml = npc.fate_touched

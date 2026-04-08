@@ -78,8 +78,8 @@ const TabJournal = {
     if (typeof AtMention !== 'undefined') {
       const generalTa = document.getElementById('journal-general-ta');
       const manorTa   = document.getElementById('journal-manor-ta');
-      if (generalTa) AtMention.wire(generalTa);
-      if (manorTa)   AtMention.wire(manorTa);
+      if (generalTa) AtMention._attach(generalTa);
+      if (manorTa)   AtMention._attach(manorTa);
     }
   },
 
