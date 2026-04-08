@@ -34,12 +34,12 @@ const TabDashboard = {
       const damage = (m.propertyDamage || []).filter(d => d.status === 'damaged').length;
 
       return `<div class="pk-card" style="border-top-color:${col};" onclick="APP.switchTab('manors');TabManors.selectManor('${key}')">
-        <div class="pk-card-name">${m.knight || key}</div>
-        <div class="pk-card-player" style="color:${col}aa">${hh ? hh.icon : '◆'} ${m.player ? 'Player: ' + m.player : key}</div>
+        <div class="pk-card-name">${esc(m.knight || key)}</div>
+        <div class="pk-card-player" style="color:${col}aa">${hh ? hh.icon : '◆'} ${m.player ? 'Player: ' + esc(m.player) : esc(key)}</div>
         <div class="pk-stat"><span class="pk-stat-label">Treasury</span><span class="pk-stat-value">${treasury} L</span></div>
-        <div class="pk-stat"><span class="pk-stat-label">Harvest ${last ? last.year : year}</span><span class="pk-stat-value">${harvest}</span></div>
-        <div class="pk-stat"><span class="pk-stat-label">Conflict ${last ? last.year : year}</span><span class="pk-stat-value">${conflict}</span></div>
-        <div class="pk-stat"><span class="pk-stat-label">Fate</span><span class="pk-stat-value">${fate}</span></div>
+        <div class="pk-stat"><span class="pk-stat-label">Harvest ${last ? last.year : year}</span><span class="pk-stat-value">${esc(harvest)}</span></div>
+        <div class="pk-stat"><span class="pk-stat-label">Conflict ${last ? last.year : year}</span><span class="pk-stat-value">${esc(conflict)}</span></div>
+        <div class="pk-stat"><span class="pk-stat-label">Fate</span><span class="pk-stat-value">${esc(fate)}</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Improvements</span><span class="pk-stat-value">${improvements}</span></div>
         ${damage ? `<div class="pk-stat"><span class="pk-stat-label" style="color:var(--crimson-mid)">⚠ Damage</span><span class="pk-stat-value" style="color:var(--crimson-mid)">${damage} item${damage!==1?'s':''}</span></div>` : ''}
       </div>`;
@@ -55,11 +55,11 @@ const TabDashboard = {
       // Age transitions
       if (age !== null) {
         if ((n.role === 'Baby' || n.role === 'Child') && age >= 7 && !n.page_placed)
-          ageFlags.push({ n, label: `${n.name}${hh} — age ${age}, ready for page training` });
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready for page training` });
         if (n.role === 'Page' && age >= 15)
-          ageFlags.push({ n, label: `${n.name}${hh} — age ${age}, ready to become a Squire` });
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready to become a Squire` });
         if (n.role === 'Squire' && age >= 21)
-          ageFlags.push({ n, label: `${n.name}${hh} — age ${age}, ready to be Knighted` });
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready to be Knighted` });
       }
 
       // Marriage eligibility: Steward role, 18+, sibling or child of household PK, no spouse yet
@@ -84,13 +84,13 @@ const TabDashboard = {
           const betRel    = !hasSpouse ? nRels.find(r => r.type === 'Betrothed') : null;
           if (isFam && !hasSpouse) {
             if (!betRel) {
-              marriageFlags.push({ n, label: `${n.name}${hh} — eligible for marriage` });
+              marriageFlags.push({ n, label: `${esc(n.name)}${hh} — eligible for marriage` });
             } else {
               const betId  = betRel.sourceId === n.id ? betRel.targetId : betRel.sourceId;
               const bet    = STORE.getNpc(betId);
               const betAge = bet?.year_born ? year - bet.year_born : null;
               if (betAge !== null && betAge >= 18)
-                marriageFlags.push({ n, label: `${n.name}${hh} & ${bet.name} — betrothed, both of age, ready to wed` });
+                marriageFlags.push({ n, label: `${esc(n.name)}${hh} & ${esc(bet.name)} — betrothed, both of age, ready to wed` });
             }
           }
         }
@@ -146,7 +146,7 @@ const TabDashboard = {
           <div class="section-title">Recent Deaths</div>
           ${recentDead.slice(0,8).map(n => `
             <div class="pk-stat" style="cursor:pointer;" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
-              <span class="pk-stat-label">† ${n.name}</span>
+              <span class="pk-stat-label">† ${esc(n.name)}</span>
               <span class="pk-stat-value" style="color:var(--crimson-mid)">${n.year_died} AD</span>
             </div>`).join('')}
         </div>` : ''}
@@ -321,7 +321,7 @@ const TabDashboard = {
           <div class="pk-stat"><span class="pk-stat-label">Treasury</span>
             <span class="pk-stat-value" style="color:${treasury>0?'var(--verdigris-mid)':treasury<0?'var(--crimson-mid)':'inherit'}">${treasury} L</span></div>
           <div class="pk-stat"><span class="pk-stat-label">Base Harvest</span><span class="pk-stat-value">${manor.baseHarvest||'?'} L</span></div>
-          ${stewardNpc ? `<div class="pk-stat"><span class="pk-stat-label">Steward</span><span class="pk-stat-value">${stewardNpc.name}</span></div>` : ''}
+          ${stewardNpc ? `<div class="pk-stat"><span class="pk-stat-label">Steward</span><span class="pk-stat-value">${esc(stewardNpc.name)}</span></div>` : ''}
           ${last ? `
           <div style="margin-top:10px;padding-top:10px;border-top:1px dotted var(--vellum-deep);">
             <div class="pk-stat"><span class="pk-stat-label">Last Harvest (${last.year} AD)</span><span class="pk-stat-value">${harvestBadge(last.harvestOutcome||last.harvestResult)}</span></div>
@@ -355,7 +355,7 @@ const TabDashboard = {
       if (!manor.heir_id)
         attentionItems.push({ icon:'⚠', text:'No Heir designated for your manor', urgent:false });
       damaged.filter(d=>d.yearRepaired && d.yearRepaired <= year).forEach(d =>
-        attentionItems.push({ icon:'🔨', text:`Overdue repair: ${d.description||d.type} (${d.repairCost||0} L)`, urgent:true }));
+        attentionItems.push({ icon:'🔨', text:`Overdue repair: ${esc(d.description||d.type)} (${d.repairCost||0} L)`, urgent:true }));
     }
     // Helper: is npc a sibling or child of the Player Knight?
     const isFamilyOfPK = (npc) => {
@@ -376,24 +376,24 @@ const TabDashboard = {
     members.forEach(n => {
       const age = n.year_born ? year - n.year_born : null;
       if ((n.role === 'Baby' || n.role === 'Child') && age !== null && age >= 7 && !n.page_placed)
-        attentionItems.push({ icon:'🧒', text:`${n.name} is ${age} — old enough to begin page training`, urgent:false });
+        attentionItems.push({ icon:'🧒', text:`${esc(n.name)} is ${age} — old enough to begin page training`, urgent:false });
       if (n.role === 'Page'   && age !== null && age >= 15)
-        attentionItems.push({ icon:'⚔', text:`${n.name} is ${age} — old enough to become a Squire`, urgent:false });
+        attentionItems.push({ icon:'⚔', text:`${esc(n.name)} is ${age} — old enough to become a Squire`, urgent:false });
       if (n.role === 'Squire' && age !== null && age >= 21)
-        attentionItems.push({ icon:'⚔', text:`${n.name} is ${age} — old enough to be Knighted`, urgent:false });
+        attentionItems.push({ icon:'⚔', text:`${esc(n.name)} is ${age} — old enough to be Knighted`, urgent:false });
       if (n.role === 'Steward' && age !== null && age >= 18 && isFamilyOfPK(n)) {
         const nRels      = STORE.getRelationships(n.id);
         const hasSpouse  = nRels.some(r => r.type === 'Spouse');
         const betRel     = !hasSpouse ? nRels.find(r => r.type === 'Betrothed') : null;
         if (!hasSpouse) {
           if (!betRel) {
-            attentionItems.push({ icon:'💍', text:`${n.name} is eligible for marriage`, urgent:false });
+            attentionItems.push({ icon:'💍', text:`${esc(n.name)} is eligible for marriage`, urgent:false });
           } else {
             const betId  = betRel.sourceId === n.id ? betRel.targetId : betRel.sourceId;
             const bet    = STORE.getNpc(betId);
             const betAge = bet?.year_born ? year - bet.year_born : null;
             if (betAge !== null && betAge >= 18)
-              attentionItems.push({ icon:'💍', text:`${n.name} and ${bet.name} are betrothed and both of age — ready to wed`, urgent:false });
+              attentionItems.push({ icon:'💍', text:`${esc(n.name)} and ${esc(bet.name)} are betrothed and both of age — ready to wed`, urgent:false });
           }
         }
       }
@@ -426,8 +426,8 @@ const TabDashboard = {
     const rosterRows = (this._rosterExpanded ? sortedMembers : sortedMembers.slice(0,8)).map(n => {
       const age = n.year_born ? year - n.year_born : null;
       return `<div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCard('${n.id}')">
-        <span class="pk-stat-label">${n.name}</span>
-        <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.7;">${n.role||'—'}${age!==null?' · '+age:''}
+        <span class="pk-stat-label">${esc(n.name)}</span>
+        <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.7;">${esc(n.role||'—')}${age!==null?' · '+age:''}
         </span>
       </div>`;
     }).join('');
@@ -464,7 +464,7 @@ const TabDashboard = {
         ${recentDead.slice(0,6).map(n => {
           const isOwn = (n.household||'').toLowerCase() === household.toLowerCase();
           return `<div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCard('${n.id}')">
-            <span class="pk-stat-label" style="${isOwn?'color:var(--crimson-mid);font-weight:600;':''}">† ${n.name}</span>
+            <span class="pk-stat-label" style="${isOwn?'color:var(--crimson-mid);font-weight:600;':''}">† ${esc(n.name)}</span>
             <span class="pk-stat-value" style="color:var(--crimson-mid);font-size:0.65rem;">${n.year_died} AD</span>
           </div>`;
         }).join('')}
@@ -487,7 +487,7 @@ const TabDashboard = {
           const cat = (typeof CHRONICLE_CATS !== 'undefined' && CHRONICLE_CATS[e.cat]) || { colour: '#707070' };
           return `<div style="padding:6px 0 6px 8px;border-bottom:1px dotted var(--vellum-deep);border-left:3px solid ${cat.colour}33;margin-bottom:2px;">
             <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:${cat.colour};margin-bottom:2px;">${e.year} AD</div>
-            <div style="font-size:0.82rem;color:var(--ink);">${e.text}</div>
+            <div style="font-size:0.82rem;color:var(--ink);">${esc(e.text)}</div>
           </div>`;
         }).join('')}
         <div style="margin-top:10px;">

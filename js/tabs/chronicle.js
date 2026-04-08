@@ -238,7 +238,7 @@ const TabChronicle = {
     const isDead = !!STORE.dead.find(d => d.id === npc.id);
     const col = isDead ? '#a02020' : '#6a3a10';
     return `<span style="cursor:pointer;color:${col};text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:600;"
-      onclick="Components.openNpcCard('${npc.id}')">${npc.name}</span>`;
+      onclick="Components.openNpcCard('${npc.id}')">${esc(npc.name)}</span>`;
   },
 
   _sectionHeader(icon, label, count, colour) {
@@ -260,9 +260,9 @@ const TabChronicle = {
               <span style="color:#c03030;font-size:0.85rem;flex-shrink:0;font-weight:bold;">†</span>
               <div style="flex:1;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
                 <span style="font-size:0.9rem;font-weight:600;color:var(--ink);">${this._npcPill(n)}</span>
-                ${n.role ? `<span style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.08em;color:#5a3a2a;">${n.role}</span>` : ''}
+                ${n.role ? `<span style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.08em;color:#5a3a2a;">${esc(n.role)}</span>` : ''}
               </div>
-              ${n.household ? `<span style="font-family:var(--font-heading);font-size:0.58rem;color:#5a3a2a;flex-shrink:0;">${n.household}</span>` : ''}
+              ${n.household ? `<span style="font-family:var(--font-heading);font-size:0.58rem;color:#5a3a2a;flex-shrink:0;">${esc(n.household)}</span>` : ''}
             </div>`).join('')}
         </div>
       </div>`;
@@ -281,7 +281,7 @@ const TabChronicle = {
                 ${n.blessed ? `<span title="Blessed Birth" style="color:var(--gold);font-size:0.75rem;">✦</span>` : ''}
                 ${n.fate_touched ? `<span title="Fate-Touched" style="color:#1a8a40;font-size:0.75rem;">◈</span>` : ''}
               </div>
-              ${n.household ? `<span style="font-family:var(--font-heading);font-size:0.58rem;color:#5a3a2a;flex-shrink:0;">${n.household}</span>` : ''}
+              ${n.household ? `<span style="font-family:var(--font-heading);font-size:0.58rem;color:#5a3a2a;flex-shrink:0;">${esc(n.household)}</span>` : ''}
             </div>`).join('')}
         </div>
       </div>`;
@@ -481,7 +481,7 @@ const TabChronicle = {
     const subjectOptions = members.length
       ? members.map(m => {
           const sel = pk && m.id === pk.id ? 'selected' : '';
-          return `<option value="${m.id}" data-name="${m.name.replace(/"/g,'&quot;')}" ${sel}>${m.name} — ${m.role || 'NPC'}</option>`;
+          return `<option value="${m.id}" data-name="${esc(m.name)}" ${sel}>${esc(m.name)} — ${esc(m.role || 'NPC')}</option>`;
         }).join('')
       : `<option value="">No household members found</option>`;
 

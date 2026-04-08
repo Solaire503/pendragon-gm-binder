@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.7.0';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -247,6 +247,45 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.7.0',
+    date:    '2026-04-08',
+    sections: [
+      {
+        heading: 'Caliburn Discord Bot — Reborn',
+        items: [
+          'Caliburn has been fully rewritten and now runs as a persistent systemd service on the server — always online, no manual startup required.',
+          'Switched from OpenAI GPT-4o-mini to Claude Haiku for all AI commands (/feast, /justice, /speak).',
+          'All knight/squire/spouse/horse management removed — the Binder handles all of that now.',
+          'Bot token and API keys moved to a secure .env file; no secrets in source code.',
+        ],
+      },
+      {
+        heading: 'Caliburn — Binder Integration',
+        items: [
+          '/npc <name>: Look up any NPC from the Binder. Shows role, household, manor, status, glory, age, relationships, and notes.',
+          'Smart fuzzy search: if the name isn\'t exact, Caliburn offers up to 5 "Did you mean?" buttons. Click one to retrieve that NPC.',
+          'Relationships display in closeness order (Spouse → Parent → Child → Sibling → …) labelled as "Parent of:", "Child of:", etc.',
+          '/chronicle: Shows recent campaign events from the Chronicle tab.',
+          '/year: Reports the current campaign year from the Binder.',
+          '/speak <message>: Address Caliburn directly. The sword responds with campaign-aware flavour via Claude Haiku.',
+        ],
+      },
+      {
+        heading: 'Security & User Management',
+        items: [
+          'Password policy enforced on all password change paths: minimum 8 characters, blocks common passwords (including campaign-specific words), blocks reuse of your current password.',
+          'Show/hide password toggle (👁) added to login and password reset forms.',
+          'Users without an email address are prompted to add one on first login after the update.',
+          'Last login timestamp now updates on every page load — no longer stuck at the original login time for long sessions.',
+          'GM user management panel now supports inline editing of username, role, household, and email.',
+          'Household field is a dropdown of actual manor keys — only valid assignments allowed.',
+          'Username changes automatically rename the player\'s data directory.',
+          'Password reset emails now generate correct public URLs (pendragon-binder.com) instead of the internal Flask address.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.6.0',
     date:    '2026-04-07',
@@ -1358,6 +1397,8 @@ const APP = {
     if (typeof PinsManager !== 'undefined') PinsManager.load();
     if (typeof Notes !== 'undefined') Notes.load();
     if (typeof Notifications !== 'undefined') Notifications.startPolling();
+    // Prompt for email if not set — deferred so the UI is fully ready
+    setTimeout(() => this._promptEmailIfMissing(), 1500);
     // Wire nav tabs
     document.querySelectorAll('.nav-tab').forEach(btn => {
       if (btn.dataset.tab) btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
@@ -1486,6 +1527,8 @@ const APP = {
         if (cfg.hasApiKey) aiKeyBtn.classList.add('key-set');
       }).catch(() => {});
     }
+
+    document.getElementById('btnUsers')?.addEventListener('click', () => this._openUserMgmt());
 
     document.title = isGM()
       ? `Pendragon GM's Binder — ${STORE.year} AD`
@@ -1962,6 +2005,284 @@ const APP = {
       Toast.show('API key cleared.', 'success');
       Modal.close();
     }).catch(e => Toast.show('Failed to clear key: ' + e.message, 'error'));
+  },
+
+  // ── EMAIL PROMPT ───────────────────────────────────────────
+  async _promptEmailIfMissing() {
+    try {
+      const r = await fetch('/api/me');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.hasEmail) return;
+    } catch { return; }
+
+    Modal.open(`
+      <div style="max-width:360px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:6px;">📧 Add Your Email</div>
+        <div style="font-size:0.85rem;color:var(--ink-soft);margin-bottom:16px;line-height:1.5;">
+          Add an email address so you can reset your passphrase if you ever get locked out.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <input id="email-prompt-1" type="email" class="edit-input" placeholder="your@email.com" autocomplete="email">
+          <input id="email-prompt-2" type="email" class="edit-input" placeholder="Confirm email" autocomplete="email">
+          <div id="email-prompt-err" style="color:var(--crimson-mid);font-size:0.8rem;display:none;"></div>
+        </div>
+        <div class="btn-row" style="margin-top:14px;">
+          <button class="btn btn-primary" onclick="APP._saveEmailPrompt()">Save Email</button>
+          <button class="btn btn-ghost" onclick="Modal.close()">Skip for now</button>
+        </div>
+      </div>`);
+  },
+
+  async _saveEmailPrompt() {
+    const e1 = document.getElementById('email-prompt-1')?.value.trim();
+    const e2 = document.getElementById('email-prompt-2')?.value.trim();
+    const errEl = document.getElementById('email-prompt-err');
+    if (!e1 || !e1.includes('@')) { errEl.textContent = 'Enter a valid email.'; errEl.style.display='block'; return; }
+    if (e1 !== e2) { errEl.textContent = 'Emails do not match.'; errEl.style.display='block'; return; }
+    try {
+      const r = await fetch('/api/me/email', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: e1 }),
+      });
+      const d = await r.json();
+      if (!r.ok) { errEl.textContent = d.error || 'Could not save email.'; errEl.style.display='block'; return; }
+      Modal.close();
+      Toast.success('Email saved — you can now use password reset.');
+    } catch { errEl.textContent = 'Network error.'; errEl.style.display='block'; }
+  },
+
+  // ── USER MANAGEMENT ───────────────────────────────────────
+  async _openUserMgmt() {
+    let users;
+    try {
+      const r = await fetch('/api/users');
+      if (!r.ok) throw new Error('Failed to load users');
+      users = await r.json();
+    } catch(e) {
+      Toast.error('Could not load users');
+      return;
+    }
+    Modal.open(this._buildUserMgmtHtml(users));
+    this._wireUserMgmt();
+  },
+
+  async _refreshUserMgmt() {
+    let users;
+    try {
+      const r = await fetch('/api/users');
+      if (!r.ok) throw new Error();
+      users = await r.json();
+    } catch(e) {
+      Toast.error('Could not refresh users');
+      return;
+    }
+    const content = document.getElementById('modalContent');
+    if (content) {
+      content.innerHTML = this._buildUserMgmtHtml(users);
+      this._wireUserMgmt();
+    }
+  },
+
+  _buildUserMgmtHtml(users) {
+    const manors = typeof STORE !== 'undefined' ? STORE.manorKeys() : [];
+    const householdOpts = (selected) =>
+      `<option value="">— none —</option>` +
+      manors.map(k => `<option value="${esc(k)}" ${(selected||'').toLowerCase()===k.toLowerCase()?'selected':''}>${esc(k)}</option>`).join('');
+    const fmtDate = ts => {
+      if (!ts) return '<span style="color:var(--ink-soft);font-style:italic;">Never</span>';
+      try {
+        return new Date(ts).toLocaleString();
+      } catch(e) { return ts; }
+    };
+    const roleBadge = role => role === 'gm'
+      ? `<span style="background:rgba(184,134,11,0.15);border:1px solid rgba(184,134,11,0.4);color:var(--gold);border-radius:20px;padding:1px 8px;font-size:0.62rem;letter-spacing:0.1em;font-family:var(--font-heading);">GM</span>`
+      : `<span style="background:rgba(60,100,180,0.12);border:1px solid rgba(60,100,180,0.3);color:#7090d0;border-radius:20px;padding:1px 8px;font-size:0.62rem;letter-spacing:0.1em;font-family:var(--font-heading);">Player</span>`;
+
+    const inputSty = 'font-size:0.82rem;padding:3px 6px;';
+    const rows = users.map(u => `
+      <tr data-username="${esc(u.username)}" style="border-bottom:1px solid var(--vellum-deep);">
+        <td style="padding:8px 6px;">
+          <input class="edit-input um-field" data-username="${esc(u.username)}" data-field="username"
+            value="${esc(u.username)}" style="width:110px;${inputSty}">
+        </td>
+        <td style="padding:8px 6px;">
+          <select class="edit-select um-field" data-username="${esc(u.username)}" data-field="role"
+            style="width:90px;${inputSty}">
+            <option value="player" ${u.role === 'player' ? 'selected' : ''}>Player</option>
+            <option value="gm"     ${u.role === 'gm'     ? 'selected' : ''}>GM</option>
+          </select>
+        </td>
+        <td style="padding:8px 6px;">
+          <select class="edit-select um-field" data-username="${esc(u.username)}" data-field="household"
+            style="width:120px;${inputSty}">
+            ${householdOpts(u.household)}
+          </select>
+        </td>
+        <td style="padding:8px 6px;">
+          <input class="edit-input um-field" data-username="${esc(u.username)}" data-field="email"
+            value="${esc(u.email || '')}" placeholder="no email" style="width:150px;${inputSty}">
+        </td>
+        <td style="padding:8px 6px;font-size:0.78rem;color:var(--ink-soft);">${fmtDate(u.lastLogin)}</td>
+        <td style="padding:8px 6px;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <button class="btn btn-ghost um-save-row" data-username="${esc(u.username)}" style="padding:3px 10px;font-size:0.72rem;">Save</button>
+            <button class="btn btn-ghost um-reset-pw" data-username="${esc(u.username)}" style="padding:3px 10px;font-size:0.72rem;">Reset PW</button>
+            <button class="btn btn-danger um-delete" data-username="${esc(u.username)}" style="padding:3px 10px;font-size:0.72rem;">Remove</button>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    return `
+      <div style="min-width:min(760px,92vw);max-height:80vh;overflow-y:auto;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:4px;">👥 User Management</div>
+        <div style="font-size:0.75rem;color:var(--ink-soft);font-style:italic;margin-bottom:16px;">Household and role changes take effect on the player's next login.</div>
+        <div id="umInlineForm" style="display:none;padding:12px;background:var(--vellum-deep);border-radius:4px;margin-bottom:12px;"></div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--vellum-mid);">
+              <th style="padding:6px 8px;text-align:left;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);">USERNAME</th>
+              <th style="padding:6px 8px;text-align:left;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);">ROLE</th>
+              <th style="padding:6px 8px;text-align:left;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);">HOUSEHOLD</th>
+              <th style="padding:6px 8px;text-align:left;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);">EMAIL</th>
+              <th style="padding:6px 8px;text-align:left;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);">LAST SEEN</th>
+              <th style="padding:6px 8px;"></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--vellum-deep);">
+          <div class="section-title" style="margin-bottom:14px;">Add User</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+            <div>
+              <div class="detail-label">Username</div>
+              <input class="edit-input" id="umNewUser" placeholder="username" style="width:100%;">
+            </div>
+            <div>
+              <div class="detail-label">Password</div>
+              <input class="edit-input" id="umNewPw" type="password" placeholder="10+ chars" style="width:100%;">
+            </div>
+            <div>
+              <div class="detail-label">Role</div>
+              <select class="edit-select" id="umNewRole" style="width:100%;">
+                <option value="player">Player</option>
+                <option value="gm">GM</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+            <div>
+              <div class="detail-label">Household (optional)</div>
+              <select class="edit-select" id="umNewHousehold" style="width:100%;">
+                ${householdOpts('')}
+              </select>
+            </div>
+            <div>
+              <div class="detail-label">Email (optional)</div>
+              <input class="edit-input" id="umNewEmail" type="email" placeholder="user@example.com" style="width:100%;">
+            </div>
+          </div>
+          <button class="btn btn-primary" id="umAddBtn" style="width:auto;padding:6px 20px;">Add User</button>
+        </div>
+
+        <div class="btn-row" style="margin-top:16px;">
+          <button class="btn btn-ghost" onclick="Modal.close()">Close</button>
+        </div>
+      </div>`;
+  },
+
+  _wireUserMgmt() {
+    // Save row (username, role, household, email all at once)
+    document.querySelectorAll('.um-save-row').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const oldUname = btn.dataset.username;
+        const get = field => document.querySelector(`.um-field[data-username="${oldUname}"][data-field="${field}"]`)?.value.trim() ?? '';
+        const payload = { username: get('username'), role: get('role'), household: get('household'), email: get('email') };
+        try {
+          const r = await fetch(`/api/users/${encodeURIComponent(oldUname)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || 'Failed');
+          Toast.success('User updated');
+          this._refreshUserMgmt();
+        } catch(e) { Toast.error(e.message || 'Could not save changes'); }
+      });
+    });
+
+    // Reset password buttons
+    document.querySelectorAll('.um-reset-pw').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const uname = btn.dataset.username;
+        const inlineDiv = document.getElementById('umInlineForm');
+        if (!inlineDiv) return;
+        inlineDiv.style.display = 'block';
+        inlineDiv.innerHTML = `
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+            <div>
+              <div class="detail-label">New password for <strong>${uname}</strong></div>
+              <input class="edit-input" id="umPwField" type="password" placeholder="10+ chars" style="width:200px;">
+            </div>
+            <button class="btn btn-primary" id="umPwSaveBtn" style="padding:5px 16px;">Set Password</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('umInlineForm').style.display='none';" style="padding:5px 12px;">Cancel</button>
+          </div>`;
+        document.getElementById('umPwSaveBtn').addEventListener('click', async () => {
+          const pw = (document.getElementById('umPwField')?.value || '').trim();
+          if (pw.length < 10) { Toast.error('Password must be at least 10 characters'); return; }
+          try {
+            const r = await fetch(`/api/users/${encodeURIComponent(uname)}/reset-password`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password: pw }),
+            });
+            const d = await r.json();
+            if (!d.ok) throw new Error(d.error || 'Failed');
+            Toast.success(`Password reset for ${uname}`);
+            inlineDiv.style.display = 'none';
+          } catch(e) { Toast.error(e.message || 'Could not reset password'); }
+        });
+      });
+    });
+
+    // Delete buttons
+    document.querySelectorAll('.um-delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const uname = btn.dataset.username;
+        if (!confirm(`Remove user "${uname}"? This cannot be undone.`)) return;
+        try {
+          const r = await fetch(`/api/users/${encodeURIComponent(uname)}`, { method: 'DELETE' });
+          const d = await r.json();
+          if (!d.ok) throw new Error(d.error || 'Failed');
+          Toast.success(`${uname} removed`);
+          this._refreshUserMgmt();
+        } catch(e) { Toast.error(e.message || 'Could not remove user'); }
+      });
+    });
+
+    // Add user
+    document.getElementById('umAddBtn')?.addEventListener('click', async () => {
+      const username  = (document.getElementById('umNewUser')?.value || '').trim();
+      const password  = (document.getElementById('umNewPw')?.value || '');
+      const role      = document.getElementById('umNewRole')?.value || 'player';
+      const household = (document.getElementById('umNewHousehold')?.value || '').trim();
+      const email     = (document.getElementById('umNewEmail')?.value || '').trim();
+      if (!username || !password) { Toast.error('Username and password are required'); return; }
+      try {
+        const r = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, role, household: household || null, email: email || null }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        Toast.success(`${username} added`);
+        this._refreshUserMgmt();
+      } catch(e) { Toast.error(e.message || 'Could not add user'); }
+    });
   },
 
   // ── CROSS-TAB NAVIGATION ──────────────────────────────────

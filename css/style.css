@@ -261,6 +261,7 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
 .hdr-dropdown-item:hover { color: var(--gold-pale); background: rgba(184,134,11,0.1); }
 .hdr-dropdown-item-crimson { color: rgba(220,120,120,0.8) !important; }
 .hdr-dropdown-item-crimson:hover { background: rgba(122,28,28,0.2) !important; }
+.hdr-dropdown-divider { height: 1px; background: var(--vellum-deep); margin: 4px 0; }
 
 /* HEADER RIGHT */
 .header-right {
@@ -397,6 +398,16 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
 }
 .hdr-btn-ai:hover { opacity: 1; background: rgba(100,60,140,0.1); }
 .hdr-btn-ai.key-set { border-color: rgba(100,60,140,0.6); opacity: 1; }
+.hdr-btn-users {
+  background: transparent;
+  border-color: rgba(100,60,140,0.3);
+  color: #8a5cc7;
+  opacity: 0.7;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+}
+.hdr-btn-users:hover { opacity: 1; background: rgba(100,60,140,0.1); }
 /* ── ROLE-BASED VISIBILITY ───────────────────────────────────── */
 /* GM-only elements: hidden by default, shown only when html.is-gm */
 .gm-only { display: none !important; }

@@ -6,6 +6,8 @@ Handles auth, sessions, role-based access, and all API endpoints.
 import json
 import os
 import shutil
+import smtplib
+import secrets as _secrets_mod
 import ssl
 import sys
 import threading
@@ -15,6 +17,7 @@ import urllib.parse
 import urllib.request
 import re
 from datetime import datetime, timedelta
+from email.mime.text import MIMEText
 from functools import wraps
 from pathlib import Path
 
@@ -24,7 +27,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '2.6.0'   # keep in sync with js/app.js
+APP_VERSION  = '2.7.0'   # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -58,6 +61,30 @@ def load_secrets():
     return secrets
 
 SECRETS = load_secrets()
+BOT_KEY = SECRETS.get('BOT_KEY', '')
+
+_reset_tokens: dict = {}   # token -> {'username': str, 'expires': float}
+_reset_tokens_lock = threading.Lock()
+
+# ── PASSWORD POLICY ───────────────────────────────────────────────────────────
+
+_COMMON_PASSWORDS = {
+    'password','passphrase','password1','password123','123456789','1234567890',
+    'qwerty','qwerty123','letmein','welcome','monkey','dragon','master',
+    'sunshine','princess','shadow','superman','iloveyou','trustno1',
+    'admin','login','hello','whatever','nothing','abc123','pass1234',
+    'pendragon','binder','caliburn','arthur','merlin','lancelot','guinevere',
+}
+
+def _check_password_policy(password: str, current_hash: str | None = None) -> str | None:
+    """Return an error string if the password fails policy, else None."""
+    if len(password) < 10:
+        return 'Passphrase must be at least 10 characters.'
+    if password.lower() in _COMMON_PASSWORDS:
+        return 'That passphrase is too common — choose something more memorable.'
+    if current_hash and check_password_hash(current_hash, password):
+        return 'New passphrase must be different from your current one.'
+    return None
 
 # ── APP ───────────────────────────────────────────────────────────────────────
 
@@ -193,6 +220,15 @@ def gm_required(f):
             return jsonify({'error': 'Not authenticated'}), 401
         if session.get('role') != 'gm':
             return jsonify({'error': 'Forbidden'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+def bot_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if not BOT_KEY or auth != f'Bearer {BOT_KEY}':
+            return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated
 
@@ -402,7 +438,10 @@ LOGIN_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE + """
     <label>Knight or Steward</label>
     <input type="text" name="username" autocomplete="username" autofocus required value="{{ username }}">
     <label>Passphrase</label>
-    <input type="password" name="password" autocomplete="current-password" required>
+    <div style="position:relative;">
+      <input type="password" id="loginPw" name="password" autocomplete="current-password" required style="padding-right:40px;width:100%;box-sizing:border-box;">
+      <button type="button" onclick="var i=document.getElementById('loginPw');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈';" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;opacity:0.6;">👁</button>
+    </div>
     <button class="btn" type="submit">Enter the Hall</button>
   </form>
 </div>
@@ -454,6 +493,139 @@ ACCOUNT_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE + """
 </div>
 </body></html>
 """
+
+FORGOT_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE + """
+<title>Pendragon — Reset Passphrase</title>
+</head><body>
+<div class="card">
+  <div class="crest">🗝</div>
+  <h1>Reset Passphrase</h1>
+  <div class="subtitle">Enter your email address</div>
+  {% if message %}<div class="info">{{ message }}</div>{% endif %}
+  <form id="forgotForm">
+    <label>Email Address</label>
+    <input type="email" id="emailInput" required autocomplete="email" autofocus>
+    <button class="btn" type="submit">Send Reset Link</button>
+  </form>
+  <hr class="divider">
+  <div class="footer-link"><a href="/login">Back to sign in</a></div>
+</div>
+<script>
+document.getElementById('forgotForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = this.querySelector('button');
+  btn.disabled = true;
+  const r = await fetch('/api/forgot-password', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({email: document.getElementById('emailInput').value})
+  });
+  const d = await r.json();
+  const el = document.querySelector('.card');
+  let info = el.querySelector('.info');
+  if (!info) { info = document.createElement('div'); info.className='info'; el.insertBefore(info, el.querySelector('form')); }
+  info.textContent = d.message || 'If that email is registered, a reset link has been sent.';
+  btn.disabled = false;
+});
+</script>
+</body></html>
+"""
+
+RESET_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE + """
+<title>Pendragon — Set New Passphrase</title>
+</head><body>
+<div class="card">
+  <div class="crest">🗝</div>
+  <h1>Set New Passphrase</h1>
+  <div class="subtitle">Choose a passphrase (10+ characters)</div>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form id="resetForm">
+    <label>New Passphrase</label>
+    <div style="position:relative;">
+      <input type="password" id="pw1" required autocomplete="new-password" minlength="10" style="padding-right:40px;width:100%;box-sizing:border-box;">
+      <button type="button" onclick="var i=document.getElementById('pw1');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈';" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;opacity:0.6;">👁</button>
+    </div>
+    <label>Confirm New Passphrase</label>
+    <div style="position:relative;">
+      <input type="password" id="pw2" required autocomplete="new-password" style="padding-right:40px;width:100%;box-sizing:border-box;">
+      <button type="button" onclick="var i=document.getElementById('pw2');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈';" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;opacity:0.6;">👁</button>
+    </div>
+    <button class="btn" type="submit">Set Passphrase</button>
+  </form>
+</div>
+<script>
+document.getElementById('resetForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const pw1 = document.getElementById('pw1').value;
+  const pw2 = document.getElementById('pw2').value;
+  const card = document.querySelector('.card');
+  let err = card.querySelector('.error');
+  if (!err) { err = document.createElement('div'); err.className='error'; card.insertBefore(err, card.querySelector('form')); }
+  if (pw1 !== pw2) { err.textContent = 'Passphrases do not match.'; err.hidden = false; return; }
+  const btn = this.querySelector('button');
+  btn.disabled = true;
+  const r = await fetch(location.pathname.replace('/reset/', '/api/reset/'), {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({password: pw1})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    card.innerHTML = '<div class="crest">✔</div><h1>Passphrase Set</h1><div class="subtitle">You can now sign in.</div><hr class="divider"><div class="footer-link"><a href="/login">Sign in</a></div>';
+  } else {
+    err.textContent = d.error || 'Something went wrong.';
+    err.hidden = false;
+    btn.disabled = false;
+  }
+});
+</script>
+</body></html>
+"""
+
+RESET_INVALID_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE + """
+<title>Pendragon — Invalid Link</title>
+</head><body>
+<div class="card">
+  <div class="crest">⚠</div>
+  <h1>Invalid or Expired Link</h1>
+  <div class="subtitle">This reset link is no longer valid.</div>
+  <hr class="divider">
+  <div class="footer-link"><a href="/forgot-password">Request a new link</a></div>
+</div>
+</body></html>
+"""
+
+
+def _send_reset_email(to_addr: str, token: str) -> bool:
+    smtp_user = SECRETS.get('SMTP_USER', '')
+    smtp_pass = SECRETS.get('SMTP_PASS', '')
+    if not smtp_user or not smtp_pass:
+        return False
+    # Use forwarded headers so the link points to the public URL (Cloudflare Tunnel),
+    # not Flask's internal 127.0.0.1 address.
+    host  = request.headers.get('X-Forwarded-Host') or request.headers.get('Host', '127.0.0.1:8765')
+    proto = request.headers.get('X-Forwarded-Proto', 'https' if SECRETS.get('CF_TUNNEL') else 'http')
+    reset_url = f"{proto}://{host}/reset/{token}"
+    body = f"""Hello,
+
+Someone requested a password reset for your Pendragon GM's Binder account.
+
+Click the link below to set a new password (valid for 1 hour):
+{reset_url}
+
+If you didn't request this, you can safely ignore this email.
+
+— The Binder
+"""
+    msg = MIMEText(body)
+    msg['Subject'] = "Pendragon Binder \u2014 Password Reset"
+    msg['From']    = smtp_user
+    msg['To']      = to_addr
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+            s.login(smtp_user, smtp_pass.replace(' ', ''))
+            s.send_message(msg)
+        return True
+    except Exception:
+        return False
 
 # ── ROUTES: AUTH ──────────────────────────────────────────────────────────────
 
@@ -520,6 +692,13 @@ def login():
                 session['username']  = user['username']
                 session['role']      = user['role']
                 session['household'] = user.get('household')
+                # Record last login timestamp
+                users = load_users()
+                for u in users:
+                    if u['username'].lower() == username.lower():
+                        u['lastLogin'] = datetime.utcnow().isoformat() + 'Z'
+                        break
+                save_users(users)
                 next_url = request.args.get('next') or url_for('index')
                 # Prevent open-redirect: only allow same-origin relative paths.
                 if not next_url.startswith('/') or next_url.startswith('//'):
@@ -546,6 +725,59 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/forgot-password')
+def forgot_password():
+    return render_template_string(FORGOT_HTML, message=None)
+
+
+@app.route('/api/forgot-password', methods=['POST'])
+def api_forgot_password():
+    data  = request.get_json(force=True, silent=True) or {}
+    email = (data.get('email') or '').strip().lower()
+    users = load_users()
+    matched = next((u for u in users if (u.get('email') or '').strip().lower() == email), None)
+    if matched and email:
+        token = _secrets_mod.token_urlsafe(32)
+        with _reset_tokens_lock:
+            _reset_tokens[token] = {'username': matched['username'], 'expires': time.time() + 3600}
+        _send_reset_email(matched['email'], token)
+    return jsonify({'ok': True, 'message': 'If that email is registered, a reset link has been sent.'})
+
+
+@app.route('/reset/<token>')
+def reset_password_page(token):
+    with _reset_tokens_lock:
+        entry = _reset_tokens.get(token)
+    if not entry or entry['expires'] < time.time():
+        return render_template_string(RESET_INVALID_HTML)
+    return render_template_string(RESET_HTML, error=None)
+
+
+@app.route('/api/reset/<token>', methods=['POST'])
+def api_reset_password(token):
+    with _reset_tokens_lock:
+        entry = _reset_tokens.get(token)
+    if not entry or entry['expires'] < time.time():
+        return jsonify({'error': 'Invalid or expired reset link.'}), 400
+    data     = request.get_json(force=True, silent=True) or {}
+    password = data.get('password', '')
+    users = load_users()
+    current_hash = next((u['password_hash'] for u in users if u['username'].lower() == entry['username'].lower()), None)
+    policy_err = _check_password_policy(password, current_hash)
+    if policy_err:
+        return jsonify({'error': policy_err}), 400
+    for u in users:
+        if u['username'].lower() == entry['username'].lower():
+            u['password_hash'] = generate_password_hash(password)
+            break
+    save_users(users)
+    with _reset_tokens_lock:
+        _reset_tokens.pop(token, None)
+        expired = [t for t, v in _reset_tokens.items() if v['expires'] < time.time()]
+        [_reset_tokens.pop(t) for t in expired]
+    return jsonify({'ok': True})
+
+
 @app.route('/account', methods=['GET', 'POST'])
 @login_required
 def account():
@@ -560,11 +792,11 @@ def account():
         user = get_user(session['username'])
         if not user or not check_password_hash(user['password_hash'], current):
             error = "Current passphrase is incorrect."
-        elif len(new_pw) < 10:
-            error = "New passphrase must be at least 10 characters."
         elif new_pw != confirm:
             error = "New passphrases do not match."
         else:
+            error = _check_password_policy(new_pw, user.get('password_hash'))
+        if not error:
             users = load_users()
             for u in users:
                 if u['username'].lower() == session['username'].lower():
@@ -639,12 +871,40 @@ def static_files(filename):
 @app.route('/api/me')
 @login_required
 def api_me():
-    """Return current user info for the frontend."""
+    """Return current user info for the frontend. Also stamps lastLogin so
+    persistent sessions stay current without requiring a fresh login."""
+    users = load_users()
+    user  = None
+    for u in users:
+        if u['username'].lower() == session['username'].lower():
+            u['lastLogin'] = datetime.utcnow().isoformat() + 'Z'
+            user = u
+            break
+    save_users(users)
     return jsonify({
         'username':  session['username'],
         'role':      session['role'],
         'household': session.get('household'),
+        'hasEmail':  bool(user and user.get('email')),
     })
+
+
+@app.route('/api/me/email', methods=['PATCH'])
+@login_required
+def api_set_my_email():
+    err = _csrf_check()
+    if err: return err
+    data  = request.get_json(force=True, silent=True) or {}
+    email = data.get('email', '').strip().lower()
+    if not email or '@' not in email or '.' not in email.split('@')[-1]:
+        return jsonify({'error': 'Please enter a valid email address.'}), 400
+    users = load_users()
+    for u in users:
+        if u['username'].lower() == session['username'].lower():
+            u['email'] = email
+            break
+    save_users(users)
+    return jsonify({'ok': True})
 
 
 @app.route('/api/keep-alive', methods=['POST'])
@@ -652,6 +912,12 @@ def api_me():
 def api_keep_alive():
     """Extend the session lifetime. Called by the client-side idle warning."""
     session.modified = True
+    users = load_users()
+    for u in users:
+        if u['username'].lower() == session['username'].lower():
+            u['lastLogin'] = datetime.utcnow().isoformat() + 'Z'
+            break
+    save_users(users)
     return jsonify({'ok': True})
 
 
@@ -731,8 +997,16 @@ def api_player_load():
         return jsonify({'status': 'file_missing', 'path': str(path)})
     try:
         data = path.read_text(encoding='utf-8')
-        json.loads(data)  # validate
-        return app.response_class(data, mimetype='application/json')
+        binder = json.loads(data)
+        # Strip GM-only fields from every NPC before sending to players
+        _GM_NPC_FIELDS = {'stats', 'passions', 'skills', 'notes', 'statblock_template'}
+        npcs = binder.get('npcs')
+        if isinstance(npcs, dict):
+            for npc in npcs.values():
+                if isinstance(npc, dict):
+                    for f in _GM_NPC_FIELDS:
+                        npc.pop(f, None)
+        return app.response_class(json.dumps(binder), mimetype='application/json')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1258,6 +1532,45 @@ def api_get_horses():
     return jsonify({'horses': horses})
 
 
+_HORSE_TYPES = {
+    'Hobby', 'Charger (Small)', 'Charger (Normal)', 'Fairy Horse',
+    'Jennet', 'Rouncey (Inferior)', 'Rouncy (Small)', 'Rouncy (Normal)',
+    'Rouncy (Large)', 'Courser', 'Dales/Irish/Cambrian Pony',
+    'Cart Horse', 'Cob', 'Nag', 'Sumpter', 'Sumpter (Strong)',
+    'Hackney', 'Donkey', 'Mule',
+}
+_HORSE_ALLOWED_FIELDS = {
+    'id', 'name', 'type', 'year_born', 'year_acquired', 'rider',
+    'notes', 'alive', 'year_died', 'death_reason', 'favorite', 'survivalHistory',
+}
+
+def _validate_horses(raw: list):
+    """Validate and sanitise a list of horse dicts. Returns (clean_list, error_str)."""
+    if len(raw) > 200:
+        return None, 'Too many horses (max 200)'
+    out = []
+    for i, h in enumerate(raw):
+        if not isinstance(h, dict):
+            return None, f'Entry {i} is not an object'
+        name = h.get('name')
+        if not isinstance(name, str) or not name.strip():
+            return None, f'Entry {i}: name is required and must be a non-empty string'
+        htype = h.get('type')
+        if htype not in _HORSE_TYPES:
+            return None, f'Entry {i}: invalid type "{htype}"'
+        clean = {k: v for k, v in h.items() if k in _HORSE_ALLOWED_FIELDS}
+        clean['name'] = clean['name'][:80]
+        if 'notes' in clean and isinstance(clean['notes'], str):
+            clean['notes'] = clean['notes'][:200]
+        if 'rider' in clean and isinstance(clean['rider'], str):
+            clean['rider'] = clean['rider'][:200]
+        if 'age' in clean:
+            age = clean['age']
+            if not isinstance(age, int) or not (0 <= age <= 40):
+                return None, f'Entry {i}: age must be an integer 0–40'
+        out.append(clean)
+    return out, None
+
 @app.route('/api/horses', methods=['POST'])
 @login_required
 def api_save_horses():
@@ -1267,7 +1580,10 @@ def api_save_horses():
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict) or not isinstance(data.get('horses'), list):
         return jsonify({'error': 'Invalid payload'}), 400
-    _write_horses(session['username'], data['horses'])
+    horses, err_msg = _validate_horses(data['horses'])
+    if err_msg:
+        return jsonify({'error': err_msg}), 400
+    _write_horses(session['username'], horses)
     return jsonify({'ok': True})
 
 
@@ -1293,7 +1609,10 @@ def api_save_horses_gm(household):
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict) or not isinstance(data.get('horses'), list):
         return jsonify({'error': 'Invalid payload'}), 400
-    _write_horses(username, data['horses'])
+    horses, err_msg = _validate_horses(data['horses'])
+    if err_msg:
+        return jsonify({'error': err_msg}), 400
+    _write_horses(username, horses)
     return jsonify({'ok': True})
 
 
@@ -1331,7 +1650,16 @@ def api_save_pins():
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict) or not isinstance(data.get('pins'), list):
         return jsonify({'error': 'Invalid payload'}), 400
-    pins = [str(p) for p in data['pins'] if isinstance(p, str)]
+    raw_pins = data['pins']
+    if len(raw_pins) > 100:
+        return jsonify({'error': 'Too many pins (max 100)'}), 400
+    pins = []
+    for i, p in enumerate(raw_pins):
+        if not isinstance(p, str) or not p:
+            return jsonify({'error': f'Pin {i} must be a non-empty string'}), 400
+        if len(p) > 60:
+            return jsonify({'error': f'Pin {i} exceeds max length of 60 characters'}), 400
+        pins.append(p)
     _write_pins(session['username'], pins)
     return jsonify({'ok': True})
 
@@ -1697,6 +2025,163 @@ def api_mark_notifications_read():
     return jsonify({'ok': True})
 
 
+# ── USER MANAGEMENT API ──────────────────────────────────────────────────────
+
+@app.route('/api/users')
+@gm_required
+def api_get_users():
+    users = load_users()
+    result = []
+    for u in users:
+        result.append({
+            'username':  u['username'],
+            'role':      u['role'],
+            'household': u.get('household') or '',
+            'email':     u.get('email') or '',
+            'lastLogin': u.get('lastLogin') or None,
+        })
+    return jsonify(result)
+
+
+@app.route('/api/users', methods=['POST'])
+@gm_required
+def api_create_user():
+    err = _csrf_check()
+    if err: return err
+    data = request.get_json(force=True, silent=True) or {}
+    username  = (data.get('username') or '').strip()
+    password  = data.get('password', '')
+    role      = (data.get('role') or '').strip()
+    household = (data.get('household') or '').strip() or None
+    email     = (data.get('email') or '').strip() or None
+
+    if not re.match(r'^[\w\-]{3,30}$', username):
+        return jsonify({'error': 'Username must be 3-30 chars, alphanumeric/underscore/hyphen only.'}), 400
+    if len(password) < 10:
+        return jsonify({'error': 'Password must be at least 10 characters.'}), 400
+    if role not in ('gm', 'player'):
+        return jsonify({'error': 'Role must be gm or player.'}), 400
+    if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        return jsonify({'error': 'Invalid email format.'}), 400
+
+    users = load_users()
+    if any(u['username'].lower() == username.lower() for u in users):
+        return jsonify({'error': 'Username already taken.'}), 400
+
+    new_user = {
+        'username':      username,
+        'role':          role,
+        'household':     household,
+        'email':         email or '',
+        'password_hash': generate_password_hash(password),
+    }
+    users.append(new_user)
+    save_users(users)
+    return jsonify({'ok': True, 'user': {
+        'username': username, 'role': role, 'household': household or '', 'email': email or '',
+    }})
+
+
+@app.route('/api/users/<target_username>', methods=['PATCH'])
+@gm_required
+def api_update_user(target_username):
+    err = _csrf_check()
+    if err: return err
+    data  = request.get_json(force=True, silent=True) or {}
+    users = load_users()
+    target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
+    if not target:
+        return jsonify({'error': 'User not found.'}), 404
+
+    if 'username' in data:
+        new_uname = data['username'].strip()
+        if not re.match(r'^[A-Za-z0-9_-]{3,30}$', new_uname):
+            return jsonify({'error': 'Username must be 3–30 characters (letters, numbers, _ -)'}), 400
+        if any(u['username'].lower() == new_uname.lower() and u is not target for u in users):
+            return jsonify({'error': 'That username is already taken.'}), 409
+        old_uname = target['username']
+        target['username'] = new_uname
+        # Rename player_data directory if it exists
+        old_dir = PLAYER_DATA_DIR / old_uname
+        new_dir = PLAYER_DATA_DIR / new_uname
+        if old_dir.exists() and not new_dir.exists():
+            old_dir.rename(new_dir)
+
+    if 'role' in data:
+        new_role = data['role']
+        if new_role not in ('gm', 'player'):
+            return jsonify({'error': 'Role must be gm or player.'}), 400
+        if target['username'].lower() == session['username'].lower():
+            return jsonify({'error': 'Cannot change your own role.'}), 400
+        gm_count = sum(1 for u in users if u['role'] == 'gm')
+        if target['role'] == 'gm' and new_role != 'gm' and gm_count <= 1:
+            return jsonify({'error': 'Cannot remove the last GM.'}), 400
+        target['role'] = new_role
+
+    if 'email' in data:
+        email = (data['email'] or '').strip()
+        if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            return jsonify({'error': 'Invalid email format.'}), 400
+        target['email'] = email
+
+    if 'household' in data:
+        hh = (data['household'] or '').strip() or None
+        if hh:
+            # Validate against actual manor keys in the save file
+            try:
+                save_path = get_save_path()
+                save_data = json.loads(save_path.read_text(encoding='utf-8')) if save_path and save_path.exists() else {}
+                valid_keys = [k.lower() for k in save_data.get('manors', {}).keys()]
+                if hh.lower() not in valid_keys:
+                    return jsonify({'error': f'"{hh}" is not a known manor. Choose from: {", ".join(save_data.get("manors", {}).keys())}'}), 400
+                # Use the canonical casing from the save file
+                hh = next(k for k in save_data.get('manors', {}).keys() if k.lower() == hh.lower())
+            except Exception:
+                pass  # If we can't validate, allow it through
+        target['household'] = hh
+
+    save_users(users)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/users/<target_username>/reset-password', methods=['POST'])
+@gm_required
+def api_admin_reset_password(target_username):
+    err = _csrf_check()
+    if err: return err
+    data     = request.get_json(force=True, silent=True) or {}
+    password = data.get('password', '')
+    if len(password) < 10:
+        return jsonify({'error': 'Password must be at least 10 characters.'}), 400
+    users = load_users()
+    target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
+    if not target:
+        return jsonify({'error': 'User not found.'}), 404
+    target['password_hash'] = generate_password_hash(password)
+    save_users(users)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/users/<target_username>', methods=['DELETE'])
+@gm_required
+def api_delete_user(target_username):
+    err = _csrf_check()
+    if err: return err
+    if target_username.lower() == session['username'].lower():
+        return jsonify({'error': 'Cannot delete your own account.'}), 400
+    users = load_users()
+    target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
+    if not target:
+        return jsonify({'error': 'User not found.'}), 404
+    if target['role'] == 'gm':
+        gm_count = sum(1 for u in users if u['role'] == 'gm')
+        if gm_count <= 1:
+            return jsonify({'error': 'Cannot delete the last GM.'}), 400
+    users = [u for u in users if u['username'].lower() != target_username.lower()]
+    save_users(users)
+    return jsonify({'ok': True})
+
+
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def _rotate_backup(save_path: Path) -> None:
@@ -1783,6 +2268,105 @@ def _console_listener():
         else:
             print(f'  [Console] Unknown command: "{cmd}" — type "help" for options')
 
+
+# ── BOT API (read-only, Bearer token auth) ────────────────────────────────────
+
+_BOT_NPC_FIELDS = ('id', 'name', 'role', 'household', 'status',
+                   'year_born', 'year_died', 'pronoun', 'manor', 'faction', 'glory', 'notes')
+
+_REL_CLOSENESS = {
+    'Spouse': 0, 'Parent': 1, 'Child': 2, 'Sibling': 3,
+    'Bastard': 4, 'Adopted Child': 5, 'Ward': 6,
+    'Squire': 7, 'Former Squire': 8,
+    'Aunt/Uncle': 9, 'Niece/Nephew': 10, 'Vassal': 11,
+}
+
+def _safe_npc(npc: dict) -> dict:
+    return {k: npc.get(k) for k in _BOT_NPC_FIELDS}
+
+def _npc_relationships(npc_id: str, all_npcs: list, all_rels: list, limit: int = 4) -> list:
+    """Return up to `limit` relationships for an NPC, sorted by closeness."""
+    id_to_name = {n.get('id'): n.get('name', '?') for n in all_npcs if n.get('id')}
+    matched = []
+    for rel in all_rels:
+        src, tgt, rtype = rel.get('sourceId'), rel.get('targetId'), rel.get('type', '')
+        if src == npc_id:
+            matched.append((_REL_CLOSENESS.get(rtype, 99), rtype, id_to_name.get(tgt, tgt)))
+        elif tgt == npc_id:
+            matched.append((_REL_CLOSENESS.get(rtype, 99), rtype, id_to_name.get(src, src)))
+    matched.sort(key=lambda x: x[0])
+    return [{'type': rtype, 'name': name} for _, rtype, name in matched[:limit]]
+
+def _load_binder() -> dict | None:
+    path = get_save_path()
+    if not path or not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return None
+
+@app.route('/api/bot/status')
+@bot_required
+def api_bot_status():
+    return jsonify({'ok': True, 'version': APP_VERSION})
+
+@app.route('/api/bot/world')
+@bot_required
+def api_bot_world():
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    year   = binder.get('year')
+    manors = list(binder.get('manors', {}).keys())
+    return jsonify({'year': year, 'manors': manors})
+
+def _all_npcs(binder: dict) -> list:
+    """Return combined living + dead NPC list from save structure."""
+    living = binder.get('living', [])
+    dead   = binder.get('dead', [])
+    if isinstance(living, dict):
+        living = list(living.values())
+    if isinstance(dead, dict):
+        dead = list(dead.values())
+    return living + dead
+
+@app.route('/api/bot/npcs')
+@bot_required
+def api_bot_npcs():
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    npcs = [_safe_npc(n) for n in _all_npcs(binder)]
+    return jsonify({'npcs': npcs})
+
+@app.route('/api/bot/npc/<name_or_id>')
+@bot_required
+def api_bot_npc(name_or_id):
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    all_npcs = _all_npcs(binder)
+    all_rels = binder.get('relationships', [])
+    needle = name_or_id.lower()
+    for npc in all_npcs:
+        if (npc.get('id') or '').lower() == needle or (npc.get('name') or '').lower() == needle:
+            result = _safe_npc(npc)
+            result['relationships'] = _npc_relationships(npc.get('id', ''), all_npcs, all_rels)
+            return jsonify(result)
+    return jsonify({'error': 'NPC not found'}), 404
+
+@app.route('/api/bot/chronicle')
+@bot_required
+def api_bot_chronicle():
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    chronicle = binder.get('chronicle', {})
+    # Sort years descending, take 3 most recent
+    recent_years = sorted(chronicle.keys(), key=lambda y: int(y), reverse=True)[:3]
+    entries = [{'year': int(y), 'entries': chronicle[y]} for y in recent_years]
+    return jsonify({'chronicle': entries})
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
 

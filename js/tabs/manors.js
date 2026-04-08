@@ -98,7 +98,7 @@ const TabManors = {
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <div><div class="detail-label">Lord</div><div style="font-size:0.82rem;margin-top:2px;">${lordNpc ? lordNpc.name : m.knight || '—'}</div></div>
+            <div><div class="detail-label">Lord</div><div style="font-size:0.82rem;margin-top:2px;">${esc(lordNpc ? lordNpc.name : m.knight || '—')}</div></div>
             <div><div class="detail-label">Treasury</div>
               <div style="font-size:0.82rem;margin-top:2px;color:${treasury>0?'var(--verdigris-mid)':treasury<0?'var(--crimson-mid)':'var(--ink)'};font-weight:600;">${treasury} L</div>
             </div>
@@ -283,14 +283,14 @@ const TabManors = {
           return `
           <div class="damage-item${dueNow?' damage-item-due':''}">
             <span class="damage-status damaged">${d.type||'Damaged'}</span>
-            <span style="flex:1;">${d.description}${fieldNote}${repairNote}</span>
+            <span style="flex:1;">${esc(d.description)}${fieldNote}${repairNote}</span>
             <span style="font-family:var(--font-heading);font-size:0.75rem;color:var(--crimson-mid);">${d.repairCost>0?d.repairCost+' L':''}</span>
             ${readOnly ? '' : dueNow
               ? `<button class="btn btn-verdigris" style="padding:2px 10px;font-size:0.5rem;" onclick="TabManors._markRepaired('${key}',${d.id})">✓ Repaired?</button>`
               : `<button class="btn btn-ghost"    style="padding:2px 8px;font-size:0.5rem;"  onclick="TabManors._markRepaired('${key}',${d.id})">Repaired</button>`}
             ${readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditDamage('${key}',${d.id})">✎</button>`}
           </div>
-          ${d.notes ? `<div style="font-size:0.78rem;color:var(--ink-soft);font-style:italic;padding:2px 8px 4px 8px;">${d.notes}</div>` : ''}`;
+          ${d.notes ? `<div style="font-size:0.78rem;color:var(--ink-soft);font-style:italic;padding:2px 8px 4px 8px;">${esc(d.notes)}</div>` : ''}`;
         }).join('')}
       </div>` : '';
 
@@ -300,7 +300,7 @@ const TabManors = {
       <div class="improvement-list">
         ${activeImpr.map(i=>`
           <div class="improvement-item ${i.cat==='fortification'?'fortification':''}">
-            <div style="flex:1;"><div class="improvement-name">${i.name}</div><div class="improvement-note">${i.notes||''}</div></div>
+            <div style="flex:1;"><div class="improvement-name">${esc(i.name)}</div><div class="improvement-note">${esc(i.notes||'')}</div></div>
             <div style="text-align:right;flex-shrink:0;">
               <div class="improvement-meta">Built ${i.yearBuilt}</div>
               <div class="improvement-meta">Maint: ${i.maintenance} L/yr${i.dvMod?' · DV +'+i.dvMod:''}</div>
@@ -320,7 +320,7 @@ const TabManors = {
           ${household.sort((a,b)=>a.name.localeCompare(b.name)).map(n=>`
             <div class="family-member-item" onclick="Components.openNpcCard('${n.id}')">
               <span class="family-member-role" style="background:${roleColour(n.role)};padding:2px 7px;border-radius:10px;font-family:var(--font-heading);font-size:0.48rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--vellum);">${n.role||'?'}</span>
-              <span class="family-member-name">${n.name}</span>
+              <span class="family-member-name">${esc(n.name)}</span>
               ${n.glory?`<span class="family-member-age">${n.glory.toLocaleString()} gl.</span>`:''}
             </div>`).join('')}
         </div>
@@ -384,7 +384,7 @@ const TabManors = {
       ${membersHtml}
 
       <!-- NOTES -->
-      ${m.notes ? `<div class="detail-block mt-16"><div class="detail-label">Notes</div><div class="detail-value" style="white-space:pre-wrap;">${m.notes}</div></div>` : ''}
+      ${m.notes ? `<div class="detail-block mt-16"><div class="detail-label">Notes</div><div class="detail-value" style="white-space:pre-wrap;">${esc(m.notes)}</div></div>` : ''}
 
       <!-- ACTIONS (GM only) -->
       ${readOnly ? '' : `
@@ -420,9 +420,9 @@ const TabManors = {
       return `
         <div class="improvement-item" style="align-items:flex-start;">
           <div style="flex:1;">
-            <div class="improvement-name">${v.manorName}</div>
+            <div class="improvement-name">${esc(v.manorName)}</div>
             <div class="improvement-note" style="color:var(--verdigris-mid);">${v.passiveIncome ?? 1} L/yr</div>
-            ${v.notes ? `<div class="improvement-note">${v.notes}</div>` : ''}
+            ${v.notes ? `<div class="improvement-note">${esc(v.notes)}</div>` : ''}
           </div>
           <div style="text-align:right;flex-shrink:0;margin-right:8px;">
             <div style="font-family:var(--font-heading);font-size:0.6rem;color:${col};margin-bottom:2px;">${v.tenure||'—'}</div>
@@ -477,7 +477,7 @@ const TabManors = {
             <input type="hidden" id="vas-knight-id" value="${v?.knightId||''}">
             <div id="vas-knight-search-results" class="npc-search-results" style="display:none;"></div>
           </div>
-          ${knightNpc ? `<div style="font-size:0.78rem;margin-top:4px;color:var(--verdigris-mid);">Currently: ${knightNpc.name}</div>` : ''}
+          ${knightNpc ? `<div style="font-size:0.78rem;margin-top:4px;color:var(--verdigris-mid);">Currently: ${esc(knightNpc.name)}</div>` : ''}
         </div>
         <div class="detail-field mb-8">
           <div class="detail-label">Passive Manor Income (L/yr)</div>
@@ -577,7 +577,7 @@ const TabManors = {
                   ${this._ledgerLine('Total Out', totalOut, 'expense', true)}
                   ${this._ledgerLine('Net', net, net >= 0 ? 'income' : 'expense', true)}
                 </div>
-                ${h.notes ? `<div style="margin-top:8px;font-size:0.78rem;color:var(--ink-soft);font-style:italic;white-space:pre-wrap;">${h.notes}</div>` : ''}
+                ${h.notes ? `<div style="margin-top:8px;font-size:0.78rem;color:var(--ink-soft);font-style:italic;white-space:pre-wrap;">${esc(h.notes)}</div>` : ''}
               </div>
             </div>
           </td>

@@ -107,11 +107,11 @@ const TabMausoleum = {
 
       return `<div class="dead-card" style="border-top-color:${col};" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
-          <div class="dead-name">${n.name}</div>
+          <div class="dead-name">${esc(n.name)}</div>
           ${hh ? `<span style="font-size:0.8rem;">${hh.icon}</span>` : ''}
         </div>
-        <div class="dead-dates">${n.role||'—'} · ${born} – ${died}${lived}</div>
-        ${notePrev ? `<div class="dead-notes">${notePrev}</div>` : ''}
+        <div class="dead-dates">${esc(n.role||'—')} · ${born} – ${died}${lived}</div>
+        ${notePrev ? `<div class="dead-notes">${esc(notePrev)}</div>` : ''}
         ${n.glory ? `<div style="margin-top:6px;font-family:var(--font-heading);font-size:0.6rem;color:var(--gold);">${n.glory.toLocaleString()} glory</div>` : ''}
       </div>`;
     }).join('');
@@ -134,12 +134,12 @@ const TabMausoleum = {
 
       return `<div class="dead-card" style="border-top-color:${col};opacity:0.82;" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
-          <div class="dead-name" style="color:var(--ink-soft);">${n.name}</div>
+          <div class="dead-name" style="color:var(--ink-soft);">${esc(n.name)}</div>
           ${hh ? `<span style="font-size:0.8rem;">${hh.icon}</span>` : ''}
         </div>
-        <div class="dead-dates">${n.role||'—'}${ageStr ? ' · ' + ageStr : ''}</div>
-        ${n.out_of_story_note ? `<div class="dead-notes" style="color:#8a7a5a;font-style:italic;">🌫 ${n.out_of_story_note}</div>` : ''}
-        ${n.household ? `<div style="margin-top:4px;font-family:var(--font-heading);font-size:0.58rem;color:var(--ink-soft);">${n.household}</div>` : ''}
+        <div class="dead-dates">${esc(n.role||'—')}${ageStr ? ' · ' + ageStr : ''}</div>
+        ${n.out_of_story_note ? `<div class="dead-notes" style="color:#8a7a5a;font-style:italic;">🌫 ${esc(n.out_of_story_note)}</div>` : ''}
+        ${n.household ? `<div style="margin-top:4px;font-family:var(--font-heading);font-size:0.58rem;color:var(--ink-soft);">${esc(n.household)}</div>` : ''}
       </div>`;
     }).join('');
   },

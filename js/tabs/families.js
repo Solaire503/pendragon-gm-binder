@@ -93,7 +93,7 @@ const TabFamilies = {
           const age = n.year_born != null ? (STORE.year - n.year_born) : (n.age ?? null);
           return `<div class="family-member-item" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
             <span class="family-member-role" style="background:${col};">${n.role||'?'}</span>
-            <span class="family-member-name">${n.name}</span>
+            <span class="family-member-name">${esc(n.name)}</span>
             ${age != null ? `<span class="family-member-age">Age ${age}</span>` : ''}
             ${n.glory ? `<span class="family-member-age" style="color:var(--gold);">${n.glory.toLocaleString()} gl.</span>` : ''}
           </div>`;
@@ -105,7 +105,7 @@ const TabFamilies = {
     const manorHtml = manor ? `
       <div class="card mb-12" style="border-top:3px solid ${hh.colour};">
         <div class="section-title">Manor Holdings</div>
-        <div class="pk-stat"><span class="pk-stat-label">Knight</span><span class="pk-stat-value">${manor.knight||'—'}</span></div>
+        <div class="pk-stat"><span class="pk-stat-label">Knight</span><span class="pk-stat-value">${esc(manor.knight||'—')}</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Base Harvest</span><span class="pk-stat-value">${manor.baseHarvest} L</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Treasury</span><span class="pk-stat-value">${STORE.manorTreasury(name)} L</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Improvements</span><span class="pk-stat-value">${(manor.improvements||[]).filter(i=>i.status==='active').length}</span></div>
@@ -125,7 +125,7 @@ const TabFamilies = {
         <div class="family-banner-icon">${hh.icon}</div>
         <div>
           <div class="family-banner-name">House ${name}</div>
-          <div class="family-banner-tagline">${members.length} member${members.length!==1?'s':''} · ${name} Household${hh.household_head ? ` · ⚜ ${STORE.getNpc(hh.household_head)?.name || ''}` : ''}</div>
+          <div class="family-banner-tagline">${members.length} member${members.length!==1?'s':''} · ${esc(name)} Household${hh.household_head ? ` · ⚜ ${esc(STORE.getNpc(hh.household_head)?.name || '')}` : ''}</div>
         </div>
         <button class="tree-btn" style="margin-left:auto;" onclick="TabTree.open('${name}')">
           🌳 Family Tree

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "cmt-adaef3ea968b",
+    "npcId": "npc-013",
+    "authorUsername": "Steve",
+    "parentId": null,
+    "history": [
+      {
+        "text": "Test comment. @[Aberthol Cador](npc-013) is the best!",
+        "ts": "2026-04-07T20:26:14.979569Z"
+      }
+    ],
+    "deleted": false,
+    "deletedBy": null
+  }
+]

@@ -165,8 +165,8 @@ const TabWinter = {
         <div class="winter-death-row">
           <span class="winter-death-dot" style="background:${col};"></span>
           <div class="winter-death-name-col">
-            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${n.name}</span>
-            <span class="winter-death-hh">${icon ? icon + ' ' : ''}${n.household || '—'}</span>
+            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+            <span class="winter-death-hh">${icon ? icon + ' ' : ''}${esc(n.household || '—')}</span>
           </div>
           <span class="winter-age-str">${ageStr}</span>
           ${cat ? `<span class="winter-cat-badge" style="background:${this._catColour(cat)};">${cat}</span>` : '<span style="min-width:64px;"></span>'}
@@ -237,7 +237,7 @@ const TabWinter = {
             onchange="TabWinter.toggleExempt('${n.id}', this.checked)">
         </label>
         <div style="flex:1;min-width:0;">
-          <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${n.name}</span>
+          <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
           ${exemptTag}
         </div>
         <span class="winter-age-str">${ageStr}</span>
@@ -489,8 +489,8 @@ const TabWinter = {
         <div class="winter-death-row">
           <span class="winter-death-dot" style="background:${col};"></span>
           <div class="winter-death-name-col">
-            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${n.name}</span>
-            <span class="winter-death-hh">${hh?.icon ? hh.icon+' ' : ''}${n.household||'—'}</span>
+            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+            <span class="winter-death-hh">${hh?.icon ? hh.icon+' ' : ''}${esc(n.household||'—')}</span>
           </div>
           <span class="winter-roll-detail" style="flex-shrink:0;">[${res.rolls.join(' → ')}]</span>
           <span class="winter-result-badge birth-badge" style="margin-left:auto;">${label}</span>
@@ -519,8 +519,8 @@ const TabWinter = {
         <div class="winter-death-row">
           <span class="winter-death-dot" style="background:${col};"></span>
           <div class="winter-death-name-col">
-            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${n.name}</span>
-            <span class="winter-death-hh">${hh?.icon ? hh.icon+' ' : ''}${n.household||'—'}</span>
+            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+            <span class="winter-death-hh">${hh?.icon ? hh.icon+' ' : ''}${esc(n.household||'—')}</span>
           </div>
           <span class="winter-roll-detail" style="flex-shrink:0;">[${res.rolls.join(' → ')}]</span>
           <span class="winter-result-badge" style="background:var(--crimson-mid);margin-left:auto;">${label}</span>
@@ -560,7 +560,7 @@ const TabWinter = {
       return `
         <div class="winter-npc-row birth-npc-row barren-row">
           <div class="birth-row-top">
-            <span class="winter-npc-name" style="opacity:0.45;" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${n.name}</span>
+            <span class="winter-npc-name" style="opacity:0.45;" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
             <span class="birth-mod-tag barren-tag" style="font-size:0.65rem;padding:2px 10px;">Barren</span>
             <span class="winter-age-str" style="margin-left:auto;opacity:0.45;">${ageStr}</span>
           </div>
@@ -584,8 +584,8 @@ const TabWinter = {
       if (sp) {
         const alive = STORE.living.some(l => l.id === spId);
         spouseTag = alive
-          ? `<span class="birth-spouse-tag">♥ ${sp.name}</span>`
-          : `<span class="birth-spouse-tag unmarried" title="${sp.name} is deceased">† widowed</span>`;
+          ? `<span class="birth-spouse-tag">♥ ${esc(sp.name)}</span>`
+          : `<span class="birth-spouse-tag unmarried" title="${esc(sp.name)} is deceased">† widowed</span>`;
       }
     }
 
@@ -623,7 +623,7 @@ const TabWinter = {
     return `
       <div class="winter-npc-row birth-npc-row">
         <div class="birth-row-top">
-          <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${n.name}</span>
+          <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
           ${spouseTag}
           <span class="winter-age-str" style="margin-left:auto;">${ageStr}</span>
         </div>
@@ -1373,8 +1373,8 @@ const TabWinter = {
       return '<div class="winter-death-row">' +
         '<span class="winter-death-dot" style="background:' + col + ';"></span>' +
         '<div class="winter-death-name-col">' +
-          '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + n.name + '</span>' +
-          '<span class="winter-death-hh">' + (hh?.icon ? hh.icon + ' ' : '') + (n.household || '—') + '</span>' +
+          '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
+          '<span class="winter-death-hh">' + (hh?.icon ? hh.icon + ' ' : '') + esc(n.household || '—') + '</span>' +
         '</div>' +
         '<span class="winter-roll-detail" style="flex-shrink:0;">[' + rollStr + ']</span>' +
         '<span class="winter-result-badge birth-badge" style="background:#5a4a7a;margin-left:auto;">' + rankLabel + '</span>' +
@@ -1491,12 +1491,12 @@ const TabWinter = {
       : '';
 
     const roleTag = n.role
-      ? '<span style="' + TAG + 'background:rgba(60,60,80,0.1);border:1px solid rgba(60,60,80,0.25);color:var(--ink-soft);margin-left:6px;">' + n.role + '</span>'
+      ? '<span style="' + TAG + 'background:rgba(60,60,80,0.1);border:1px solid rgba(60,60,80,0.25);color:var(--ink-soft);margin-left:6px;">' + esc(n.role) + '</span>'
       : '';
 
     return '<div class="winter-npc-row birth-npc-row">' +
       '<div class="birth-row-top">' +
-        '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + n.name + '</span>' +
+        '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
         roleTag +
         '<span style="' + TAG + 'background:rgba(90,74,58,0.15);border:1px solid rgba(90,74,58,0.35);color:var(--ink);margin-left:6px;">+' + mod + ' age mod</span>' +
         orientSel +
@@ -1584,12 +1584,12 @@ const TabWinter = {
       : '';
 
     const roleTag = n.role
-      ? '<span style="' + TAG + 'background:rgba(60,60,80,0.1);border:1px solid rgba(60,60,80,0.25);color:var(--ink-soft);margin-left:6px;">' + n.role + '</span>'
+      ? '<span style="' + TAG + 'background:rgba(60,60,80,0.1);border:1px solid rgba(60,60,80,0.25);color:var(--ink-soft);margin-left:6px;">' + esc(n.role) + '</span>'
       : '';
 
     return '<div class="winter-npc-row birth-npc-row">' +
       '<div class="birth-row-top">' +
-        '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + n.name + '</span>' +
+        '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
         roleTag +
         '<span style="' + TAG + 'background:rgba(40,80,120,0.15);border:1px solid rgba(40,80,120,0.35);color:var(--ink);margin-left:6px;">Courtesy ' + courtesy + '</span>' +
         (waitYears > 0 ? '<span style="' + TAG + 'background:rgba(90,50,90,0.15);border:1px solid rgba(90,50,90,0.35);color:var(--ink);">+' + waitYears + ' yr waited</span>' : '') +
@@ -1611,7 +1611,7 @@ const TabWinter = {
 
     const candidates = this._getSpouseCandidates(npc);
     const candOpts = candidates.length
-      ? candidates.map(c => '<option value="' + c.id + '">' + c.name + (c.year_born ? ' (Age ' + (STORE.year - c.year_born) + ')' : '') + (c.role ? ' \u2014 ' + c.role : '') + '</option>').join('')
+      ? candidates.map(c => '<option value="' + c.id + '">' + esc(c.name) + (c.year_born ? ' (Age ' + (STORE.year - c.year_born) + ')' : '') + (c.role ? ' \u2014 ' + esc(c.role) : '') + '</option>').join('')
       : '<option value="">— No compatible NPCs found —</option>';
 
     const re = res.rankEntry;
@@ -1628,11 +1628,11 @@ const TabWinter = {
 
     Modal.open(
       '<div style="min-width:420px;max-width:540px;">' +
-        '<div class="modal-header"><h2 style="margin:0;font-size:1rem;">&#x1F492; Confirm Marriage \u2014 ' + npc.name + '</h2></div>' +
+        '<div class="modal-header"><h2 style="margin:0;font-size:1rem;">&#x1F492; Confirm Marriage \u2014 ' + esc(npc.name) + '</h2></div>' +
         '<div style="padding:16px 20px;">' +
           rankNote +
           '<p style="margin:0 0 14px;font-size:0.85rem;color:var(--ink-soft);">' +
-            '<strong>' + npc.name + '</strong> is to be wed this winter of ' + STORE.year + ' AD. ' +
+            '<strong>' + esc(npc.name) + '</strong> is to be wed this winter of ' + STORE.year + ' AD. ' +
             'Pick an existing NPC or create a new spouse.' +
           '</p>' +
           '<div style="display:flex;gap:8px;margin-bottom:14px;">' +
@@ -1660,7 +1660,7 @@ const TabWinter = {
               '</div>' +
               '<div class="detail-field"><div class="detail-label">Role / Rank</div><input class="edit-input" id="marrNewRole" placeholder="' + (re ? re.rank : 'Lady') + '"></div>' +
               '<div class="detail-field"><div class="detail-label">Year Born (optional)</div><input class="edit-input" id="marrNewYear" type="number" placeholder="' + (STORE.year - 20) + '"></div>' +
-              '<div class="detail-field" style="grid-column:1/-1;"><div class="detail-label">Household</div><input class="edit-input" id="marrNewHousehold" value="' + (npc.household || '') + '"></div>' +
+              '<div class="detail-field" style="grid-column:1/-1;"><div class="detail-label">Household</div><input class="edit-input" id="marrNewHousehold" value="' + esc(npc.household || '') + '"></div>' +
             '</div>' +
           '</div>' +
           '<div class="btn-row" style="margin-top:16px;">' +

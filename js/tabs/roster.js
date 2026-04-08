@@ -185,7 +185,7 @@ const TabRoster = {
         groups[g].push(n);
       });
       list.innerHTML = Object.entries(groups).map(([role, members]) => `
-        <div class="npc-group-header">${role} (${members.length})</div>
+        <div class="npc-group-header">${esc(role)} (${members.length})</div>
         ${members.map(n => this._itemHtml(n)).join('')}
       `).join('');
     } else {
@@ -236,8 +236,8 @@ const TabRoster = {
       <span class="hh-pip" style="${hhPipStyle(n.household)}"></span>
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-          <span class="npc-item-name" style="${rtStyle}">${n.name}${blessedBadge}${fateBadge}${rtBadge}</span>
-          <span class="npc-item-role">${n.role||''}</span>
+          <span class="npc-item-name" style="${rtStyle}">${esc(n.name)}${blessedBadge}${fateBadge}${rtBadge}</span>
+          <span class="npc-item-role">${esc(n.role||'')}</span>
           ${ageDisplay}
           ${n.glory ? `<span class="npc-item-glory">${n.glory.toLocaleString()}</span>` : ''}
         </div>
@@ -272,7 +272,7 @@ const TabRoster = {
       if (npc.training_where) {
         const role  = (npc.role || '').toLowerCase();
         const label = role === 'squire' ? 'Squire under' : role === 'page' ? 'Page at' : 'Training';
-        return `<span class="training-line">${label}: <strong>${npc.training_where}</strong></span>`;
+        return `<span class="training-line">${label}: <strong>${esc(npc.training_where)}</strong></span>`;
       }
       return '';
     }
@@ -288,7 +288,7 @@ const TabRoster = {
     const clickAttr = other
       ? `data-npc-hover="${other.id}" onclick="event.stopPropagation();Components.openNpcCard('${other.id}')" style="cursor:pointer;"`
       : '';
-    return `<span class="training-line" ${clickAttr}>${label}: <strong>${name}</strong></span>`;
+    return `<span class="training-line" ${clickAttr}>${label}: <strong>${esc(name)}</strong></span>`;
   },
 
   _renderDetail(id) {

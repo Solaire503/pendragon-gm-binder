@@ -291,7 +291,7 @@ function buildNpcCardHtml(npc, opts = {}) {
   const manorKey = npc.manor ? STORE.manorKeys().find(k => npc.manor.toLowerCase().includes(k.toLowerCase())) : null;
   const manorLinkHtml = manorKey
     ? `<span class="manor-link" onclick="APP.goToManor('${manorKey}')">${hhIcon(manorKey)} ${manorKey} Manor</span>`
-    : (npc.manor ? `<span style="font-size:0.9rem;color:var(--ink-soft)">${npc.manor}</span>` : '');
+    : (npc.manor ? `<span style="font-size:0.9rem;color:var(--ink-soft)">${esc(npc.manor)}</span>` : '');
 
   // Relationships
   const REL_PRIORITY = {
@@ -377,10 +377,10 @@ function buildNpcCardHtml(npc, opts = {}) {
 
     return `<div class="family-member-item" onclick="Components.openNpcCard('${other.id}')">
       <span class="family-member-role" style="background:${roleColour(r.type)}">${displayType}</span>
-      <span class="family-member-name" style="${nameStyle}">${other.name}</span>
+      <span class="family-member-name" style="${nameStyle}">${esc(other.name)}</span>
       ${bastardBadge}
       ${deathNote}
-      <span class="family-member-age">${other.role || ''}</span>
+      <span class="family-member-age">${esc(other.role || '')}</span>
       <button class="rel-edit-btn" title="Edit relationship" onclick="event.stopPropagation();Components.openEditRelationship('${r.id}','${npc.id}')">✎</button>
     </div>`;
   }).join('') : '<div class="text-muted italic" style="font-size:0.85rem;padding:4px 0;">No recorded relationships</div>';
@@ -400,9 +400,9 @@ function buildNpcCardHtml(npc, opts = {}) {
         const sibColour = sibType === 'Full Sibling' ? '#5a4a7a' : sibType === 'Half-Sibling' ? '#6a5a3a' : '#4a5a6a';
         return `<div class="family-member-item" onclick="Components.openNpcCard('${s.id}')">
           <span class="family-member-role" style="background:${sibColour};">${sibType}</span>
-          <span class="family-member-name" style="${nameStyle}">${s.name}</span>
+          <span class="family-member-name" style="${nameStyle}">${esc(s.name)}</span>
           ${deathNote}
-          <span class="family-member-age">${s.role || ''}${sAge != null ? ' · '+sAge : ''}</span>
+          <span class="family-member-age">${esc(s.role || '')}${sAge != null ? ' · '+sAge : ''}</span>
         </div>`;
       }).join('')}
     </div>` : '';
@@ -431,10 +431,10 @@ function buildNpcCardHtml(npc, opts = {}) {
       }
       return `<div class="family-member-item" onclick="Components.openNpcCard('${s.id}')">
         <span class="family-member-role" style="background:${colorFn(role)};">${role}</span>
-        <span class="family-member-name" style="${nameStyle}">${s.name}</span>
+        <span class="family-member-name" style="${nameStyle}">${esc(s.name)}</span>
         ${bastardBadge}
         ${deathNote}
-        <span class="family-member-age">${s.role || ''}${sAge != null ? ' · '+sAge : ''}</span>
+        <span class="family-member-age">${esc(s.role || '')}${sAge != null ? ' · '+sAge : ''}</span>
       </div>`;
     }).join('');
     return `<div class="section-title mt-16" style="opacity:0.85;">${title}
@@ -524,9 +524,9 @@ function buildNpcCardHtml(npc, opts = {}) {
     const noteText  = r.notes ? `<span style="font-size:0.78rem;color:var(--ink-soft);font-style:italic;"> — ${AtMention.render(r.notes)}</span>` : '';
     return `<div class="family-member-item" ${other ? `onclick="Components.openNpcCard('${other.id}')"` : ''}>
       <span class="family-member-role" style="background:var(--violet-mid);color:#fff;">${label}</span>
-      <span class="family-member-name" style="${nameStyle}">${name}${noteText}</span>
+      <span class="family-member-name" style="${nameStyle}">${esc(name)}${noteText}</span>
       ${deathNote}
-      <span class="family-member-age">${sub}</span>
+      <span class="family-member-age">${esc(sub)}</span>
     </div>`;
   }).join('');
 
@@ -536,7 +536,7 @@ function buildNpcCardHtml(npc, opts = {}) {
     <div class="family-member-list">
       ${npc.page_court ? `<div class="family-member-item">
         <span class="family-member-role" style="background:var(--cobalt-mid);color:#fff;">${(npc.role||'').toLowerCase().includes('page') ? 'Paging at' : 'Paged at'}</span>
-        <span class="family-member-name">${npc.page_court}</span>
+        <span class="family-member-name">${esc(npc.page_court)}</span>
       </div>` : ''}
       ${npc.training_where && !npc.training_npc_id ? (() => {
         // Determine training type: training_path field is authoritative; if absent,
@@ -560,7 +560,7 @@ function buildNpcCardHtml(npc, opts = {}) {
         }
         return `<div class="family-member-item">
           <span class="family-member-role" style="background:${trainColour};color:#fff;">${trainLabel}</span>
-          <span class="family-member-name">${npc.training_where}</span>
+          <span class="family-member-name">${esc(npc.training_where)}</span>
         </div>`;
       })() : ''}
       ${trainingRelHtml}
@@ -580,13 +580,13 @@ function buildNpcCardHtml(npc, opts = {}) {
         <div class="npc-avatar" style="background:${col}22;border-color:${col};">${icon}</div>
         <div class="npc-header-text">
           <div class="npc-name" ${npc.round_table ? 'style="color:var(--gold);text-shadow:0 0 12px rgba(184,134,11,0.4);"' : ''}>
-            ${npc.name}
+            ${esc(npc.name)}
             ${npc.blessed      ? '<span class="blessed-pip-lg" title="Blessed Birth">✦</span>' : ''}
             ${npc.fate_touched ? '<span class="fate-pip-lg"    title="Fate-Touched">◈</span>'  : ''}
             ${npc.round_table  ? '<span title="Knight of the Round Table" style="font-size:0.75rem;color:var(--gold);margin-left:2px;">⊕</span>' : ''}
           </div>
-          ${npc.out_of_story ? `<div style="margin-top:3px;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.08em;color:#8a7a5a;background:rgba(138,122,90,0.12);border:1px solid rgba(138,122,90,0.3);padding:2px 8px;border-radius:4px;display:inline-block;">🌫 Out of Story${npc.out_of_story_note ? ' — ' + npc.out_of_story_note : ''}</div>` : ''}
-          <div class="npc-role-line">${npc.role || '—'}${npc.pronoun ? ' · ' + npc.pronoun : ''}</div>
+          ${npc.out_of_story ? `<div style="margin-top:3px;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.08em;color:#8a7a5a;background:rgba(138,122,90,0.12);border:1px solid rgba(138,122,90,0.3);padding:2px 8px;border-radius:4px;display:inline-block;">🌫 Out of Story${npc.out_of_story_note ? ' — ' + esc(npc.out_of_story_note) : ''}</div>` : ''}
+          <div class="npc-role-line">${esc(npc.role) || '—'}${npc.pronoun ? ' · ' + esc(npc.pronoun) : ''}</div>
           ${deathLine}
           ${glory ? `<div class="npc-glory-badge">${glory}</div>` : ''}
         </div>
@@ -605,9 +605,9 @@ function buildNpcCardHtml(npc, opts = {}) {
         ${isDead ? `<div class="detail-field"><div class="detail-label">Died</div><div class="detail-value">${npc.year_died ? npc.year_died + ' AD' : '—'}</div></div>` : ''}
         <div class="detail-field">
           <div class="detail-label">Eligibility</div>
-          <div class="detail-value">${npc.eligibility || '—'}</div>
+          <div class="detail-value">${esc(npc.eligibility) || '—'}</div>
         </div>
-        ${npc.dowry ? `<div class="detail-field"><div class="detail-label">Dowry</div><div class="detail-value">${npc.dowry}</div></div>` : ''}
+        ${npc.dowry ? `<div class="detail-field"><div class="detail-label">Dowry</div><div class="detail-value">${esc(npc.dowry)}</div></div>` : ''}
       </div>
 
       ${ageFlagHtml}
@@ -703,11 +703,11 @@ function buildNpcEditHtml(npc, isNew = false) {
 
   return `
     <div style="min-width:500px;max-width:660px;">
-      <div class="page-title" style="font-size:1.1rem;margin-bottom:16px;">Edit — ${npc.name}</div>
+      <div class="page-title" style="font-size:1.1rem;margin-bottom:16px;">Edit — ${esc(npc.name)}</div>
       <div class="npc-detail-grid">
         <div class="detail-field">
           <div class="detail-label">Name</div>
-          <input class="edit-input" id="ef-name" value="${npc.name || ''}">
+          <input class="edit-input" id="ef-name" value="${esc(npc.name || '')}">
         </div>
         <div class="detail-field">
           <div class="detail-label">Role</div>
@@ -748,7 +748,7 @@ function buildNpcEditHtml(npc, isNew = false) {
         </div>
         <div class="detail-field">
           <div class="detail-label">Manor (display text)</div>
-          <input class="edit-input" id="ef-manor" value="${npc.manor || ''}">
+          <input class="edit-input" id="ef-manor" value="${esc(npc.manor || '')}">
         </div>
         <div class="detail-field">
           <div class="detail-label">Eligibility</div>
@@ -756,24 +756,24 @@ function buildNpcEditHtml(npc, isNew = false) {
         </div>
         <div class="detail-field">
           <div class="detail-label">Dowry</div>
-          <input class="edit-input" id="ef-dowry" value="${npc.dowry || ''}">
+          <input class="edit-input" id="ef-dowry" value="${esc(npc.dowry || '')}">
         </div>
       </div>
       <div class="detail-field mt-8 mb-8">
         <div class="detail-label">Notes</div>
-        <textarea class="edit-input edit-textarea" id="ef-notes">${npc.notes || ''}</textarea>
+        <textarea class="edit-input edit-textarea" id="ef-notes">${esc(npc.notes || '')}</textarea>
       </div>
       <div class="detail-field mb-8">
         <div class="detail-label">Passions &amp; Traits</div>
-        <textarea class="edit-input edit-textarea" id="ef-passions">${npc.passions || ''}</textarea>
+        <textarea class="edit-input edit-textarea" id="ef-passions">${esc(npc.passions || '')}</textarea>
       </div>
       <div class="detail-field mb-8">
         <div class="detail-label">Skills</div>
-        <textarea class="edit-input edit-textarea" id="ef-skills">${npc.skills || ''}</textarea>
+        <textarea class="edit-input edit-textarea" id="ef-skills">${esc(npc.skills || '')}</textarea>
       </div>
       <div class="detail-field mb-8">
         <div class="detail-label">Stats</div>
-        <textarea class="edit-input edit-textarea" id="ef-stats">${npc.stats || ''}</textarea>
+        <textarea class="edit-input edit-textarea" id="ef-stats">${esc(npc.stats || '')}</textarea>
       </div>
       <input type="hidden" id="ef-statblock-template" value="${esc(npc.statblock_template || '')}">
       <div style="margin-bottom:12px;">
@@ -786,18 +786,18 @@ function buildNpcEditHtml(npc, isNew = false) {
         <div style="display:flex;flex-direction:column;gap:6px;padding:8px;background:var(--vellum-mid);border:1px solid var(--vellum-deep);border-radius:var(--radius);">
           <div class="detail-field">
             <div class="detail-label">Paged at</div>
-            <input class="edit-input" id="ef-page-court" placeholder="e.g. Court of Sarum…" value="${npc.page_court || ''}">
+            <input class="edit-input" id="ef-page-court" placeholder="e.g. Court of Sarum…" value="${esc(npc.page_court || '')}">
           </div>
           <div class="detail-field">
             <div class="detail-label">Training Path</div>
-            <input class="edit-input" id="ef-training-path" placeholder="squire / priest / steward…" value="${npc.training_path || ''}">
+            <input class="edit-input" id="ef-training-path" placeholder="squire / priest / steward…" value="${esc(npc.training_path || '')}">
           </div>
           <div class="detail-field">
             <div class="detail-label">Trained / Squired under</div>
             <div style="font-family:var(--font-heading);font-size:0.5rem;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.7;margin-bottom:4px;">Search for an NPC in the binder — saves a Squire/Page relationship automatically.</div>
             ${buildNpcSearchHtml('ef-training-npc-search', 'ef-training-npc-id', 'Search for knight or trainer…')}
             <div style="font-family:var(--font-heading);font-size:0.5rem;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.7;margin:6px 0 4px;">Not in the binder? Type a name instead:</div>
-            <input class="edit-input" id="ef-training-where" placeholder="e.g. Sir Elad of Woodford…" value="${npc.training_where || ''}">
+            <input class="edit-input" id="ef-training-where" placeholder="e.g. Sir Elad of Woodford…" value="${esc(npc.training_where || '')}">
           </div>
         </div>
       </div>
@@ -814,7 +814,7 @@ function buildNpcEditHtml(npc, isNew = false) {
             <span style="font-family:var(--font-heading);font-size:0.62rem;letter-spacing:0.1em;">Blessed Birth</span>
           </label>
           <div id="ef-blessed-note-wrap" style="display:${npc.blessed?'block':'none'};padding-left:20px;">
-            <input class="edit-input" id="ef-blessed-note" placeholder="Blessed birth note…" value="${npc.blessed_note || ''}">
+            <input class="edit-input" id="ef-blessed-note" placeholder="Blessed birth note…" value="${esc(npc.blessed_note || '')}">
           </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <input type="checkbox" id="ef-fate-touched" ${npc.fate_touched?'checked':''}>
@@ -842,7 +842,7 @@ function buildNpcEditHtml(npc, isNew = false) {
               <span style="font-family:var(--font-heading);font-size:0.62rem;letter-spacing:0.1em;color:#8a7a5a;">🌫 Out of Story</span>
             </label>
             <div id="ef-oos-note-wrap" style="display:${npc.out_of_story?'block':'none'};padding-left:20px;margin-top:6px;">
-              <input class="edit-input" id="ef-oos-note" placeholder="Why did they leave? e.g. Became an Esquire, took ship to the continent…" value="${npc.out_of_story_note || ''}">
+              <input class="edit-input" id="ef-oos-note" placeholder="Why did they leave? e.g. Became an Esquire, took ship to the continent…" value="${esc(npc.out_of_story_note || '')}">
             </div>
           </div>
           ${['knight','king','warlord','baron'].some(r => (npc.role||'').toLowerCase().includes(r)) ? `
@@ -891,8 +891,8 @@ function initNpcSearch(textId, hiddenId, allNpcs) {
     if (!list.length) { results.style.display = 'none'; return; }
     results.innerHTML = list.slice(0, 12).map(n =>
       `<div class="npc-search-item" data-id="${n.id}">
-        <span class="npc-search-name">${n.name}</span>
-        ${n.role ? `<span class="npc-search-role">${n.role}</span>` : ''}
+        <span class="npc-search-name">${esc(n.name)}</span>
+        ${n.role ? `<span class="npc-search-role">${esc(n.role)}</span>` : ''}
         ${n.household ? `<span class="npc-search-hh" style="color:${STORE.householdColour(n.household)}">${STORE.householdIcon(n.household)}</span>` : ''}
       </div>`
     ).join('');
@@ -960,7 +960,7 @@ function buildAddRelHtml(npcId) {
   const typeOpts = RELATION_TYPES.map(t => `<option value="${t}">${t}</option>`).join('');
   return `
     <div style="min-width:400px;">
-      <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Add Relationship — ${npc.name}</div>
+      <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Add Relationship — ${esc(npc.name)}</div>
       <div class="detail-field mb-8">
         <div class="detail-label">Relationship Type</div>
         <select class="edit-input edit-select" id="rel-type"
@@ -1460,7 +1460,7 @@ const Components = {
     if (!npc) return;
     Modal.open(`
       <div style="min-width:340px;">
-        <div class="page-title" style="font-size:1rem;margin-bottom:12px;">Mark as Deceased — ${npc.name}</div>
+        <div class="page-title" style="font-size:1rem;margin-bottom:12px;">Mark as Deceased — ${esc(npc.name)}</div>
         <div class="detail-field mb-8">
           <div class="detail-label">Year of Death</div>
           <input class="edit-input" id="kill-year" type="number" value="${STORE.year}">
