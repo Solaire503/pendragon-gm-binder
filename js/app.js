@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.7.0';
+const APP_VERSION = '2.7.1';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -247,6 +247,37 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.7.1',
+    date:    '2026-04-08',
+    sections: [
+      {
+        heading: 'Chronicle Integration',
+        items: [
+          'Each life event on an NPC card now has a 📜 button (GM only) — click to commit that event to the Chronicle of Logres for its year.',
+          'The entry is pre-filled with the event\'s flavor text (or title + mechanical summary if no flavor exists), and is fully editable before committing.',
+          'Duplicate guard: attempting to add the same life event twice shows a flowery refusal instead of a duplicate entry. Each committed entry tracks its source event ID.',
+          'Resolved solo generator cards with flavor text now show a "📜 Add to Chronicle" button — same flow, pre-filled and editable.',
+          'NPC cards also retain the general 📜 Chronicle button for hand-written entries not tied to a specific life event.',
+        ],
+      },
+      {
+        heading: 'Solo Event Flavor Text',
+        items: [
+          'Flavor text expanded to 2-3 sentences (was 1-2) with a higher word cap.',
+          'The actual event outcome is now required to be clear within the prose — atmosphere no longer swallows the substance.',
+        ],
+      },
+      {
+        heading: 'Caliburn — Persona Improvements',
+        items: [
+          'Caliburn no longer defaults to reciting the campaign year and manor list every response — context is used only when genuinely relevant.',
+          'Reacts directly and specifically to what is said, including unusual or unexpected messages.',
+          'Rare easter egg: Caliburn occasionally slips and says "Artoria Pendragon" before sharply correcting himself.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.7.0',
     date:    '2026-04-08',
