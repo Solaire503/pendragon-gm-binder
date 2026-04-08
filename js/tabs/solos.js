@@ -1461,11 +1461,14 @@ const TabSolos = {
           </div>`).join('')}</div>`
       : '';
 
+    const chronicleBtn = card.state === 'resolved' && card.flavorText
+      ? `<button class="btn btn-ghost solos-chronicle-btn" onclick="TabSolos._promptAddToChronicle('${card.id}')">📜 Add to Chronicle</button>`
+      : '';
     const buttonsHtml = card.state === 'fresh' ? `
       <div class="solos-card-actions">
         <button class="btn btn-primary solos-resolve-btn" onclick="TabSolos._resolveCard('${card.id}')">✓ Resolve</button>
         <button class="btn btn-ghost solos-dismiss-btn"  onclick="TabSolos._dismissCard('${card.id}')">✗ Dismiss</button>
-      </div>` : '';
+      </div>` : chronicleBtn ? `<div class="solos-card-actions">${chronicleBtn}</div>` : '';
 
     return `
       <div class="solos-card ${stateClass}" id="solos-card-${card.id}">
@@ -1931,10 +1934,11 @@ const TabSolos = {
 
     const system = [
       'You are a chronicler writing in the manner of Thomas Malory\'s Le Morte d\'Arthur and the Lancelot-Grail Vulgate Cycle.',
-      'Write 1–2 sentences of flavor text for a Pendragon RPG event set in ~499 AD Britain.',
+      'Write 2–3 sentences of flavor text for a Pendragon RPG event set in ~499 AD Britain.',
       'Style: plain, grave, third-person narration; archaic cadence without being impenetrable; matter-of-fact about strange or violent things; the unhurried tone of someone setting events to parchment for posterity.',
       'Use Malory\'s hallmarks: "And so it befell", "it is told", "Thus did", "wherefore", "worshipful", periodic asides on honour or fate — but sparingly, not all at once.',
-      'Under 60 words total. No preamble. No surrounding quotation marks. Write nothing but the flavor text itself.',
+      'CRITICAL: The actual event must be clear from the prose. A reader who has not seen the mechanical summary must be able to understand what happened — a wound taken, a kinsman lost, a marriage made, a fortune gained. Weave the substance into the style; do not let atmosphere swallow the event.',
+      'Under 90 words total. No preamble. No surrounding quotation marks. Write nothing but the flavor text itself.',
       `Approach: ${slot.angle}`,
       `Hard constraint: ${slot.avoid}`,
       'Also forbidden anywhere: snow, frost, ice, frozen, chill, cold, bitter, moorland, wolf/wolves, mist, fog, rode through, rode forth, rampart, blizzard.',
@@ -1946,7 +1950,7 @@ const TabSolos = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model:      'claude-haiku-4-5-20251001',
-          max_tokens: 160,
+          max_tokens: 220,
           system,
           messages: [{
             role:    'user',
@@ -1975,6 +1979,45 @@ const TabSolos = {
       const card = this._getCard(cardId);
       if (card) { card.flavorLoading = false; card.flavorText = null; this._reRenderCard(cardId); }
     }
+  },
+
+  // ── ADD TO CHRONICLE ─────────────────────────────────────
+  _promptAddToChronicle(cardId) {
+    const card = this._getCard(cardId);
+    if (!card) return;
+    const npc  = STORE.getNpc(card.knightId);
+    const name = npc ? npc.name : 'Unknown Knight';
+    const year = card.year;
+    const text = card.flavorText || '';
+
+    Modal.open(`
+      <div style="min-width:340px;max-width:520px;">
+        <div class="modal-header">
+          <h2 style="margin:0;font-size:1rem;font-family:var(--font-heading,'Cinzel',serif);">📜 Add to Chronicle — ${year} AD</h2>
+        </div>
+        <p style="font-size:0.82rem;color:var(--ink-soft);margin:8px 0 12px;line-height:1.5;">
+          Edit the entry below before committing it to the Chronicle of Logres.
+        </p>
+        <textarea id="solos-chron-text" class="edit-input" rows="5"
+          style="width:100%;resize:vertical;font-family:var(--font-body,'EB Garamond',serif);font-size:0.9rem;line-height:1.5;"
+        >${this._esc(name + ' — ' + text)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+          <button class="btn btn-primary" onclick="TabSolos._commitToChronicle(${year})">Commit to Chronicle</button>
+        </div>
+      </div>`);
+  },
+
+  _commitToChronicle(year) {
+    const text = document.getElementById('solos-chron-text')?.value?.trim();
+    if (!text) return;
+    if (!STORE.chronicle) STORE.chronicle = {};
+    const key = String(year);
+    if (!STORE.chronicle[key]) STORE.chronicle[key] = [];
+    STORE.chronicle[key].push({ id: 'ev-' + Date.now(), text, cat: 'personal', ts: Date.now() });
+    STORE.save();
+    Modal.close();
+    Toast.success('Entry committed to the Chronicle of Logres.');
   },
 
   // ── KNIGHT PERSONALITY NOTE ───────────────────────────────

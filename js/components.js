@@ -631,6 +631,7 @@ function buildNpcCardHtml(npc, opts = {}) {
         ${isGM() ? `
           <button class="btn btn-primary" onclick="Components.openEditNpc('${npc.id}')">Edit</button>
           <button class="btn btn-verdigris" onclick="Components.openAddRelationship('${npc.id}')">+ Relationship</button>
+          <button class="btn btn-ghost" onclick="Components.promptChronicleNpc('${npc.id}')">📜 Chronicle</button>
           ${!isDead
             ? `<button class="btn btn-danger" onclick="Components.confirmKill('${npc.id}')">Mark Deceased</button>`
             : `<button class="btn btn-ghost" onclick="Components.confirmRestore('${npc.id}')">Restore to Living</button>`}
@@ -1011,6 +1012,7 @@ function buildSoloChronicleHtml(npc) {
         <span class="solo-chr-date">${esc(dateLine)}</span>
         <span class="solo-chr-title">${esc(ev.title || '')}</span>
         ${canEdit ? `<button class="btn btn-ghost solo-chr-edit-btn" onclick="Components.editSoloEvent('${npc.id}','${ev.id}')">Edit</button>` : ''}
+        ${isGM() ? `<button class="btn btn-ghost solo-chr-edit-btn" onclick="Components.promptChronicleEvent('${npc.id}','${ev.id}')">📜</button>` : ''}
       </div>
       ${ev.mechDesc   ? `<div class="solo-chr-mech">${esc(ev.mechDesc)}</div>` : ''}
       ${ev.flavorText ? `<div class="solo-chr-flavor">${esc(ev.flavorText)}</div>` : ''}
@@ -1835,6 +1837,116 @@ const Components = {
     STORE.deleteSoloEvent(npcId, eventId);
     Toast.show('Event deleted.', 'success');
     this.openNpcCard(npcId);
+  },
+
+  promptChronicleEvent(npcId, eventId) {
+    const npc = STORE.getNpc(npcId);
+    if (!npc) return;
+    const ev = (npc.soloEvents || []).find(e => e.id === eventId);
+    if (!ev) return;
+    const year = ev.year || STORE.year;
+    const key  = String(year);
+
+    // Duplicate check — look for this exact event ID in the chronicle
+    const entries = (STORE.chronicle && STORE.chronicle[key]) || [];
+    const allEntries = Object.values(STORE.chronicle || {}).flat();
+    const alreadyPenned = allEntries.some(e => e.sourceEventId === eventId);
+
+    if (alreadyPenned) {
+      Modal.open(`
+        <div style="max-width:400px;text-align:center;padding:8px 0;">
+          <div style="font-size:2rem;margin-bottom:12px;">📜</div>
+          <p style="font-family:var(--font-body,'EB Garamond',serif);font-size:1rem;line-height:1.6;font-style:italic;color:var(--ink);">
+            This tale hath already been penned in the annals of Logres for the year ${year} AD.
+            The chronicler's quill is still. Seek not to write what is already writ.
+          </p>
+          <button class="btn btn-ghost" style="margin-top:16px;" onclick="Modal.close()">So be it</button>
+        </div>`);
+      return;
+    }
+
+    // Pre-fill: knight name + flavor text if available, else title + mechDesc
+    const prefill = ev.flavorText
+      ? `${npc.name} — ${ev.flavorText}`
+      : `${npc.name} — ${ev.title || ''}${ev.mechDesc ? ': ' + ev.mechDesc : ''}`;
+
+    Modal.open(`
+      <div style="min-width:340px;max-width:520px;">
+        <div class="modal-header">
+          <h2 style="margin:0;font-size:1rem;font-family:var(--font-heading,'Cinzel',serif);">📜 Chronicle — ${esc(npc.name)}, ${year} AD</h2>
+        </div>
+        <p style="font-size:0.82rem;color:var(--ink-soft);margin:8px 0 12px;line-height:1.5;">
+          Edit this entry before committing it to the Chronicle of Logres.
+        </p>
+        <textarea id="npc-chron-text" class="edit-input" rows="4"
+          style="width:100%;resize:vertical;font-family:var(--font-body,'EB Garamond',serif);font-size:0.9rem;line-height:1.5;"
+        >${esc(prefill)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+          <button class="btn btn-primary" onclick="Components._commitNpcChronicle(${year},'${esc(eventId)}')">Commit to Chronicle</button>
+        </div>
+      </div>`);
+  },
+
+  promptChronicleNpc(npcId) {
+    const npc  = STORE.getNpc(npcId);
+    if (!npc) return;
+    const year = STORE.year;
+    const key  = String(year);
+
+    // Duplicate check — has this NPC's name already been recorded this year?
+    const entries = (STORE.chronicle && STORE.chronicle[key]) || [];
+    const nameStr = npc.name.toLowerCase();
+    const alreadyPenned = entries.some(e => (e.text || '').toLowerCase().includes(nameStr));
+
+    if (alreadyPenned) {
+      Modal.open(`
+        <div style="max-width:400px;text-align:center;padding:8px 0;">
+          <div style="font-size:2rem;margin-bottom:12px;">📜</div>
+          <p style="font-family:var(--font-body,'EB Garamond',serif);font-size:1rem;line-height:1.6;font-style:italic;color:var(--ink);">
+            This tale hath already been penned in the annals of Logres for the year ${year} AD.
+            The chronicler's quill is still. Seek not to write what is already writ.
+          </p>
+          <button class="btn btn-ghost" style="margin-top:16px;" onclick="Modal.close()">So be it</button>
+        </div>`);
+      return;
+    }
+
+    Modal.open(`
+      <div style="min-width:340px;max-width:520px;">
+        <div class="modal-header">
+          <h2 style="margin:0;font-size:1rem;font-family:var(--font-heading,'Cinzel',serif);">📜 Chronicle — ${esc(npc.name)}, ${year} AD</h2>
+        </div>
+        <p style="font-size:0.82rem;color:var(--ink-soft);margin:8px 0 12px;line-height:1.5;">
+          Record this tale in the Chronicle of Logres. Edit as you see fit before committing.
+        </p>
+        <textarea id="npc-chron-text" class="edit-input" rows="4"
+          style="width:100%;resize:vertical;font-family:var(--font-body,'EB Garamond',serif);font-size:0.9rem;line-height:1.5;"
+          placeholder="${esc(npc.name)} — "></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+          <button class="btn btn-primary" onclick="Components._commitNpcChronicle(${year})">Commit to Chronicle</button>
+        </div>
+      </div>`);
+    // Pre-focus
+    setTimeout(() => {
+      const ta = document.getElementById('npc-chron-text');
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }, 50);
+  },
+
+  _commitNpcChronicle(year, sourceEventId) {
+    const text = document.getElementById('npc-chron-text')?.value?.trim();
+    if (!text) return;
+    if (!STORE.chronicle) STORE.chronicle = {};
+    const key = String(year);
+    if (!STORE.chronicle[key]) STORE.chronicle[key] = [];
+    const entry = { id: 'ev-' + Date.now(), text, cat: 'personal', ts: Date.now() };
+    if (sourceEventId) entry.sourceEventId = sourceEventId;
+    STORE.chronicle[key].push(entry);
+    STORE.save();
+    Modal.close();
+    Toast.success('Entry committed to the Chronicle of Logres.');
   },
 };
 
