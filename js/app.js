@@ -75,11 +75,64 @@ const FEATURES = [
     ],
   },
   {
-    heading: 'Roster & Chronicle',
+    heading: 'Roster & NPC Cards',
     icon: '📜',
     items: [
       'The full NPC Roster is available for browsing — search by name, household, role, or status.',
-      'Click any NPC to open their card: relationships, life events, skills, notes, and family.',
+      'Click any NPC to open their card: relationships, life events, and family tree links.',
+      'On desktop, NPC cards display a sidebar on the right with My Impressions and the Comments section. On mobile, tap "📝 Notes & Comments" to slide it in.',
+    ],
+  },
+  {
+    heading: 'My Impressions',
+    icon: '🖊',
+    items: [
+      'Every NPC card has a My Impressions section in the sidebar — a private note visible only to you.',
+      'Write anything about this character from your knight\'s perspective: suspicions, alliances, feelings. Auto-saves as you type.',
+      'Impressions are stored per-user, per-NPC — your notes about an NPC are invisible to everyone else.',
+    ],
+  },
+  {
+    heading: 'Public NPC Comments',
+    icon: '💬',
+    items: [
+      'Leave a public comment on any NPC card — visible to all logged-in users.',
+      'Full @NPC mention support — type @ to search and link any character. Mentions render as clickable links.',
+      'Reply to any comment one level deep. Edit your own comments at any time.',
+      'Delete your own comments (soft-delete — the GM can still see the content). You can restore a comment you deleted yourself.',
+    ],
+  },
+  {
+    heading: 'Notifications',
+    icon: '🔔',
+    items: [
+      'The 🔔 bell in the header shows a badge when you have unread notifications.',
+      'You are notified when someone leaves a comment on an NPC card, or when the GM writes you a private journal note.',
+      'Click the bell to open the panel. Click any notification to jump to the relevant NPC. Mark individual items or all as read.',
+    ],
+  },
+  {
+    heading: 'Journal — Private Notes',
+    icon: '📝',
+    items: [
+      'The Journal tab (under Records in the nav) is your private scratchpad — visible only to you.',
+      'General Notes and Manor Notes sections, with a live @NPC mention preview as you type. Auto-saves with a short debounce.',
+      'Notes from the GM appear in a separate section — the GM can write you a private message that only you can see.',
+    ],
+  },
+  {
+    heading: 'Families Tab',
+    icon: '🌳',
+    items: [
+      'Browse any household\'s roster, manor holdings, and family tree.',
+      'You can add, edit, and delete relationships on your own household\'s family tree. Other households\' trees are view-only.',
+      'Tree node positions (drag from the Unplaced pocket) persist for your household.',
+    ],
+  },
+  {
+    heading: 'Chronicle',
+    icon: '📜',
+    items: [
       'The Chronicle tab shows the full campaign record — browse any year and read every event.',
       'The Mausoleum lists everyone who has died, with cause, dates, age at death, and glory.',
     ],
@@ -91,6 +144,18 @@ const FEATURES = [
       'The "📜 Submit Entry" button on the Chronicle tab lets you contribute a record from your knight\'s point of view.',
       'Write your account in the submission form and click Submit for Review. Your entry is queued and sent to the GM — nothing appears in the shared chronicle until the GM approves it.',
       'Once approved, your entry appears in the chronicle for the current year just like any other event.',
+    ],
+  },
+  {
+    heading: 'Caliburn — Discord Bot',
+    icon: '⚔',
+    items: [
+      'Caliburn is the campaign\'s Discord bot — always online, no setup needed.',
+      '/roll, /skill, /passion, /oppose, /trait, /damage — all Pendragon 6e dice commands.',
+      '/npc <name> — look up any NPC. If the name isn\'t exact, Caliburn offers up to 5 "Did you mean?" suggestions as buttons.',
+      '/chronicle — recent campaign events. /year — current campaign year.',
+      '/feast and /justice — AI-generated dark ages feast dishes and manor justice events.',
+      '/speak <message> — address Caliburn, the sword of Britain, directly. He has opinions.',
     ],
   },
 
@@ -204,13 +269,43 @@ const FEATURES = [
     ],
   },
   {
+    heading: 'NPC Comments — GM Controls',
+    icon: '💬',
+    items: [
+      'The GM can delete any comment from any user. Soft-deleted comments show the content struck through (visible to the GM only) — players see only "[deleted]".',
+      'Restore any deleted comment (your own or another user\'s). Shred (GM only) permanently removes a comment from the record with no undo.',
+      'Full edit history: click the history icon on any edited comment to see every previous version with timestamps.',
+      'GM notes in the sidebar are private to the GM. Use the Journal "Write to Player" section to push a private note to a specific player.',
+    ],
+  },
+  {
+    heading: 'Journal — Write to Player',
+    icon: '📝',
+    items: [
+      'The GM\'s Journal tab includes a "Write to Player" section — select a player and write a private note they alone can see.',
+      'Submitting the note pushes a notification to that player immediately. They\'ll see it in their Journal\'s "Notes from the GM" section.',
+    ],
+  },
+  {
+    heading: 'Chronicle — GM Controls',
+    icon: '📜',
+    items: [
+      'Add chronicle entries for any year directly from the Chronicle tab — choose a category (Campaign, Combat, Personal, Supernatural, Rumour) and write the entry.',
+      'Each NPC life event has a 📜 button — click it to commit that event\'s flavor text to the Chronicle of Logres for its year. Fully editable before committing.',
+      'Attempting to send the same life event to the Chronicle twice shows a refusal — the entry is tracked by ID so duplicates are prevented regardless of text edits.',
+      'Resolved solo generator cards with flavor text also show "📜 Add to Chronicle" — same editable pre-fill flow.',
+      'Review and approve player Chronicle submissions from the pending queue at the bottom of the Chronicle tab.',
+    ],
+  },
+  {
     heading: 'Yearly & Solo Events',
     icon: '🎲',
     items: [
       'Three roll types per knight: Yearly Event (1d20 → full table), Solo Event (1d6 → adventure chain), and Kin Events (frequency + full 40-entry kin table).',
       'Multi-knight support — roll for every active knight simultaneously.',
-      'AI flavor text via Claude Haiku, written in the style of Malory\'s Le Morte d\'Arthur. Knight personality notes steer the prose.',
+      'AI flavor text via Claude Haiku, written in the style of Malory\'s Le Morte d\'Arthur — 2-3 sentences, the actual event outcome woven into the prose. Knight personality notes steer the voice.',
       'Resolved events auto-add to the knight\'s Life Events chronicle on their NPC card.',
+      'Resolved cards with flavor text show "📜 Add to Chronicle" to commit the event to the shared campaign record.',
     ],
   },
   {
