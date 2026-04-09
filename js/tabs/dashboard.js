@@ -104,6 +104,16 @@ const TabDashboard = {
     STORE.living.forEach(n => { byRole[n.role] = (byRole[n.role] || 0) + 1; });
     const topRoles = Object.entries(byRole).sort((a,b) => b[1]-a[1]).slice(0, 8);
 
+    // Succession needed — households whose head is dead or deleted
+    const successionFlags = STORE.households.filter(h => {
+      if (!h.household_head) return false;
+      const head = STORE.getNpc(h.household_head);
+      return !head || head.status === 'Dead';
+    }).map(h => {
+      const head = STORE.getNpc(h.household_head);
+      return { household: h, headName: head ? head.name : '(deleted NPC)', isDead: !!head };
+    });
+
     // Recent deaths (last 2 years)
     const recentDead = STORE.dead.filter(n => n.year_died && n.year_died >= year - 2).sort((a,b) => b.year_died - a.year_died);
 
@@ -150,6 +160,16 @@ const TabDashboard = {
             <div class="pk-stat" style="cursor:pointer;" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
               <span class="pk-stat-label">† ${esc(n.name)}</span>
               <span class="pk-stat-value" style="color:var(--crimson-mid)">${n.year_died} AD</span>
+            </div>`).join('')}
+        </div>` : ''}
+
+        ${successionFlags.length ? `
+        <div class="card" style="border-top:3px solid var(--crimson-mid);">
+          <div class="section-title" style="margin-bottom:12px;color:var(--crimson-mid);">⚜ Succession Needed</div>
+          ${successionFlags.map(({ household: h, headName, isDead }) => `
+            <div class="pk-stat" style="cursor:pointer;" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${h.name}')">
+              <span class="pk-stat-label" style="font-size:0.78rem;"><span style="color:${h.colour}">${h.icon}</span> ${esc(h.name)} — ${isDead ? '† ' + esc(headName) + ' has fallen' : 'Head of House missing'}</span>
+              <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.6;">choose heir →</span>
             </div>`).join('')}
         </div>` : ''}
 
@@ -358,6 +378,12 @@ const TabDashboard = {
         attentionItems.push({ icon:'⚠', text:'No Heir designated for your manor', urgent:false });
       damaged.filter(d=>d.yearRepaired && d.yearRepaired <= year).forEach(d =>
         attentionItems.push({ icon:'🔨', text:`Overdue repair: ${esc(d.description||d.type)} (${d.repairCost||0} L)`, urgent:true }));
+    }
+    // Succession check — is the household head dead or missing?
+    if (hh?.household_head) {
+      const headNpc = STORE.getNpc(hh.household_head);
+      if (!headNpc || headNpc.status === 'Dead')
+        attentionItems.push({ icon:'⚜', text:`${headNpc ? '† ' + esc(headNpc.name) + ' has fallen' : 'Head of House is missing'} — a new Head of House must be chosen`, urgent:true });
     }
     // Helper: is npc a sibling or child of the Player Knight?
     const isFamilyOfPK = (npc) => {
