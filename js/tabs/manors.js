@@ -121,7 +121,7 @@ const TabManors = {
         `<button class="btn ${this._playerSection===s?'btn-primary':'btn-ghost'}" style="font-size:0.58rem;" onclick="TabManors.setPlayerSection('${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
       ).join('');
       const playerContent = this._playerSection === 'stables'
-        ? this._renderStables(m, ownKey, col, true)
+        ? this._renderStables(m, ownKey, col, false)
         : this._renderOverview(m, ownKey, col, true);
       ownDetail = `
         <div style="margin-top:24px;">
