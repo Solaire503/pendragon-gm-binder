@@ -20,7 +20,7 @@ const TasksManager = {
     this._loading = true;
     try {
       const r = await fetch('/api/tasks');
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
       this._personal  = Array.isArray(d.personal)  ? d.personal  : [];
       this._broadcast = Array.isArray(d.broadcast) ? d.broadcast : [];
     } catch {
@@ -48,7 +48,7 @@ const TasksManager = {
         body: JSON.stringify({ text: text.trim(), priority: !!priority }),
       });
       if (!r.ok) {
-        const d = await r.json();
+        const d = await r.json().catch(() => ({}));
         Components.toast(d.error || 'Failed to save task', 'error');
         return;
       }
@@ -112,7 +112,7 @@ const TasksManager = {
         body: JSON.stringify({ text: text.trim(), priority }),
       });
       if (!r.ok) {
-        const d = await r.json();
+        const d = await r.json().catch(() => ({}));
         Components.toast(d.error || 'Failed to save', 'error');
         return;
       }
@@ -167,7 +167,7 @@ const TasksManager = {
         body: JSON.stringify({ text: text.trim(), priority }),
       });
       if (!r.ok) {
-        const d = await r.json();
+        const d = await r.json().catch(() => ({}));
         Components.toast(d.error || 'Failed to broadcast', 'error');
         return;
       }
@@ -212,7 +212,7 @@ const TasksManager = {
         body: JSON.stringify({ text: text.trim(), priority }),
       });
       if (!r.ok) {
-        const d = await r.json();
+        const d = await r.json().catch(() => ({}));
         Components.toast(d.error || 'Failed to save', 'error');
         return;
       }
@@ -264,7 +264,7 @@ const TasksManager = {
         body: JSON.stringify({ text: text.trim() }),
       });
       if (!r.ok) {
-        const d = await r.json();
+        const d = await r.json().catch(() => ({}));
         Components.toast(d.error || 'Failed to send', 'error');
         return;
       }

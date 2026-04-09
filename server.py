@@ -949,6 +949,8 @@ def api_set_my_email():
 @login_required
 def api_keep_alive():
     """Extend the session lifetime. Called by the client-side idle warning."""
+    err = _csrf_check()
+    if err: return err
     session.modified = True
     users = load_users()
     for u in users:
@@ -1599,6 +1601,8 @@ def api_broadcasts():
 @login_required
 def api_heartbeat():
     """Update presence for the current user."""
+    err = _csrf_check()
+    if err: return err
     user = get_user(session['username'])
     with _mp_lock:
         _presence[session['username']] = {

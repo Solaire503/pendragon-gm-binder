@@ -215,15 +215,15 @@ const TabManors = {
     const stewardFallback = stewardStr.length > 0 ? STORE.living.find(n => n.name.toLowerCase().includes(stewardStr.toLowerCase())) : null;
 
     const npcBtn = (npc, placeholder, field) => {
-      if (npc) return `<span class="npc-inline-link" data-npc-hover="${npc.id}" onclick="Components.openNpcCard(${JSON.stringify(npc.id)})">${npc.name}</span>` +
-        (readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;margin-left:4px;" onclick="TabManors._pickPersonnel(${JSON.stringify(key)},${JSON.stringify(field)})">✎</button>`);
+      if (npc) return `<span class="npc-inline-link" data-npc-hover="${npc.id}" onclick="Components.openNpcCard('${npc.id}')">${npc.name}</span>` +
+        (readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;margin-left:4px;" onclick="TabManors._pickPersonnel('${key}','${field}')">✎</button>`);
       if (readOnly) return '<span style="opacity:0.4;font-style:italic;">—</span>';
-      return `<button class="btn btn-ghost" style="padding:3px 10px;font-size:0.55rem;" onclick="TabManors._pickPersonnel(${JSON.stringify(key)},${JSON.stringify(field)})">+ Set ${placeholder}</button>`;
+      return `<button class="btn btn-ghost" style="padding:3px 10px;font-size:0.55rem;" onclick="TabManors._pickPersonnel('${key}','${field}')">+ Set ${placeholder}</button>`;
     };
 
     const stewardSkillDisplay = (stewardNpc || stewardFallback)
       ? `<span style="font-family:var(--font-heading);font-size:0.78rem;color:var(--verdigris-mid);margin-left:8px;" title="Stewardship skill — used in manor fate checks">Stewardship: <strong>${m.steward_skill ?? '?'}</strong></span>` +
-        (readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 6px;font-size:0.48rem;margin-left:4px;" onclick="TabManors._editStewardSkill(${JSON.stringify(key)})">✎</button>`)
+        (readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 6px;font-size:0.48rem;margin-left:4px;" onclick="TabManors._editStewardSkill('${key}')">✎</button>`)
       : '';
 
     // ── Hatred / Care bars ────────────────────────────────
@@ -286,9 +286,9 @@ const TabManors = {
             <span style="flex:1;">${esc(d.description)}${fieldNote}${repairNote}</span>
             <span style="font-family:var(--font-heading);font-size:0.75rem;color:var(--crimson-mid);">${d.repairCost>0?d.repairCost+' L':''}</span>
             ${readOnly ? '' : dueNow
-              ? `<button class="btn btn-verdigris" style="padding:2px 10px;font-size:0.5rem;" onclick="TabManors._markRepaired(${JSON.stringify(key)},${d.id})">✓ Repaired?</button>`
-              : `<button class="btn btn-ghost"    style="padding:2px 8px;font-size:0.5rem;"  onclick="TabManors._markRepaired(${JSON.stringify(key)},${d.id})">Repaired</button>`}
-            ${readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditDamage(${JSON.stringify(key)},${d.id})">✎</button>`}
+              ? `<button class="btn btn-verdigris" style="padding:2px 10px;font-size:0.5rem;" onclick="TabManors._markRepaired('${key}',${d.id})">✓ Repaired?</button>`
+              : `<button class="btn btn-ghost"    style="padding:2px 8px;font-size:0.5rem;"  onclick="TabManors._markRepaired('${key}',${d.id})">Repaired</button>`}
+            ${readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditDamage('${key}',${d.id})">✎</button>`}
           </div>
           ${d.notes ? `<div style="font-size:0.78rem;color:var(--ink-soft);font-style:italic;padding:2px 8px 4px 8px;">${esc(d.notes)}</div>` : ''}`;
         }).join('')}
@@ -312,13 +312,13 @@ const TabManors = {
     // ── Household members (collapsed) ─────────────────────
     const household = STORE.householdMembers(key);
     const membersHtml = household.length ? `
-      <div class="section-title mt-16" style="cursor:pointer;user-select:none;" onclick="TabManors._toggleMembers(${JSON.stringify(key)})">
+      <div class="section-title mt-16" style="cursor:pointer;user-select:none;" onclick="TabManors._toggleMembers('${key}')">
         <span id="membersCaret-${key}">▶</span> Household Members (${household.length})
       </div>
       <div id="membersPanel-${key}" style="display:none;">
         <div class="family-member-list mt-8">
           ${household.sort((a,b)=>a.name.localeCompare(b.name)).map(n=>`
-            <div class="family-member-item" onclick="Components.openNpcCard(${JSON.stringify(n.id)})">
+            <div class="family-member-item" onclick="Components.openNpcCard('${n.id}')">
               <span class="family-member-role" style="background:${roleColour(n.role)};padding:2px 7px;border-radius:10px;font-family:var(--font-heading);font-size:0.48rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--vellum);">${n.role||'?'}</span>
               <span class="family-member-name">${esc(n.name)}</span>
               ${n.glory?`<span class="family-member-age">${n.glory.toLocaleString()} gl.</span>`:''}
@@ -371,7 +371,7 @@ const TabManors = {
       <!-- INLINE RECORD PANEL (GM only) -->
       ${readOnly ? '' : `
       <div style="margin-bottom:16px;">
-        <button class="btn ${this._recordOpen ? 'btn-primary' : 'btn-verdigris'}" style="width:100%;" onclick="TabManors.toggleRecord(${JSON.stringify(key)})">
+        <button class="btn ${this._recordOpen ? 'btn-primary' : 'btn-verdigris'}" style="width:100%;" onclick="TabManors.toggleRecord('${key}')">
           ${this._recordOpen ? '▲ Cancel Recording' : `▼ Record New Year (${STORE.year} AD)`}
         </button>
         ${this._recordOpen ? this._renderInlineRecord(m, key) : ''}
@@ -389,9 +389,9 @@ const TabManors = {
       <!-- ACTIONS (GM only) -->
       ${readOnly ? '' : `
       <div class="btn-row mt-16">
-        <button class="btn btn-ghost" onclick="TabManors.openAddImprovement(${JSON.stringify(key)})">+ Improvement</button>
-        <button class="btn btn-ghost" onclick="TabManors.openAddDamage(${JSON.stringify(key)})">+ Damage</button>
-        <button class="btn btn-ghost" onclick="TabManors._editManorNotes(${JSON.stringify(key)})">Edit Notes</button>
+        <button class="btn btn-ghost" onclick="TabManors.openAddImprovement('${key}')">+ Improvement</button>
+        <button class="btn btn-ghost" onclick="TabManors.openAddDamage('${key}')">+ Damage</button>
+        <button class="btn btn-ghost" onclick="TabManors._editManorNotes('${key}')">Edit Notes</button>
       </div>`}`;
   },
 
@@ -427,18 +427,18 @@ const TabManors = {
           <div style="text-align:right;flex-shrink:0;margin-right:8px;">
             <div style="font-family:var(--font-heading);font-size:0.6rem;color:${col};margin-bottom:2px;">${v.tenure||'—'}</div>
             <div class="improvement-meta">
-              ${knight ? `<span class="npc-inline-link" data-npc-hover="${knight.id}" onclick="Components.openNpcCard(${JSON.stringify(knight.id)})">${knight.name}</span>` : '<span style="opacity:0.5;">No knight set</span>'}
+              ${knight ? `<span class="npc-inline-link" data-npc-hover="${knight.id}" onclick="Components.openNpcCard('${knight.id}')">${knight.name}</span>` : '<span style="opacity:0.5;">No knight set</span>'}
             </div>
           </div>
-          <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.5rem;" onclick="TabManors.openEditVassal(${JSON.stringify(key)},${v.id})">✎</button>
-          <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.5rem;color:var(--crimson-mid);" onclick="TabManors._removeVassal(${JSON.stringify(key)},${v.id})">✕</button>
+          <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.5rem;" onclick="TabManors.openEditVassal('${key}',${v.id})">✎</button>
+          <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.5rem;color:var(--crimson-mid);" onclick="TabManors._removeVassal('${key}',${v.id})">✕</button>
         </div>`;
     }).join('');
 
     return `
       <div class="section-title mt-16" style="display:flex;justify-content:space-between;align-items:center;">
         <span>Vassal Manors (${vassals.length}${vassals.length ? ' · +'+vassals.reduce((s,v)=>s+(v.passiveIncome??1),0)+' L/yr' : ''})</span>
-        <button class="btn btn-ghost" style="padding:2px 10px;font-size:0.5rem;" onclick="TabManors.openAddVassal(${JSON.stringify(key)})">+ Add Vassal</button>
+        <button class="btn btn-ghost" style="padding:2px 10px;font-size:0.5rem;" onclick="TabManors.openAddVassal('${key}')">+ Add Vassal</button>
       </div>
       ${vassals.length ? `<div class="improvement-list">${rows}</div>` : `<div style="font-size:0.78rem;color:var(--ink-soft);opacity:0.6;padding:4px 0;">No vassal manors.</div>`}`;
   },
@@ -488,7 +488,7 @@ const TabManors = {
           <input class="edit-input" id="vas-notes" value="${v?.notes||''}">
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="TabManors._saveVassal(${JSON.stringify(key)},${v?.id||'null'})">Save</button>
+          <button class="btn btn-primary" onclick="TabManors._saveVassal('${key}',${v?.id||'null'})">Save</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>
@@ -584,7 +584,7 @@ const TabManors = {
         </tr>` : '';
 
       return `
-        <tr class="ledger-summary-row" style="cursor:pointer;" onclick="TabManors._toggleSummaryRow(${JSON.stringify(key)}, ${h.year})">
+        <tr class="ledger-summary-row" style="cursor:pointer;" onclick="TabManors._toggleSummaryRow('${key}', ${h.year})">
           <td style="font-family:var(--font-heading);font-size:0.7rem;color:var(--ink-soft);padding:4px 8px;white-space:nowrap;">${h.year} AD</td>
           <td style="padding:4px 6px;">${luckBadge}</td>
           <td style="padding:4px 6px;">${conflictBadge(h.conflict)}</td>
@@ -597,7 +597,7 @@ const TabManors = {
 
     const footer = hasMore ? `
       <div style="text-align:center;margin-top:6px;">
-        <button class="btn btn-ghost" style="font-size:0.55rem;letter-spacing:0.12em;" onclick="TabManors._toggleHistorySummary(${JSON.stringify(key)})">
+        <button class="btn btn-ghost" style="font-size:0.55rem;letter-spacing:0.12em;" onclick="TabManors._toggleHistorySummary('${key}')">
           ${showAll ? '▲ Show last 10 only' : `▼ Show all ${history.length} years`}
         </button>
       </div>` : '';
@@ -670,8 +670,8 @@ const TabManors = {
             <p style="margin:0 0 16px;">${year} AD is already recorded for ${key}.</p>
             <div class="btn-row">
               <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
-              <button class="btn btn-verdigris" onclick="Modal.close(); TabManors.openEditHistory(${JSON.stringify(key)}, ${year})">Edit</button>
-              <button class="btn btn-danger"   onclick="Modal.close(); TabManors._overwriteRecord(${JSON.stringify(key)}, ${year})">Overwrite</button>
+              <button class="btn btn-verdigris" onclick="Modal.close(); TabManors.openEditHistory('${key}', ${year})">Edit</button>
+              <button class="btn btn-danger"   onclick="Modal.close(); TabManors._overwriteRecord('${key}', ${year})">Overwrite</button>
             </div>
           </div>`);
         return;
@@ -834,7 +834,7 @@ const TabManors = {
 
     const RESULTS = ['Critical','Success','Failure','Fumble'];
     const rBtns = (which) => RESULTS.map(r =>
-      `<button class="result-btn" data-val="${r}" onclick="TabManors._setTestResult(${JSON.stringify(key)},${JSON.stringify(which)},${JSON.stringify(r)})">${r}</button>`
+      `<button class="result-btn" data-val="${r}" onclick="TabManors._setTestResult('${key}','${which}','${r}')">${r}</button>`
     ).join('');
 
     const luckOpts     = ['No Result','Boon','Calamity'].map(v=>`<option${wp.luck===v?' selected':''}>${v}</option>`).join('');
@@ -888,8 +888,8 @@ const TabManors = {
       <div id="ry-tb-row" style="display:${wp.stewardResult==='Success'&&wp.fateResult==='Success'?'flex':'none'};align-items:center;gap:10px;margin-bottom:6px;">
         <span class="detail-label" style="white-space:nowrap;color:var(--gold);">Tie — Who wins?</span>
         <div id="ry-tb-btns" class="result-btn-group">
-          <button class="result-btn" data-val="win"  onclick="TabManors._setTestResult(${JSON.stringify(key)},'tb','win')">Steward Wins → Regular</button>
-          <button class="result-btn" data-val="lose" onclick="TabManors._setTestResult(${JSON.stringify(key)},'tb','lose')">Misfortune Wins → Meager</button>
+          <button class="result-btn" data-val="win"  onclick="TabManors._setTestResult('${key}','tb','win')">Steward Wins → Regular</button>
+          <button class="result-btn" data-val="lose" onclick="TabManors._setTestResult('${key}','tb','lose')">Misfortune Wins → Meager</button>
         </div>
       </div>
 
@@ -929,7 +929,7 @@ const TabManors = {
           <div class="detail-field mb-6">
             <div class="detail-label" style="display:flex;justify-content:space-between;align-items:center;">
               Misc Income
-              <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="event.preventDefault();TabManors._addMiscItem('ry-misc-income-list');TabManors._updateRecordCalcs(${JSON.stringify(key)},STORE.getManor(${JSON.stringify(key)}))">＋ Add</button>
+              <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="event.preventDefault();TabManors._addMiscItem('ry-misc-income-list');TabManors._updateRecordCalcs('${key}',STORE.getManor('${key}'))">＋ Add</button>
             </div>
             <div id="ry-misc-income-list"></div>
           </div>
@@ -963,7 +963,7 @@ const TabManors = {
           <div class="detail-field mb-6">
             <div class="detail-label" style="display:flex;justify-content:space-between;align-items:center;">
               Misc Expenses
-              <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="event.preventDefault();TabManors._addMiscItem('ry-misc-exp-list');TabManors._updateRecordCalcs(${JSON.stringify(key)},STORE.getManor(${JSON.stringify(key)}))">＋ Add</button>
+              <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="event.preventDefault();TabManors._addMiscItem('ry-misc-exp-list');TabManors._updateRecordCalcs('${key}',STORE.getManor('${key}'))">＋ Add</button>
             </div>
             <div id="ry-misc-exp-list"></div>
           </div>
@@ -1027,8 +1027,8 @@ const TabManors = {
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="TabManors._saveHistoryInline(${JSON.stringify(key)})">Save Year</button>
-        <button class="btn btn-ghost"   onclick="TabManors.toggleRecord(${JSON.stringify(key)})">Cancel</button>
+        <button class="btn btn-primary" onclick="TabManors._saveHistoryInline('${key}')">Save Year</button>
+        <button class="btn btn-ghost"   onclick="TabManors.toggleRecord('${key}')">Cancel</button>
       </div>
     </div>`;
   },
@@ -1175,7 +1175,7 @@ const TabManors = {
 
         </div>
         <div class="btn-row mt-16">
-          <button class="btn btn-primary" onclick="TabManors._saveEditHistory(${JSON.stringify(key)},${year})">Save Changes</button>
+          <button class="btn btn-primary" onclick="TabManors._saveEditHistory('${key}',${year})">Save Changes</button>
           <button class="btn btn-ghost"   onclick="Modal.close()">Cancel</button>
         </div>
       </div>`, { wide: true });
@@ -1497,7 +1497,7 @@ const TabManors = {
     const history = [...(m.history||[])].sort((a,b) => b.year - a.year);
     if (!history.length) return `
       <div class="empty-state"><div class="empty-state-text">No history recorded yet</div></div>
-      <div class="btn-row mt-16"><button class="btn btn-verdigris" onclick="TabManors._goToRecord(${JSON.stringify(key)})">+ Record First Year</button></div>`;
+      <div class="btn-row mt-16"><button class="btn btn-verdigris" onclick="TabManors._goToRecord('${key}')">+ Record First Year</button></div>`;
 
     const rows = history.map(h => {
       const yKey   = `${key}-${h.year}`;
@@ -1568,9 +1568,9 @@ const TabManors = {
                 </div>
                 ${noteSnip ? `<div style="margin-top:10px;font-size:0.82rem;color:var(--ink-soft);font-style:italic;white-space:pre-wrap;">${noteSnip}</div>` : ''}
                 <div style="margin-top:12px;display:flex;gap:6px;">
-                  <button class="btn btn-ghost" style="font-size:0.55rem;padding:2px 10px;" onclick="event.stopPropagation();TabManors.openEditHistory(${JSON.stringify(key)},${h.year})">✎ Edit</button>
-                  <button class="btn btn-ghost" style="font-size:0.55rem;padding:2px 10px;" onclick="event.stopPropagation();TabManors.exportYearSummaryPng(${JSON.stringify(key)},${h.year})">⬇ Export Summary</button>
-                  <button class="btn btn-ghost" style="font-size:0.55rem;padding:2px 10px;color:var(--crimson-mid);border-color:var(--crimson-mid);opacity:0.7;" onclick="event.stopPropagation();TabManors.deleteHistory(${JSON.stringify(key)},${h.year})">✕ Delete</button>
+                  <button class="btn btn-ghost" style="font-size:0.55rem;padding:2px 10px;" onclick="event.stopPropagation();TabManors.openEditHistory('${key}',${h.year})">✎ Edit</button>
+                  <button class="btn btn-ghost" style="font-size:0.55rem;padding:2px 10px;" onclick="event.stopPropagation();TabManors.exportYearSummaryPng('${key}',${h.year})">⬇ Export Summary</button>
+                  <button class="btn btn-ghost" style="font-size:0.55rem;padding:2px 10px;color:var(--crimson-mid);border-color:var(--crimson-mid);opacity:0.7;" onclick="event.stopPropagation();TabManors.deleteHistory('${key}',${h.year})">✕ Delete</button>
                 </div>
               </div>
 
@@ -1579,7 +1579,7 @@ const TabManors = {
         </tr>` : '';
 
       return `
-        <tr class="history-row" style="cursor:pointer;" onclick="TabManors._toggleRow(${JSON.stringify(yKey)})">
+        <tr class="history-row" style="cursor:pointer;" onclick="TabManors._toggleRow('${yKey}')">
           <td>
             <span style="font-family:var(--font-heading);font-size:0.88rem;">${h.year} AD</span>
           </td>
@@ -1611,7 +1611,7 @@ const TabManors = {
         </table>
       </div>
       <div class="btn-row mt-16">
-        <button class="btn btn-verdigris" onclick="TabManors._goToRecord(${JSON.stringify(key)})">+ Record Year</button>
+        <button class="btn btn-verdigris" onclick="TabManors._goToRecord('${key}')">+ Record Year</button>
       </div>`;
   },
 
@@ -1688,8 +1688,8 @@ const TabManors = {
           ${i.dvNote ? `<div class="improvement-note">${i.dvNote}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-self:center;margin-left:8px;">
-          <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditImprovement(${JSON.stringify(key)},${i.id})">Edit</button>
-          <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors._toggleImprovementStatus(${JSON.stringify(key)},${i.id},${JSON.stringify(i.status)})">
+          <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditImprovement('${key}',${i.id})">Edit</button>
+          <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors._toggleImprovementStatus('${key}',${i.id},'${i.status}')">
             ${i.status==='active'?'Deactivate':'Restore'}
           </button>
         </div>
@@ -1704,7 +1704,7 @@ const TabManors = {
         <div class="improvement-list" style="opacity:0.6;">${renderList(inactive)}</div>` : ''}
 
       <div class="btn-row mt-16">
-        <button class="btn btn-verdigris" onclick="TabManors.openAddImprovement(${JSON.stringify(key)})">+ Add Improvement</button>
+        <button class="btn btn-verdigris" onclick="TabManors.openAddImprovement('${key}')">+ Add Improvement</button>
       </div>`;
   },
 
@@ -1742,8 +1742,8 @@ const TabManors = {
           ${buildNpcSearchHtml('pp-search', 'pp-id')}
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="TabManors._savePersonnel(${JSON.stringify(key)},${JSON.stringify(field)})">Set</button>
-          ${current ? `<button class="btn btn-ghost" onclick="TabManors._clearPersonnel(${JSON.stringify(key)},${JSON.stringify(field)})">Clear</button>` : ''}
+          <button class="btn btn-primary" onclick="TabManors._savePersonnel('${key}','${field}')">Set</button>
+          ${current ? `<button class="btn btn-ghost" onclick="TabManors._clearPersonnel('${key}','${field}')">Clear</button>` : ''}
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`, {
@@ -1800,7 +1800,7 @@ const TabManors = {
           Used in the Stewardship vs Fate check each manor year.
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="TabManors._saveStewardSkill(${JSON.stringify(key)})">Save</button>
+          <button class="btn btn-primary" onclick="TabManors._saveStewardSkill('${key}')">Save</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`);
@@ -1851,7 +1851,7 @@ const TabManors = {
           </div>
         </div>
         <div class="btn-row mt-12">
-          <button class="btn btn-primary" onclick="TabManors._saveManorNotes(${JSON.stringify(key)})">Save</button>
+          <button class="btn btn-primary" onclick="TabManors._saveManorNotes('${key}')">Save</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`, {wide: false});
@@ -2075,7 +2075,7 @@ const TabManors = {
         </div>
 
         <div class="btn-row mt-16">
-          <button class="btn btn-primary" onclick="TabManors._saveHistory(${JSON.stringify(key)})">Save Year</button>
+          <button class="btn btn-primary" onclick="TabManors._saveHistory('${key}')">Save Year</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`, { wide: true });
@@ -2164,7 +2164,7 @@ const TabManors = {
           <textarea class="edit-input edit-textarea" id="ai-notes" placeholder="Additional notes…"></textarea>
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="TabManors._saveImprovement(${JSON.stringify(key)})">Add</button>
+          <button class="btn btn-primary" onclick="TabManors._saveImprovement('${key}')">Add</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`);
@@ -2225,7 +2225,7 @@ const TabManors = {
           <textarea class="edit-input edit-textarea" id="ei-notes">${i.notes||''}</textarea>
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="TabManors._saveEditImprovement(${JSON.stringify(key)},${imprId})">Save</button>
+          <button class="btn btn-primary" onclick="TabManors._saveEditImprovement('${key}',${imprId})">Save</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`);
@@ -2280,7 +2280,7 @@ const TabManors = {
           <input class="edit-input" id="ad-year-repaired" type="number" placeholder="${STORE.year + 1}">
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="TabManors._saveDamage(${JSON.stringify(key)})">Log</button>
+          <button class="btn btn-primary" onclick="TabManors._saveDamage('${key}')">Log</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`);
@@ -2314,7 +2314,7 @@ const TabManors = {
           <textarea class="edit-input edit-textarea" id="ed-notes">${d.notes||''}</textarea>
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="TabManors._saveEditDamage(${JSON.stringify(key)},${id})">Save</button>
+          <button class="btn btn-primary" onclick="TabManors._saveEditDamage('${key}',${id})">Save</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`);
@@ -2468,12 +2468,12 @@ const TabManors = {
               ${lastRollHtml}
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
-              ${needsRoll && !readOnly ? `<button class="btn btn-ghost" style="padding:2px 9px;font-size:0.52rem;" onclick="TabManors.openSurvivalRoll(${JSON.stringify(key)},${JSON.stringify(h.id)})">🎲 Roll</button>` : ''}
+              ${needsRoll && !readOnly ? `<button class="btn btn-ghost" style="padding:2px 9px;font-size:0.52rem;" onclick="TabManors.openSurvivalRoll('${key}','${h.id}')">🎲 Roll</button>` : ''}
               ${!readOnly ? `
-                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditHorse(${JSON.stringify(key)},${JSON.stringify(h.id)})">✎</button>
-                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;color:var(--crimson-mid);" onclick="TabManors._killHorse(${JSON.stringify(key)},${JSON.stringify(h.id)},'dead')">✝</button>
-                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;color:var(--gold);" onclick="TabManors._killHorse(${JSON.stringify(key)},${JSON.stringify(h.id)},'ruined')">⚠</button>
-                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;opacity:0.5;" onclick="TabManors._deleteHorse(${JSON.stringify(key)},${JSON.stringify(h.id)})">🗑</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditHorse('${key}','${h.id}')">✎</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;color:var(--crimson-mid);" onclick="TabManors._killHorse('${key}','${h.id}','dead')">✝</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;color:var(--gold);" onclick="TabManors._killHorse('${key}','${h.id}','ruined')">⚠</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;opacity:0.5;" onclick="TabManors._deleteHorse('${key}','${h.id}')">🗑</button>
               ` : ''}
             </div>
           </div>
@@ -2500,17 +2500,17 @@ const TabManors = {
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
               <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.85rem;${!canFav ? 'opacity:0.35;' : ''}"
-                onclick="TabManors._toggleFavorite(${JSON.stringify(key)},${JSON.stringify(h.id)})" ${favDisabled}>
+                onclick="TabManors._toggleFavorite('${key}','${h.id}')" ${favDisabled}>
                 ${h.favorite ? '★' : '☆'}
               </button>
-              <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;opacity:0.5;" onclick="TabManors._deleteHorse(${JSON.stringify(key)},${JSON.stringify(h.id)})">🗑</button>
+              <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;opacity:0.5;" onclick="TabManors._deleteHorse('${key}','${h.id}')">🗑</button>
             </div>
           </div>
         </div>`;
     };
 
     const addBtn = readOnly ? '' :
-      `<button class="btn btn-verdigris" onclick="TabManors.openAddHorse(${JSON.stringify(key)})" style="font-size:0.72rem;">+ Add Horse</button>`;
+      `<button class="btn btn-verdigris" onclick="TabManors.openAddHorse('${key}')" style="font-size:0.72rem;">+ Add Horse</button>`;
 
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -2573,7 +2573,7 @@ const TabManors = {
           <textarea id="ah-notes" class="form-input" rows="2" placeholder="Markings, history…" style="resize:vertical;"></textarea>
         </div>
         <div class="btn-row">
-          <button class="btn btn-verdigris" onclick="TabManors._saveNewHorse(${JSON.stringify(key)})">Add Horse</button>
+          <button class="btn btn-verdigris" onclick="TabManors._saveNewHorse('${key}')">Add Horse</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
         </div>
       </div>`);
@@ -2672,9 +2672,9 @@ const TabManors = {
           <textarea id="eh-notes" class="form-input" rows="2" style="resize:vertical;">${esc(h.notes || '')}</textarea>
         </div>
         <div class="btn-row">
-          <button class="btn btn-verdigris" onclick="TabManors._saveEditHorse(${JSON.stringify(key)},${JSON.stringify(horseId)})">Save</button>
+          <button class="btn btn-verdigris" onclick="TabManors._saveEditHorse('${key}','${horseId}')">Save</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
-          <button class="btn btn-ghost" style="color:var(--crimson-mid);margin-left:auto;" onclick="TabManors._deleteHorse(${JSON.stringify(key)},${JSON.stringify(horseId)})">Delete</button>
+          <button class="btn btn-ghost" style="color:var(--crimson-mid);margin-left:auto;" onclick="TabManors._deleteHorse('${key}','${horseId}')">Delete</button>
         </div>
       </div>`);
   },
@@ -2785,7 +2785,7 @@ const TabManors = {
             Are you rolling for a different year, or testing?
           </div>
           <div class="btn-row">
-            <button class="btn btn-verdigris" onclick="Modal.close();TabManors.openSurvivalRoll(${JSON.stringify(key)},${JSON.stringify(horseId)},true)">Yes, Roll Anyway</button>
+            <button class="btn btn-verdigris" onclick="Modal.close();TabManors.openSurvivalRoll('${key}','${horseId}',true)">Yes, Roll Anyway</button>
             <button class="btn btn-ghost" onclick="Modal.close();TabManors._noRecordYet()">No, Not Yet</button>
           </div>
         </div>`);
@@ -2837,7 +2837,7 @@ const TabManors = {
         </div>
 
         <div class="btn-row">
-          <button class="btn btn-verdigris" onclick="TabManors._confirmSurvivalRoll(${JSON.stringify(key)},${JSON.stringify(horseId)},${roll},${modified},${JSON.stringify(result)})">Confirm & Record</button>
+          <button class="btn btn-verdigris" onclick="TabManors._confirmSurvivalRoll('${key}','${horseId}',${roll},${modified},'${result}')">Confirm & Record</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel (reroll)</button>
         </div>
       </div>`);
