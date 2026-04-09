@@ -55,7 +55,7 @@ const TabManors = {
     const tabsHtml = keys.map(k => {
       const hh  = STORE.getHousehold(k);
       const col = hh ? hh.colour : '#5a5040';
-      return `<button class="manor-tab${this._current===k?' active':''}" data-key="${esc(k)}" onclick="TabManors.selectManor(${JSON.stringify(k)})">
+      return `<button class="manor-tab${this._current===k?' active':''}" data-key="${esc(k)}" onclick="TabManors.selectManor(this.dataset.key)">
         <span class="hh-dot" style="background:${col};"></span>${esc(k)}
       </button>`;
     }).join('');
@@ -118,7 +118,7 @@ const TabManors = {
       const hh  = STORE.getHousehold(ownKey);
       const col = hh ? hh.colour : '#5a5040';
       const playerSecBtns = ['overview','stables'].map(s =>
-        `<button class="btn ${this._playerSection===s?'btn-primary':'btn-ghost'}" style="font-size:0.58rem;" onclick="TabManors.setPlayerSection(${JSON.stringify(s)})">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
+        `<button class="btn ${this._playerSection===s?'btn-primary':'btn-ghost'}" style="font-size:0.58rem;" onclick="TabManors.setPlayerSection('${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
       ).join('');
       const playerContent = this._playerSection === 'stables'
         ? this._renderStables(m, ownKey, col, true)
@@ -166,7 +166,7 @@ const TabManors = {
 
     const sections = ['overview','history','improvements','stables'];
     const secBtns  = sections.map(s =>
-      `<button class="btn ${this._section===s?'btn-primary':'btn-ghost'}" style="font-size:0.58rem;" onclick="TabManors.setSection(${JSON.stringify(s)})">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
+      `<button class="btn ${this._section===s?'btn-primary':'btn-ghost'}" style="font-size:0.58rem;" onclick="TabManors.setSection('${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
     ).join('');
 
     let content = '';
