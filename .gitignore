@@ -12,6 +12,7 @@ binder-save.json
 announcements.json
 submissions.json
 presence.json
+broadcast_tasks.json
 # GM session notes (runtime, not source-controlled)
 comments.json
 
@@ -20,6 +21,9 @@ player_data/
 
 # ===== Local backups =====
 backups/
+
+# ===== Planning & internal docs =====
+planning/
 
 # ===== Claude Code local config =====
 .claude/
