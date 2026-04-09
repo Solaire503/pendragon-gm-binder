@@ -347,7 +347,7 @@ function buildNpcCardHtml(npc, opts = {}) {
     'Niece/Nephew':    ['Niece/Nephew of',          'Aunt/Uncle of'],
     'Grandparent':     ['Grandparent of',           'Grandchild of'],
     'Grandchild':      ['Grandchild of',            'Grandparent of'],
-    'Squire':          ['Squire',                   'Squired under'],
+    'Squire':          ['Squire',                   'Squire under'],
     'Former Squire':   ['Former squire',            'Formerly squired under'],
     'Page':            ['Page',                     'Page under'],
     'Vassal':          ['Vassal of',                'Liege of'],
