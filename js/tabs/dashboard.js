@@ -136,6 +136,8 @@ const TabDashboard = {
           </div>
         </div>
 
+        ${typeof TasksManager !== 'undefined' ? TasksManager.buildDashboardWidget() : ''}
+
         <div class="card">
           <div class="section-title">Households</div>
           ${hhHtml}
@@ -514,6 +516,7 @@ const TabDashboard = {
         <!-- CARDS GRID -->
         <div class="dashboard-layout">
           ${attentionHtml}
+          ${typeof TasksManager !== 'undefined' ? TasksManager.buildDashboardWidget() : ''}
           ${manorHtml}
           ${this._buildPoiWidget(year)}
           ${typeof Notes !== 'undefined' ? Notes.buildDashboardWidget() : ''}

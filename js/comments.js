@@ -44,8 +44,9 @@ const Comments = {
       ? topLevel.map(c => this._renderComment(c, npcId, comments, username, false)).join('')
       : '<div class="text-muted" style="font-style:italic;padding:4px 0;font-size:0.85rem;">No comments yet.</div>';
 
+    const showForm = !(typeof isObserver !== 'undefined' && isObserver());
     return `<div id="comments-${esc(npcId)}" class="comments-section">
-      ${addFormHtml}
+      ${showForm ? addFormHtml : ''}
       <div class="comments-list">${listHtml}</div>
     </div>`;
   },

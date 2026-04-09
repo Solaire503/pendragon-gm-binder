@@ -1646,6 +1646,36 @@ html.is-player .player-readonly-banner {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── TASKS & REMINDERS ──────────────────────────────────────── */
+.tasks-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 0 5px 6px;
+  border-bottom: 1px dotted var(--vellum-deep);
+  border-left: 3px solid transparent;
+}
+.tasks-item:last-of-type { border-bottom: none; }
+.tasks-item-priority { border-left-color: var(--crimson-mid); }
+.tasks-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.tasks-action-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-soft);
+  padding: 0 3px;
+  font-size: 0.75rem;
+  transition: opacity 0.15s, color 0.15s;
+  line-height: 1;
+}
+.tasks-action-del { color: var(--crimson-mid) !important; }
+.tasks-item:hover .tasks-action-btn { opacity: 1; }
+
 /* ── BROADCAST BANNER ───────────────────────────────────────── */
 .broadcast-banner {
   display: flex;

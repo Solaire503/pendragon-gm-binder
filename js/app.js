@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '2.9.1';
 
 // ── FEATURES GUIDE ────────────────────────────────────────────
 // Each entry: { heading, icon, items:[], playerOnly? }
@@ -13,6 +13,17 @@ const FEATURES = [
   {
     divider: true,
     label: 'Your View — Player Knight Features',
+  },
+  {
+    heading: 'Tasks & Reminders',
+    icon: '📋',
+    items: [
+      'A sticky task board on your dashboard — write reminders that persist every time you log in.',
+      'Check off a task to complete it. Completed tasks collapse into a "Completed" section and disappear after 90 days.',
+      'Mark any task as ⚑ High Priority to make it bold with a red left border — hard to miss.',
+      'Use "📨 Assign task to GM" to send a reminder directly to the GM\'s board (your name will be attached so they know who sent it).',
+      'The GM can also broadcast tasks to all players at once — look for the 📢 badge on shared tasks.',
+    ],
   },
   {
     heading: 'Your Dashboard',
@@ -150,12 +161,23 @@ const FEATURES = [
     heading: 'Caliburn — Discord Bot',
     icon: '⚔',
     items: [
-      'Caliburn is the campaign\'s Discord bot — always online, no setup needed.',
+      'Caliburn is the campaign\'s Discord bot — always online, no setup needed. All commands require the Knight of the Realm role.',
       '/roll, /skill, /passion, /oppose, /trait, /damage — all Pendragon 6e dice commands.',
       '/npc <name> — look up any NPC. If the name isn\'t exact, Caliburn offers up to 5 "Did you mean?" suggestions as buttons.',
       '/chronicle — recent campaign events. /year — current campaign year.',
       '/feast and /justice — AI-generated dark ages feast dishes and manor justice events.',
       '/speak <message> — address Caliburn, the sword of Britain, directly. He has opinions.',
+      '/bugreport — submit a bug report for the GM\'s Binder. Opens a form with Summary and Details fields. Creates a GitHub issue automatically and notifies the GM.',
+    ],
+  },
+  {
+    heading: 'Observer Accounts',
+    icon: '👁',
+    items: [
+      'Observer is a read-only role for the Binder — ideal for showing off the campaign to a guest or new player without risk of anything being changed.',
+      'Observers see the full GM overview: all NPCs, manors, families, chronicle, roster, and dashboard panels.',
+      'All write controls are hidden from the UI and blocked on the server — nothing can be accidentally modified.',
+      'Create an Observer account via GM Tools → Manage Users. Set role to Observer — no household assignment needed.',
     ],
   },
 
@@ -342,6 +364,45 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '2.9.1',
+    date:    '2026-04-09',
+    sections: [
+      {
+        heading: 'New Feature — Observer Role',
+        items: [
+          'New "Observer" account role — full read access to the GM overview dashboard with zero write capability.',
+          'Observers see all NPCs, manors, families, chronicle, and roster but cannot add tasks, post comments, or modify anything.',
+          'All write attempts are blocked server-side regardless of UI. Safe to hand out as a showcase or demo account.',
+          'Create via GM Tools → Manage Users — Observer is now a selectable role alongside Player and GM.',
+        ],
+      },
+      {
+        heading: 'Caliburn Bot',
+        items: [
+          '/bugreport command — opens a two-field modal (Summary + Details). Automatically creates a labelled GitHub issue on the Binder repo and DMs the GM with a direct link.',
+          'All commands now restricted to the Knight of the Realm Discord role — unauthorised users see a quiet ephemeral response.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '2.9.0',
+    date:    '2026-04-09',
+    sections: [
+      {
+        heading: 'New Feature — Tasks & Reminders',
+        items: [
+          'Dashboard widget for both GM and players — sticky task/reminder list that persists across sessions.',
+          'Personal tasks: add, edit, delete, and check off your own reminders. Completed items collapse into a subtab and auto-purge after 90 days.',
+          'High Priority flag — marks a task with a red left border and bold text so it stands out at a glance.',
+          'GM Broadcast: push a task to all players\' dashboards simultaneously. Edit text/priority or revoke at any time.',
+          'Player → GM assignment: players can send a reminder directly to the GM\'s task board (with their name attached).',
+          'Widget position: players see Tasks between Matters Requiring Attention and Manor Summary; GM sees it between Roster at a Glance and Households.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.8.0',
     date:    '2026-04-08',
@@ -2309,8 +2370,9 @@ const APP = {
         <td style="padding:8px 6px;">
           <select class="edit-select um-field" data-username="${esc(u.username)}" data-field="role"
             style="width:90px;${inputSty}">
-            <option value="player" ${u.role === 'player' ? 'selected' : ''}>Player</option>
-            <option value="gm"     ${u.role === 'gm'     ? 'selected' : ''}>GM</option>
+            <option value="player"   ${u.role === 'player'   ? 'selected' : ''}>Player</option>
+            <option value="gm"       ${u.role === 'gm'       ? 'selected' : ''}>GM</option>
+            <option value="observer" ${u.role === 'observer' ? 'selected' : ''}>Observer</option>
           </select>
         </td>
         <td style="padding:8px 6px;">
@@ -2368,6 +2430,7 @@ const APP = {
               <select class="edit-select" id="umNewRole" style="width:100%;">
                 <option value="player">Player</option>
                 <option value="gm">GM</option>
+                <option value="observer">Observer</option>
               </select>
             </div>
           </div>

@@ -2,8 +2,9 @@
    COMPONENTS.JS — Reusable UI building blocks
 ══════════════════════════════════════════════════════════════ */
 
-// Role helper — used throughout to gate GM-only UI
-const isGM = () => window.__USER__?.role === 'gm';
+// Role helpers — used throughout to gate role-specific UI
+const isGM       = () => window.__USER__?.role === 'gm';
+const isObserver = () => window.__USER__?.role === 'observer';
 
 // HTML escape helper — use whenever interpolating untrusted data into innerHTML
 const esc = s => String(s == null ? '' : s)

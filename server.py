@@ -28,14 +28,15 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '2.7.1'   # keep in sync with js/app.js
+APP_VERSION  = '2.9.1'   # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
 USERS_FILE   = BASE_DIR / 'users.json'
 BACKUP_DIR   = BASE_DIR / 'backups'
 PLAYER_DATA_DIR  = BASE_DIR / 'player_data'
-SUBMISSIONS_FILE = BASE_DIR / 'submissions.json'
+SUBMISSIONS_FILE     = BASE_DIR / 'submissions.json'
+BROADCAST_TASKS_FILE = BASE_DIR / 'broadcast_tasks.json'
 CERT_FILE    = BASE_DIR / 'cert.pem'
 KEY_FILE     = BASE_DIR / 'key.pem'
 PORT         = 8765
@@ -175,15 +176,19 @@ def _csrf_check():
     """Verify that state-changing requests originate from this app's own origin.
 
     Strategy (in order):
-    1. Compare Origin header to Host — the standard check for fetch/XHR.
-    2. If no Origin, compare Referer to Host — fallback for same-origin POSTs
+    1. Block observer accounts — they are always read-only.
+    2. Compare Origin header to Host — the standard check for fetch/XHR.
+    3. If no Origin, compare Referer to Host — fallback for same-origin POSTs
        where some browsers omit Origin.
-    3. If neither header is present, reject the request outright.
+    4. If neither header is present, reject the request outright.
 
     The old localhost bypass is intentionally removed: behind Cloudflare Tunnel
     every request arrives from 127.0.0.1, which would skip all CSRF checks.
     Modern browsers always include Origin or Referer on same-origin POSTs.
     """
+    if session.get('role') == 'observer':
+        return jsonify({'error': 'Observer accounts are read-only'}), 403
+
     host = request.headers.get('Host', '')
     if not host:
         return jsonify({'error': 'CSRF check failed'}), 403
@@ -859,7 +864,7 @@ def index():
     early_script = (
         f'<script>window.__USER__={user_data};'
         f'(function(){{var r=window.__USER__.role;'
-        f'document.documentElement.classList.add(r==="gm"?"is-gm":"is-player")}})()</script>\n'
+        f'document.documentElement.classList.add(r==="gm"?"is-gm":r==="observer"?"is-observer":"is-player")}})()</script>\n'
     )
     html = html.replace('<head>', '<head>\n' + early_script, 1)
     # Cache busting: append ?v=VERSION to all .js and .css asset URLs so
@@ -1775,6 +1780,270 @@ def api_save_pins():
     return jsonify({'ok': True})
 
 
+# ── TASKS & REMINDERS ─────────────────────────────────────────────────────────
+
+_broadcast_tasks_lock = threading.Lock()
+_TASK_TEXT_MAX    = 500
+_PERSONAL_TASKS_MAX = 100
+
+
+def _read_personal_tasks(username: str) -> list:
+    """Load tasks.json for a user, pruning completed tasks older than 90 days."""
+    path = PLAYER_DATA_DIR / username / 'tasks.json'
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(data, list):
+            return []
+        cutoff = time.time() - 90 * 86400
+        return [t for t in data if isinstance(t, dict)
+                and not (t.get('completed') and (t.get('completedAt') or 0) < cutoff)]
+    except Exception:
+        return []
+
+
+def _write_personal_tasks(username: str, tasks: list) -> None:
+    d = PLAYER_DATA_DIR / username
+    d.mkdir(parents=True, exist_ok=True)
+    _atomic_write(d / 'tasks.json', json.dumps(tasks, indent=2))
+
+
+def _read_broadcast_tasks() -> list:
+    """Load broadcast_tasks.json, pruning revoked tasks older than 90 days."""
+    if not BROADCAST_TASKS_FILE.exists():
+        return []
+    try:
+        data = json.loads(BROADCAST_TASKS_FILE.read_text(encoding='utf-8'))
+        if not isinstance(data, list):
+            return []
+        cutoff = time.time() - 90 * 86400
+        return [t for t in data if isinstance(t, dict)
+                and (not t.get('revokedAt') or t['revokedAt'] > cutoff)]
+    except Exception:
+        return []
+
+
+def _write_broadcast_tasks(tasks: list) -> None:
+    _atomic_write(BROADCAST_TASKS_FILE, json.dumps(tasks, indent=2))
+
+
+def _validate_task_text(text) -> 'str | None':
+    if not isinstance(text, str) or not text.strip():
+        return 'Task text must be a non-empty string'
+    if len(text) > _TASK_TEXT_MAX:
+        return f'Task text must be \u2264{_TASK_TEXT_MAX} characters'
+    return None
+
+
+@app.route('/api/tasks')
+@login_required
+def api_get_tasks():
+    """Return current user's personal tasks + active broadcast tasks."""
+    username   = session['username']
+    personal   = _read_personal_tasks(username)
+    broadcasts = []
+    for t in _read_broadcast_tasks():
+        if t.get('revokedAt'):
+            continue
+        broadcasts.append({
+            'id':          t['id'],
+            'text':        t['text'],
+            'priority':    bool(t.get('priority', False)),
+            'createdAt':   t['createdAt'],
+            'completedAt': (t.get('completedBy') or {}).get(username),
+        })
+    return jsonify({'personal': personal, 'broadcast': broadcasts})
+
+
+@app.route('/api/tasks', methods=['POST'])
+@login_required
+def api_create_task():
+    """Create a personal task for the current user."""
+    err = _csrf_check()
+    if err: return err
+    data    = request.get_json(force=True, silent=True) or {}
+    err_msg = _validate_task_text(data.get('text'))
+    if err_msg:
+        return jsonify({'error': err_msg}), 400
+    import uuid as _uuid
+    task = {
+        'id':          str(_uuid.uuid4()),
+        'text':        data['text'].strip(),
+        'priority':    bool(data.get('priority', False)),
+        'completed':   False,
+        'completedAt': None,
+        'createdAt':   time.time(),
+    }
+    with _player_lock(session['username']):
+        tasks = _read_personal_tasks(session['username'])
+        if len(tasks) >= _PERSONAL_TASKS_MAX:
+            return jsonify({'error': f'Maximum {_PERSONAL_TASKS_MAX} tasks per user'}), 400
+        tasks.append(task)
+        _write_personal_tasks(session['username'], tasks)
+    return jsonify({'ok': True, 'task': task})
+
+
+@app.route('/api/tasks/<task_id>', methods=['PUT'])
+@login_required
+def api_update_task(task_id: str):
+    """Edit text/priority or toggle completed on a personal task."""
+    err = _csrf_check()
+    if err: return err
+    if not task_id or len(task_id) > 60:
+        return jsonify({'error': 'Invalid task ID'}), 400
+    data = request.get_json(force=True, silent=True) or {}
+    with _player_lock(session['username']):
+        tasks = _read_personal_tasks(session['username'])
+        task  = next((t for t in tasks if t.get('id') == task_id), None)
+        if not task:
+            return jsonify({'error': 'Task not found'}), 404
+        if 'text' in data:
+            err_msg = _validate_task_text(data['text'])
+            if err_msg:
+                return jsonify({'error': err_msg}), 400
+            task['text'] = data['text'].strip()
+        if 'priority' in data:
+            task['priority'] = bool(data['priority'])
+        if 'completed' in data:
+            task['completed']   = bool(data['completed'])
+            task['completedAt'] = time.time() if task['completed'] else None
+        _write_personal_tasks(session['username'], tasks)
+    return jsonify({'ok': True, 'task': task})
+
+
+@app.route('/api/tasks/<task_id>', methods=['DELETE'])
+@login_required
+def api_delete_task(task_id: str):
+    """Delete a personal task owned by the current user."""
+    err = _csrf_check()
+    if err: return err
+    if not task_id or len(task_id) > 60:
+        return jsonify({'error': 'Invalid task ID'}), 400
+    with _player_lock(session['username']):
+        tasks    = _read_personal_tasks(session['username'])
+        filtered = [t for t in tasks if t.get('id') != task_id]
+        if len(filtered) == len(tasks):
+            return jsonify({'error': 'Task not found'}), 404
+        _write_personal_tasks(session['username'], filtered)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/tasks/broadcast', methods=['POST'])
+@gm_required
+def api_create_broadcast_task():
+    """GM: create a broadcast task visible to all users."""
+    err = _csrf_check()
+    if err: return err
+    data    = request.get_json(force=True, silent=True) or {}
+    err_msg = _validate_task_text(data.get('text'))
+    if err_msg:
+        return jsonify({'error': err_msg}), 400
+    import uuid as _uuid
+    task = {
+        'id':          str(_uuid.uuid4()),
+        'text':        data['text'].strip(),
+        'priority':    bool(data.get('priority', False)),
+        'createdAt':   time.time(),
+        'createdBy':   session['username'],
+        'revokedAt':   None,
+        'completedBy': {},
+    }
+    with _broadcast_tasks_lock:
+        tasks = _read_broadcast_tasks()
+        if len(tasks) >= 200:
+            return jsonify({'error': 'Maximum 200 broadcast tasks'}), 400
+        tasks.append(task)
+        _write_broadcast_tasks(tasks)
+    return jsonify({'ok': True, 'task': task})
+
+
+@app.route('/api/tasks/broadcast/<task_id>', methods=['PUT'])
+@gm_required
+def api_update_broadcast_task(task_id: str):
+    """GM: edit text/priority or revoke a broadcast task."""
+    err = _csrf_check()
+    if err: return err
+    if not task_id or len(task_id) > 60:
+        return jsonify({'error': 'Invalid task ID'}), 400
+    data = request.get_json(force=True, silent=True) or {}
+    with _broadcast_tasks_lock:
+        tasks = _read_broadcast_tasks()
+        task  = next((t for t in tasks if t.get('id') == task_id), None)
+        if not task:
+            return jsonify({'error': 'Task not found'}), 404
+        if 'text' in data:
+            err_msg = _validate_task_text(data['text'])
+            if err_msg:
+                return jsonify({'error': err_msg}), 400
+            task['text'] = data['text'].strip()
+        if 'priority' in data:
+            task['priority'] = bool(data['priority'])
+        if data.get('revoke'):
+            task['revokedAt'] = time.time()
+        _write_broadcast_tasks(tasks)
+    return jsonify({'ok': True, 'task': task})
+
+
+@app.route('/api/tasks/broadcast/<task_id>/complete', methods=['POST'])
+@login_required
+def api_complete_broadcast_task(task_id: str):
+    """Toggle the current user's completion of a broadcast task."""
+    err = _csrf_check()
+    if err: return err
+    if not task_id or len(task_id) > 60:
+        return jsonify({'error': 'Invalid task ID'}), 400
+    username = session['username']
+    with _broadcast_tasks_lock:
+        tasks = _read_broadcast_tasks()
+        task  = next((t for t in tasks if t.get('id') == task_id
+                      and not t.get('revokedAt')), None)
+        if not task:
+            return jsonify({'error': 'Task not found'}), 404
+        cb = task.setdefault('completedBy', {})
+        if username in cb:
+            del cb[username]
+            completed = False
+        else:
+            cb[username]  = time.time()
+            completed = True
+        _write_broadcast_tasks(tasks)
+    return jsonify({'ok': True, 'completed': completed})
+
+
+@app.route('/api/tasks/assign-gm', methods=['POST'])
+@login_required
+def api_assign_task_to_gm():
+    """Any logged-in user: add a task to the GM's personal task list."""
+    err = _csrf_check()
+    if err: return err
+    data    = request.get_json(force=True, silent=True) or {}
+    err_msg = _validate_task_text(data.get('text'))
+    if err_msg:
+        return jsonify({'error': err_msg}), 400
+    gm_username = next(
+        (u['username'] for u in load_users() if u.get('role') == 'gm'), None)
+    if not gm_username:
+        return jsonify({'error': 'No GM account found'}), 404
+    import uuid as _uuid
+    task = {
+        'id':          str(_uuid.uuid4()),
+        'text':        data['text'].strip(),
+        'priority':    False,
+        'completed':   False,
+        'completedAt': None,
+        'createdAt':   time.time(),
+        'assignedBy':  session['username'],
+    }
+    with _player_lock(gm_username):
+        tasks = _read_personal_tasks(gm_username)
+        if len(tasks) >= _PERSONAL_TASKS_MAX:
+            return jsonify({'error': 'GM task list is full'}), 400
+        tasks.append(task)
+        _write_personal_tasks(gm_username, tasks)
+    return jsonify({'ok': True})
+
+
 # ── NOTES ─────────────────────────────────────────────────────────────────────
 
 _NOTES_DEFAULTS = {'general': '', 'manor_notes': '', 'impressions': {}}
@@ -2205,8 +2474,8 @@ def api_create_user():
         return jsonify({'error': 'Username must be 3-30 chars, alphanumeric/underscore/hyphen only.'}), 400
     if len(password) < 10:
         return jsonify({'error': 'Password must be at least 10 characters.'}), 400
-    if role not in ('gm', 'player'):
-        return jsonify({'error': 'Role must be gm or player.'}), 400
+    if role not in ('gm', 'player', 'observer'):
+        return jsonify({'error': 'Role must be gm, player, or observer.'}), 400
     if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
         return jsonify({'error': 'Invalid email format.'}), 400
 
@@ -2255,8 +2524,8 @@ def api_update_user(target_username):
 
     if 'role' in data:
         new_role = data['role']
-        if new_role not in ('gm', 'player'):
-            return jsonify({'error': 'Role must be gm or player.'}), 400
+        if new_role not in ('gm', 'player', 'observer'):
+            return jsonify({'error': 'Role must be gm, player, or observer.'}), 400
         if target['username'].lower() == session['username'].lower():
             return jsonify({'error': 'Cannot change your own role.'}), 400
         gm_count = sum(1 for u in users if u['role'] == 'gm')
