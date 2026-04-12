@@ -63,6 +63,21 @@
   --font-display:   'Cinzel Decorative', 'Times New Roman', serif;
   --font-heading:   'Cinzel', 'Times New Roman', serif;
   --font-body:      'EB Garamond', Georgia, serif;
+
+  /* Z-index scale — global layer ordering.
+     Local stacking contexts (e.g. .modal-close at 20 inside .modal-box)
+     keep raw values since they're scoped to their parent. */
+  --z-pocket:       10;    /* floating panels inside tabs (tree pocket) */
+  --z-banner:       99;    /* broadcast banner — sits just below header */
+  --z-header:       100;   /* app header */
+  --z-presence:     200;   /* presence dropdown — above header */
+  --z-dropdown:     500;   /* nav & header dropdowns */
+  --z-modal:        1000;  /* primary modal overlay */
+  --z-modal-top:    1100;  /* card popup layered above modal */
+  --z-toast:        2000;  /* toast notifications */
+  --z-drawer:       3000;  /* mobile NPC sidebar drawer */
+  --z-hover:        8000;  /* NPC hover card */
+  --z-popover:      9999;  /* NPC search result dropdown */
 }
 
 /* ── RESET ───────────────────────────────────────────────────── */
@@ -104,7 +119,7 @@ body {
   box-shadow: 0 2px 20px var(--shadow);
   position: relative;
   overflow: visible;
-  z-index: 100;
+  z-index: var(--z-header);
 }
 .app-header::before {
   content: '';
@@ -193,7 +208,7 @@ body {
   border: 1px solid rgba(184,134,11,0.45);
   border-top: none;
   min-width: 148px;
-  z-index: 500;
+  z-index: var(--z-dropdown);
   box-shadow: 0 6px 16px rgba(0,0,0,0.6);
 }
 .nav-dropdown-menu.open { display: block; }
@@ -236,7 +251,7 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
   background: linear-gradient(180deg, #1c0f05 0%, #110a03 100%);
   border: 1px solid rgba(184,134,11,0.45);
   min-width: 160px;
-  z-index: 500;
+  z-index: var(--z-dropdown);
   box-shadow: 0 6px 16px rgba(0,0,0,0.6);
 }
 .hdr-dropdown-menu.open { display: block; }
@@ -260,8 +275,8 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
 }
 .hdr-dropdown-item:last-child { border-bottom: none; }
 .hdr-dropdown-item:hover { color: var(--gold-pale); background: rgba(184,134,11,0.1); }
-.hdr-dropdown-item-crimson { color: rgba(220,120,120,0.8) !important; }
-.hdr-dropdown-item-crimson:hover { background: rgba(122,28,28,0.2) !important; }
+.hdr-dropdown-item-crimson { color: rgba(220,120,120,0.8); }
+.hdr-dropdown-item-crimson:hover { background: rgba(122,28,28,0.2); }
 .hdr-dropdown-divider { height: 1px; background: var(--vellum-deep); margin: 4px 0; }
 
 /* HEADER RIGHT */
@@ -1313,8 +1328,10 @@ html.is-player .player-readonly-banner {
 .family-member-item:hover .rel-edit-btn {
   opacity: 0.6;
 }
-.rel-edit-btn:hover {
-  opacity: 1 !important;
+/* Chained selector gains higher specificity than the parent-hover rule above,
+   so we no longer need !important to brighten on direct hover. */
+.family-member-item:hover .rel-edit-btn:hover {
+  opacity: 1;
   color: var(--ink);
 }
 
@@ -1358,7 +1375,7 @@ html.is-player .player-readonly-banner {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 10;
+  z-index: var(--z-pocket);
 }
 .tree-pocket-hdr {
   font-family: var(--font-heading);
@@ -1519,7 +1536,7 @@ html.is-player .player-readonly-banner {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1100;
+  z-index: var(--z-modal-top);
   padding: 20px;
 }
 .card-popup-overlay[hidden] { display: none; }
@@ -1541,7 +1558,7 @@ html.is-player .player-readonly-banner {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   padding: 20px;
   backdrop-filter: blur(2px);
 }
@@ -1562,7 +1579,7 @@ html.is-player .player-readonly-banner {
 .modal-close {
   position: absolute;
   top: 8px; right: 24px;
-  z-index: 20;
+  z-index: 20; /* local stacking inside .modal-box, not part of global scale */
   background: var(--vellum-mid);
   border: 1px solid var(--vellum-deep);
   border-radius: 50%;
@@ -1619,7 +1636,7 @@ html.is-player .player-readonly-banner {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 2000;
+  z-index: var(--z-toast);
   pointer-events: none;
 }
 .toast {
@@ -1674,7 +1691,7 @@ html.is-player .player-readonly-banner {
   transition: opacity 0.15s, color 0.15s;
   line-height: 1;
 }
-.tasks-action-del { color: var(--crimson-mid) !important; }
+.tasks-action-del { color: var(--crimson-mid); }
 .tasks-item:hover .tasks-action-btn { opacity: 1; }
 
 /* ── BROADCAST BANNER ───────────────────────────────────────── */
@@ -1689,7 +1706,7 @@ html.is-player .player-readonly-banner {
   box-shadow: inset 0 1px 0 rgba(255,220,150,0.06), 0 4px 12px var(--shadow);
   animation: broadcastSlide 0.3s ease-out;
   position: relative;
-  z-index: 99;
+  z-index: var(--z-banner);
 }
 @keyframes broadcastSlide {
   from { opacity: 0; transform: translateY(-100%); }
@@ -1811,7 +1828,7 @@ html.is-player .player-readonly-banner {
   border: 1px solid rgba(184,134,11,0.3);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px var(--shadow);
-  z-index: 200;
+  z-index: var(--z-presence);
   padding: 6px 0;
   animation: presenceFadeIn 0.15s ease-out;
 }
@@ -2128,7 +2145,7 @@ html.is-player .player-readonly-banner {
   border-radius: 4px;
   max-height: 220px;
   overflow-y: auto;
-  z-index: 9999;
+  z-index: var(--z-popover);
   box-shadow: 0 4px 16px rgba(0,0,0,0.18);
 }
 .npc-search-item {
@@ -2747,8 +2764,8 @@ html.is-player .player-readonly-banner {
   flex: 1;
 }
 .solo-chr-edit-btn {
-  font-size: 0.6rem !important;
-  padding: 2px 7px !important;
+  font-size: 0.6rem;
+  padding: 2px 7px;
   margin-left: auto;
   opacity: 0.6;
 }
@@ -2778,7 +2795,7 @@ html.is-player .player-readonly-banner {
   white-space: pre-wrap;
 }
 .solo-chr-more-btn {
-  font-size: 0.72rem !important;
+  font-size: 0.72rem;
   width: 100%;
   margin-top: 2px;
   opacity: 0.7;
@@ -2799,7 +2816,7 @@ html.is-player .player-readonly-banner {
 /* ── NPC HOVER CARD ──────────────────────────────────────────── */
 #npcHoverCard {
   position: fixed;
-  z-index: 8000;
+  z-index: var(--z-hover);
   pointer-events: none;
   min-width: 220px;
   max-width: 300px;
@@ -2908,7 +2925,7 @@ html.is-player .player-readonly-banner {
 .horse-card-dead {
   background: var(--vellum);
   opacity: 0.72;
-  border-left-color: var(--ink-soft) !important;
+  border-left-color: var(--ink-soft);
 }
 .horse-type-badge {
   font-family: var(--font-heading);
@@ -3015,8 +3032,8 @@ html.is-player .player-readonly-banner {
 }
 
 .comment-action-btn {
-  font-size: 0.72rem !important;
-  padding: 1px 8px !important;
+  font-size: 0.72rem;
+  padding: 1px 8px;
   opacity: 0.65;
   transition: opacity 0.12s;
 }
@@ -3185,7 +3202,7 @@ html.is-player .player-readonly-banner {
     max-height: none;
     border-left: 2px solid var(--gold);
     box-shadow: -4px 0 24px rgba(0,0,0,0.5);
-    z-index: 3000;
+    z-index: var(--z-drawer);
     transform: translateX(100%);
     transition: transform 0.25s ease;
     background: var(--vellum);
@@ -3218,7 +3235,7 @@ html.is-player .player-readonly-banner {
     position: fixed;
     bottom: 80px;
     right: 16px;
-    z-index: 2999;
+    z-index: calc(var(--z-drawer) - 1); /* sits just below the drawer */
     background: var(--vellum-deep);
     color: var(--ink);
     border: 1px solid var(--gold);

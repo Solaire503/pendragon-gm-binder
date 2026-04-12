@@ -697,10 +697,70 @@ const STORE = {
   },
 
   addRelationship(sourceId, targetId, type, notes) {
+    type = type || 'Other';
+    // Validation: self-relationship is nonsense in every type.
+    if (sourceId === targetId) {
+      if (typeof Toast !== 'undefined') Toast.error('A character cannot have a relationship with themselves');
+      return null;
+    }
+    // Validation: ancestry cycles. If the proposed link would put someone
+    // in their own ancestor chain, reject it — otherwise the family tree
+    // stops being a tree.
+    if (this._wouldCreateAncestryCycle(sourceId, targetId, type)) {
+      if (typeof Toast !== 'undefined') Toast.error('That would create a circular ancestry chain');
+      return null;
+    }
     const id = 'rel-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-    this.relationships.push({ id, sourceId, targetId, type: type || 'Other', notes: notes || '' });
+    this.relationships.push({ id, sourceId, targetId, type, notes: notes || '' });
     this.save();
     return id;
+  },
+
+  // Walks the existing ancestry graph to see whether adding
+  // (sourceId → targetId, type) would close a cycle.
+  // Only meaningful for direct-ancestry types; sibling/spouse/etc. return false.
+  _wouldCreateAncestryCycle(sourceId, targetId, type) {
+    // Normalise to (ancestorId, descendantId) for the proposed link.
+    let ancestorId, descendantId;
+    switch (type) {
+      // "source is a child of target" → target is ancestor
+      case 'Child':
+      case 'Bastard':
+      case 'Adopted Child':
+      case 'Grandchild':
+        ancestorId = targetId; descendantId = sourceId; break;
+      // "source is a parent of target" → source is ancestor
+      case 'Parent':
+      case 'Adoptive Parent':
+      case 'Grandparent':
+        ancestorId = sourceId; descendantId = targetId; break;
+      default:
+        return false; // non-ancestry type — no cycle possible
+    }
+    // Walk upward from ancestorId through existing parent links.
+    // If we hit descendantId, the proposed link would close a loop.
+    const visited = new Set();
+    const stack   = [ancestorId];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (cur === descendantId) return true;
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      this.relationships.forEach(r => {
+        // cur is stored as a child → targetId is a parent of cur
+        if ((r.type === 'Child' || r.type === 'Bastard' || r.type === 'Adopted Child') && r.sourceId === cur) {
+          stack.push(r.targetId);
+        }
+        // cur is stored as a parent's child → sourceId is a parent of cur
+        if ((r.type === 'Parent' || r.type === 'Adoptive Parent') && r.targetId === cur) {
+          stack.push(r.sourceId);
+        }
+        // Grandparent chains — walk two steps at once through the stored link.
+        if (r.type === 'Grandparent' && r.targetId === cur) stack.push(r.sourceId);
+        if (r.type === 'Grandchild' && r.sourceId === cur) stack.push(r.targetId);
+      });
+    }
+    return false;
   },
 
   removeRelationship(id) {

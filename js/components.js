@@ -15,6 +15,61 @@ const esc = s => String(s == null ? '' : s)
   .replace(/'/g, '&#39;');
 window.esc = esc;
 
+// ── API FETCH HELPER ──────────────────────────────────────────
+// Standardized fetch wrapper. All network calls should prefer this over raw
+// fetch() so error handling and JSON parsing are consistent.
+//
+//   API.get('/api/pins')                           → { ok, data, status, error }
+//   API.post('/api/pins', { pins: [...] })         → { ok, data, status, error }
+//
+// Result shape:
+//   { ok: true,  data: <parsed JSON>,  status: 200 }
+//   { ok: false, data: null,           status: 404, error: 'Not found' }
+//   { ok: false, data: null,           status: 0,   error: 'Network error' }
+//
+// Callers decide how to react (toast, throw, silent fallback, etc.).
+const API = {
+  async _request(url, method, body) {
+    const init = { method, headers: {} };
+    if (body != null) {
+      init.headers['Content-Type'] = 'application/json';
+      init.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+    try {
+      const r = await fetch(url, init);
+      const data = await r.json().catch(() => null);
+      if (!r.ok) {
+        return { ok: false, data: null, status: r.status, error: (data && data.error) || `HTTP ${r.status}` };
+      }
+      return { ok: true, data, status: r.status };
+    } catch (e) {
+      return { ok: false, data: null, status: 0, error: (e && e.message) || 'Network error' };
+    }
+  },
+  get(url)         { return this._request(url, 'GET',    null); },
+  post(url, body)  { return this._request(url, 'POST',   body); },
+  put(url, body)   { return this._request(url, 'PUT',    body); },
+  patch(url, body) { return this._request(url, 'PATCH',  body); },
+  del(url)         { return this._request(url, 'DELETE', null); },
+};
+window.API = API;
+
+// Relative-time formatter ("just now", "5m ago", "3d ago", or locale date).
+// Consolidated from former copies in comments.js and notifications.js (LO-4).
+function relTime(ts) {
+  if (!ts) return '';
+  const diff  = Date.now() - new Date(ts).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins  < 1)  return 'just now';
+  if (mins  < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days  < 30) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+window.relTime = relTime;
+
 // ── TOAST ─────────────────────────────────────────────────────
 const Toast = {
   show(msg, type = 'info', duration = 3000) {
@@ -1593,6 +1648,10 @@ const Components = {
     if (!npc) return;
     if (!confirm(`Permanently delete ${npc.name}? This cannot be undone.`)) return;
     STORE.deleteNpc(id);
+    // LO-18 cascade: drop comments, other players' impressions, and every
+    // pin referencing this NPC. Fire-and-forget — client state is already
+    // clean and the GM save sync is independent.
+    API.post(`/api/npc/${encodeURIComponent(id)}/purge`);
     Toast.success('NPC deleted');
     Modal.close();
     APP.refreshCurrentTab();

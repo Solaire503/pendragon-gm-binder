@@ -14,13 +14,8 @@ const PinsManager = {
       return new Promise(res => this._queue.push(res));
     }
     this._loading = true;
-    try {
-      const r = await fetch('/api/pins');
-      const d = await r.json();
-      this._pins = Array.isArray(d.pins) ? d.pins : [];
-    } catch {
-      this._pins = this._pins || [];
-    }
+    const res = await API.get('/api/pins');
+    this._pins = (res.ok && Array.isArray(res.data?.pins)) ? res.data.pins : (this._pins || []);
     this._loading = false;
     this._queue.forEach(cb => cb(this._pins));
     this._queue = [];
@@ -28,13 +23,7 @@ const PinsManager = {
   },
 
   async _save() {
-    try {
-      await fetch('/api/pins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pins: this._pins }),
-      });
-    } catch { /* silent */ }
+    await API.post('/api/pins', { pins: this._pins }); // fire-and-forget
   },
 
   isPinned(npcId) {

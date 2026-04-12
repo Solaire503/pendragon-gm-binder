@@ -23,15 +23,12 @@ const Notifications = {
     if (document.hidden) return;
     if (this._loading) return;
     this._loading = true;
-    try {
-      const r = await fetch('/api/notifications');
-      if (!r.ok) return;
-      const d = await r.json();
-      this._data = Array.isArray(d.notifications) ? d.notifications : [];
+    const res = await API.get('/api/notifications');
+    if (res.ok) {
+      this._data = Array.isArray(res.data?.notifications) ? res.data.notifications : [];
       this._updateBadge();
-    } catch { /* silent */ } finally {
-      this._loading = false;
     }
+    this._loading = false;
   },
 
   // ── BADGE ────────────────────────────────────────────────────
@@ -50,37 +47,28 @@ const Notifications = {
   // ── MARK READ ────────────────────────────────────────────────
   async markRead(ids) {
     if (!ids || !ids.length) return;
-    try {
-      await fetch('/api/notifications/read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      });
-      ids.forEach(id => {
-        const n = this._data.find(x => x.id === id);
-        if (n) n.read = true;
-      });
-      this._updateBadge();
-    } catch { /* silent */ }
+    const res = await API.post('/api/notifications/read', { ids });
+    if (!res.ok) return;
+    ids.forEach(id => {
+      const n = this._data.find(x => x.id === id);
+      if (n) n.read = true;
+    });
+    this._updateBadge();
   },
 
   async markAllRead() {
     const ids = this._data.filter(n => !n.read).map(n => n.id);
     if (!ids.length) return;
-    try {
-      await fetch('/api/notifications/read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ all: true }),
-      });
-      this._data.forEach(n => { n.read = true; });
-      this._updateBadge();
-      // Re-render panel if open
-      const panelEl = document.getElementById('notif-panel-list');
-      if (panelEl) panelEl.innerHTML = this._buildListHtml();
-    } catch {
+    const res = await API.post('/api/notifications/read', { all: true });
+    if (!res.ok) {
       Toast.error('Could not mark all as read');
+      return;
     }
+    this._data.forEach(n => { n.read = true; });
+    this._updateBadge();
+    // Re-render panel if open
+    const panelEl = document.getElementById('notif-panel-list');
+    if (panelEl) panelEl.innerHTML = this._buildListHtml();
   },
 
   // ── PANEL ────────────────────────────────────────────────────
@@ -116,7 +104,7 @@ const Notifications = {
                  : n.type === 'note'       ? '📝'
                  : n.type === 'chronicle'  ? '📜'
                  : '🔔';
-      const ts = this._relTime(n.timestamp);
+      const ts = relTime(n.timestamp);
       const unreadClass = n.read ? '' : ' notif-unread';
       const clickHandler = n.link
         ? `onclick="Notifications._openNotif('${esc(n.id)}','${esc(n.link || '')}')"`
@@ -144,19 +132,4 @@ const Notifications = {
     }
   },
 
-  // ── RELATIVE TIME ────────────────────────────────────────────
-  // LO-4: _relTime is duplicated in comments.js. If a shared utils.js is
-  // added in future, consolidate both copies there.
-  _relTime(ts) {
-    if (!ts) return '';
-    const diff = Date.now() - new Date(ts).getTime();
-    const mins  = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days  = Math.floor(diff / 86400000);
-    if (mins  < 1)  return 'just now';
-    if (mins  < 60) return `${mins}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days  < 30) return `${days}d ago`;
-    return new Date(ts).toLocaleDateString();
-  },
 };

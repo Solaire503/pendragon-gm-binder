@@ -18,15 +18,10 @@ const TasksManager = {
       return new Promise(res => this._queue.push(res));
     }
     this._loading = true;
-    try {
-      const r = await fetch('/api/tasks');
-      const d = await r.json().catch(() => ({}));
-      this._personal  = Array.isArray(d.personal)  ? d.personal  : [];
-      this._broadcast = Array.isArray(d.broadcast) ? d.broadcast : [];
-    } catch {
-      this._personal  = this._personal  || [];
-      this._broadcast = this._broadcast || [];
-    }
+    const res = await API.get('/api/tasks');
+    const d = (res.ok && res.data) || {};
+    this._personal  = Array.isArray(d.personal)  ? d.personal  : (this._personal  || []);
+    this._broadcast = Array.isArray(d.broadcast) ? d.broadcast : (this._broadcast || []);
     this._loading = false;
     this._queue.forEach(cb => cb());
     this._queue = [];
@@ -41,21 +36,12 @@ const TasksManager = {
 
   async addPersonal(text, priority) {
     if (!text || !text.trim()) return;
-    try {
-      const r = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim(), priority: !!priority }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        Components.toast(d.error || 'Failed to save task', 'error');
-        return;
-      }
-      await this._refreshAndRender();
-    } catch {
-      Components.toast('Failed to save task', 'error');
+    const res = await API.post('/api/tasks', { text: text.trim(), priority: !!priority });
+    if (!res.ok) {
+      Components.toast(res.error || 'Failed to save task', 'error');
+      return;
     }
+    await this._refreshAndRender();
   },
 
   async togglePersonal(id) {
@@ -65,22 +51,15 @@ const TasksManager = {
     task.completed   = !task.completed;
     task.completedAt = task.completed ? Date.now() / 1000 : null;
     if (typeof TabDashboard !== 'undefined') TabDashboard.render();
-    try {
-      await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ completed: task.completed }),
-      });
-    } catch { /* silent — optimistic update stands */ }
+    // Fire-and-forget — optimistic update stands on network failure
+    await API.put(`/api/tasks/${encodeURIComponent(id)}`, { completed: task.completed });
   },
 
   async deletePersonal(id) {
     // Optimistic removal
     if (this._personal) this._personal = this._personal.filter(t => t.id !== id);
     if (typeof TabDashboard !== 'undefined') TabDashboard.render();
-    try {
-      await fetch(`/api/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    } catch { /* silent */ }
+    await API.del(`/api/tasks/${encodeURIComponent(id)}`);
   },
 
   openEditPersonal(id) {
@@ -105,21 +84,12 @@ const TasksManager = {
     const priority = document.getElementById('editTaskPriority')?.checked || false;
     if (!text.trim()) { Components.toast('Task text cannot be empty', 'error'); return; }
     Modal.close();
-    try {
-      const r = await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim(), priority }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        Components.toast(d.error || 'Failed to save', 'error');
-        return;
-      }
-      await this._refreshAndRender();
-    } catch {
-      Components.toast('Failed to save task', 'error');
+    const res = await API.put(`/api/tasks/${encodeURIComponent(id)}`, { text: text.trim(), priority });
+    if (!res.ok) {
+      Components.toast(res.error || 'Failed to save', 'error');
+      return;
     }
+    await this._refreshAndRender();
   },
 
   // ── BROADCAST TASKS (GM) ──────────────────────────────────
@@ -130,12 +100,7 @@ const TasksManager = {
     // Optimistic
     task.completedAt = task.completedAt ? null : Date.now() / 1000;
     if (typeof TabDashboard !== 'undefined') TabDashboard.render();
-    try {
-      await fetch(`/api/tasks/broadcast/${encodeURIComponent(id)}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch { /* silent */ }
+    await API.post(`/api/tasks/broadcast/${encodeURIComponent(id)}/complete`, {});
   },
 
   openAddBroadcast() {
@@ -160,22 +125,13 @@ const TasksManager = {
     const priority = document.getElementById('newBcastPriority')?.checked || false;
     if (!text.trim()) { Components.toast('Task text cannot be empty', 'error'); return; }
     Modal.close();
-    try {
-      const r = await fetch('/api/tasks/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim(), priority }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        Components.toast(d.error || 'Failed to broadcast', 'error');
-        return;
-      }
-      await this._refreshAndRender();
-      Components.toast('Task broadcast to all players', 'success');
-    } catch {
-      Components.toast('Failed to broadcast task', 'error');
+    const res = await API.post('/api/tasks/broadcast', { text: text.trim(), priority });
+    if (!res.ok) {
+      Components.toast(res.error || 'Failed to broadcast', 'error');
+      return;
     }
+    await this._refreshAndRender();
+    Components.toast('Task broadcast to all players', 'success');
   },
 
   openEditBroadcast(id) {
@@ -205,36 +161,23 @@ const TasksManager = {
     const priority = document.getElementById('editBcastPriority')?.checked || false;
     if (!text.trim()) { Components.toast('Task text cannot be empty', 'error'); return; }
     Modal.close();
-    try {
-      const r = await fetch(`/api/tasks/broadcast/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim(), priority }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        Components.toast(d.error || 'Failed to save', 'error');
-        return;
-      }
-      await this._refreshAndRender();
-    } catch {
-      Components.toast('Failed to save task', 'error');
+    const res = await API.put(`/api/tasks/broadcast/${encodeURIComponent(id)}`, { text: text.trim(), priority });
+    if (!res.ok) {
+      Components.toast(res.error || 'Failed to save', 'error');
+      return;
     }
+    await this._refreshAndRender();
   },
 
   async _revokeBroadcast(id) {
     Modal.close();
-    try {
-      await fetch(`/api/tasks/broadcast/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revoke: true }),
-      });
-      await this._refreshAndRender();
-      Components.toast('Broadcast task revoked', 'success');
-    } catch {
-      Components.toast('Failed to revoke task', 'error');
+    const res = await API.put(`/api/tasks/broadcast/${encodeURIComponent(id)}`, { revoke: true });
+    if (!res.ok) {
+      Components.toast(res.error || 'Failed to revoke task', 'error');
+      return;
     }
+    await this._refreshAndRender();
+    Components.toast('Broadcast task revoked', 'success');
   },
 
   // ── ASSIGN TO GM (players) ────────────────────────────────
@@ -257,21 +200,12 @@ const TasksManager = {
     const text = document.getElementById('assignGmText')?.value || '';
     if (!text.trim()) { Components.toast('Task text cannot be empty', 'error'); return; }
     Modal.close();
-    try {
-      const r = await fetch('/api/tasks/assign-gm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim() }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        Components.toast(d.error || 'Failed to send', 'error');
-        return;
-      }
-      Components.toast('Reminder sent to GM', 'success');
-    } catch {
-      Components.toast('Failed to send reminder', 'error');
+    const res = await API.post('/api/tasks/assign-gm', { text: text.trim() });
+    if (!res.ok) {
+      Components.toast(res.error || 'Failed to send reminder', 'error');
+      return;
     }
+    Components.toast('Reminder sent to GM', 'success');
   },
 
   // ── INLINE ADD FROM WIDGET ────────────────────────────────

@@ -255,11 +255,18 @@ const TabDashboard = {
     const year      = STORE.year;
     const household = user.household || '';
 
-    // Guard: if the binder hasn't been loaded yet or the household isn't configured,
-    // show a holding message rather than a broken dashboard.
-    if (!household || !STORE.year) {
+    // Guard: if the binder hasn't been loaded yet or the account has no
+    // household assigned, show an accurate holding message. These are two
+    // different problems with different fixes — don't conflate them.
+    if (!STORE.year) {
       panel.innerHTML = `<div style="padding:40px 24px;text-align:center;color:var(--ink-soft);font-family:'EB Garamond',serif;font-style:italic;">
-        The binder is not yet loaded. The GM must configure and load a save file before player dashboards are available.
+        The binder is not yet loaded. Waiting for the GM to configure a save file.
+      </div>`;
+      return;
+    }
+    if (!household) {
+      panel.innerHTML = `<div style="padding:40px 24px;text-align:center;color:var(--ink-soft);font-family:'EB Garamond',serif;font-style:italic;">
+        Your account is not yet linked to a household. Ask the GM to assign one to your player profile.
       </div>`;
       return;
     }

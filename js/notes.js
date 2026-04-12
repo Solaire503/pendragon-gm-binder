@@ -16,17 +16,8 @@ const Notes = {
       return new Promise(res => this._queue.push(res));
     }
     this._loading = true;
-    try {
-      const r = await fetch('/api/notes');
-      if (r.ok) {
-        const d = await r.json();
-        this._data = d && typeof d === 'object' ? d : {};
-      } else {
-        this._data = this._data || {};
-      }
-    } catch {
-      this._data = this._data || {};
-    }
+    const res = await API.get('/api/notes');
+    this._data = (res.ok && res.data && typeof res.data === 'object') ? res.data : (this._data || {});
     this._loading = false;
     this._queue.forEach(cb => cb(this._data));
     this._queue = [];
@@ -36,15 +27,11 @@ const Notes = {
   // ── SAVE ─────────────────────────────────────────────────────
   async save() {
     if (!this._data) return;
-    try {
-      await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this._data),
-      });
+    const res = await API.post('/api/notes', this._data);
+    if (res.ok) {
       this._dirty = false;
-    } catch (e) {
-      console.error('Notes save failed:', e);
+    } else {
+      console.error('Notes save failed:', res.error);
       if (typeof Toast !== 'undefined') Toast.error('Notes could not be saved — check your connection');
     }
   },

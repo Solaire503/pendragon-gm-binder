@@ -5,6 +5,7 @@ Handles auth, sessions, role-based access, and all API endpoints.
 
 import hmac
 import json
+import logging
 import os
 import shutil
 import smtplib
@@ -25,6 +26,18 @@ from pathlib import Path
 from flask import (Flask, jsonify, redirect, render_template_string,
                    request, send_from_directory, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
+
+# ── LOGGING ──────────────────────────────────────────────────────────────────
+# Structured event logger. Goes to stdout under systemd, captured by journald.
+# Interactive console output (banner, status, console listener) still uses print().
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s  %(levelname)-7s  %(message)s',
+    datefmt='%H:%M:%S',
+)
+# Flask/Werkzeug's request log is noisy; keep it at WARNING for the event log.
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
+log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
@@ -273,19 +286,33 @@ def _atomic_write(path: Path, text: str) -> None:
     tmp.write_text(text, encoding='utf-8')
     os.replace(str(tmp), str(path))
 
+def _read_json(path: Path, default=None):
+    """Read and parse a JSON file. Returns ``default`` on missing file or parse error.
+    Callers that need strict error handling should still use ``json.loads`` directly."""
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except Exception as e:
+        log.warning('JSON read failed for %s: %s', path.name, e)
+        return default
+
+def _write_json(path: Path, data, indent: int = 2) -> None:
+    """Serialize data to JSON and write atomically. Creates parent dirs as needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(path, json.dumps(data, indent=indent, ensure_ascii=False))
+
 # ── USER MANAGEMENT ───────────────────────────────────────────────────────────
 
 _users_lock = threading.Lock()
 
 def load_users() -> list:
     with _users_lock:
-        if not USERS_FILE.exists():
-            return []
-        return json.loads(USERS_FILE.read_text(encoding='utf-8'))
+        return _read_json(USERS_FILE, default=[]) or []
 
 def save_users(users: list) -> None:
     with _users_lock:
-        _atomic_write(USERS_FILE, json.dumps(users, indent=2))
+        _write_json(USERS_FILE, users)
 
 def get_user(username: str) -> dict | None:
     for u in load_users():
@@ -301,18 +328,10 @@ def get_username_for_household(household: str) -> str | None:
     return None
 
 def _read_horses(username: str) -> list:
-    path = PLAYER_DATA_DIR / username / 'horses.json'
-    if not path.exists():
-        return []
-    try:
-        return json.loads(path.read_text(encoding='utf-8'))
-    except Exception:
-        return []
+    return _read_json(PLAYER_DATA_DIR / username / 'horses.json', default=[]) or []
 
 def _write_horses(username: str, horses: list) -> None:
-    d = PLAYER_DATA_DIR / username
-    d.mkdir(parents=True, exist_ok=True)
-    _atomic_write(d / 'horses.json', json.dumps(horses, indent=2))
+    _write_json(PLAYER_DATA_DIR / username / 'horses.json', horses)
 
 def needs_setup() -> bool:
     """True if any user account has no password set yet."""
@@ -324,24 +343,16 @@ def needs_setup() -> bool:
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 
 def load_config() -> dict:
-    try:
-        return json.loads(CONFIG_FILE.read_text(encoding='utf-8'))
-    except Exception:
-        return {}
+    return _read_json(CONFIG_FILE, default={}) or {}
 
 def save_config(cfg: dict) -> None:
-    _atomic_write(CONFIG_FILE, json.dumps(cfg, indent=2))
+    _write_json(CONFIG_FILE, cfg)
 
 def load_submissions():
-    try:
-        if SUBMISSIONS_FILE.exists():
-            return json.loads(SUBMISSIONS_FILE.read_text(encoding='utf-8'))
-    except Exception:
-        pass
-    return []
+    return _read_json(SUBMISSIONS_FILE, default=[]) or []
 
 def save_submissions_data(subs):
-    _atomic_write(SUBMISSIONS_FILE, json.dumps(subs, indent=2))
+    _write_json(SUBMISSIONS_FILE, subs)
 
 def get_save_path() -> Path | None:
     p = load_config().get('saveFile')
@@ -356,7 +367,7 @@ def ensure_certificate() -> None:
         return
     if CERT_FILE.exists() and KEY_FILE.exists():
         return
-    print('  [SSL]   Generating self-signed certificate (one-time)...')
+    log.info('[SSL] Generating self-signed certificate (one-time)...')
     try:
         from OpenSSL import crypto
         k = crypto.PKey()
@@ -378,10 +389,10 @@ def ensure_certificate() -> None:
 
         CERT_FILE.write_bytes(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
         KEY_FILE.write_bytes(crypto.dump_privatekey(crypto.FILETYPE_PEM, k))
-        print('  [SSL]   Certificate written to cert.pem / key.pem')
+        log.info('[SSL] Certificate written to cert.pem / key.pem')
     except Exception as e:
-        print(f'  [SSL]   WARNING: Could not generate certificate: {e}')
-        print('  [SSL]   Server will start without HTTPS.')
+        log.warning('[SSL] Could not generate certificate: %s', e)
+        log.warning('[SSL] Server will start without HTTPS.')
 
 # ── HTML TEMPLATES ────────────────────────────────────────────────────────────
 
@@ -995,11 +1006,11 @@ def api_set_config():
                 return jsonify({'error': 'Save file must be a .json file'}), 400
             path = str(resolved)
             cfg['saveFile'] = path
-            print(f'  [Config] Save file set to: {path}')
+            log.info('[Config] Save file set to: %s', path)
 
         # anthropicKey changes via UI are ignored — key lives in secrets.env
         if 'anthropicKey' in data:
-            print('  [Config] API key change via UI ignored — edit secrets.env directly.')
+            log.info('[Config] API key change via UI ignored — edit secrets.env directly.')
 
         save_config(cfg)
         return jsonify({'ok': True})
@@ -1018,7 +1029,7 @@ def api_load():
     try:
         data = path.read_text(encoding='utf-8')
         json.loads(data)  # validate
-        print(f'  [Load]  {path.name} ({len(data):,} bytes)')
+        log.info('[Load] %s (%s bytes)', path.name, f'{len(data):,}')
         return app.response_class(data, mimetype='application/json')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1107,10 +1118,10 @@ def api_save():
             _atomic_write(path, body)
 
         now = datetime.now().strftime('%H:%M:%S')
-        print(f'  [Save]  {path.name} — {len(body):,} bytes at {now}')
+        log.info('[Save] %s — %s bytes at %s', path.name, f'{len(body):,}', now)
 
         if _restart_pending.is_set():
-            print('  [Console] Save complete — restarting now...')
+            log.info('[Restart] Save complete — restarting now...')
             threading.Thread(target=_do_restart, daemon=True).start()
 
         return jsonify({'ok': True, 'bytes': len(body), 'time': now})
@@ -1239,7 +1250,7 @@ def api_new():
         cfg = load_config()
         cfg['saveFile'] = str(path)
         save_config(cfg)
-        print(f'  [New]   Created {path}')
+        log.info('[New] Created %s', path)
         return jsonify({'ok': True, 'saveFile': str(path)})
     except Exception as e:
         return jsonify({'error': 'Could not create save file'}), 500
@@ -1311,13 +1322,13 @@ def api_ai():
         )
         with urllib.request.urlopen(req, timeout=30) as r:
             resp_body = r.read()
-            print('  [AI]    Flavor text generated')
+            log.info('[AI] Flavor text generated')
             return app.response_class(resp_body, status=r.status, mimetype='application/json')
     except urllib.error.HTTPError as e:
-        print(f'  [AI]    API error: {e.code}')
+        log.error('[AI] API error: %s', e.code)
         return jsonify({'error': 'AI service returned an error'}), e.code
     except Exception as e:
-        print(f'  [AI]    Error: {e}')
+        log.error('[AI] Error: %s', e)
         return jsonify({'error': 'AI request failed'}), 500
 
 
@@ -1424,7 +1435,7 @@ def api_succession():
         _atomic_write(path, json.dumps(save_data, indent=2, ensure_ascii=False))
 
     if _restart_pending.is_set():
-        print('  [Console] Save complete — restarting now...')
+        log.info('[Restart] Save complete — restarting now...')
         threading.Thread(target=_do_restart, daemon=True).start()
 
     return jsonify({'ok': True})
@@ -1489,7 +1500,7 @@ def api_broadcast():
         if len(_broadcasts) > 20:
             _broadcasts[:] = _broadcasts[-20:]
 
-    print(f'  [Broadcast] {session["username"]}: {msg[:60]}')
+    log.info('[Broadcast] %s: %s', session['username'], msg[:60])
     return jsonify({'ok': True, 'broadcast': entry})
 
 
@@ -1534,7 +1545,7 @@ def api_post_submission():
         if len(subs) > 200:
             subs = subs[-200:]
         save_submissions_data(subs)
-    print(f'  [Submit] {session["username"]} submitted chronicle entry for {year} AD')
+    log.info('[Submit] %s submitted chronicle entry for %s AD', session['username'], year)
     return jsonify({'ok': True, 'id': sub['id']})
 
 
@@ -1572,7 +1583,7 @@ def api_approve_submission(sub_id):
     with _submissions_lock:
         subs = [s for s in load_submissions() if s['id'] != sub_id]
         save_submissions_data(subs)
-    print(f'  [Chronicle] GM approved submission {sub_id} for {year_key} AD')
+    log.info('[Chronicle] GM approved submission %s for %s AD', sub_id, year_key)
     return jsonify({'ok': True})
 
 
@@ -1738,19 +1749,11 @@ def _player_lock(username: str) -> threading.Lock:
 # ── PINS ─────────────────────────────────────────────────────────────────────
 
 def _read_pins(username: str) -> list:
-    path = PLAYER_DATA_DIR / username / 'pins.json'
-    if not path.exists():
-        return []
-    try:
-        return json.loads(path.read_text(encoding='utf-8'))
-    except Exception:
-        return []
+    return _read_json(PLAYER_DATA_DIR / username / 'pins.json', default=[]) or []
 
 
 def _write_pins(username: str, pins: list) -> None:
-    d = PLAYER_DATA_DIR / username
-    d.mkdir(parents=True, exist_ok=True)
-    _atomic_write(d / 'pins.json', json.dumps(pins, indent=2))
+    _write_json(PLAYER_DATA_DIR / username / 'pins.json', pins)
 
 
 @app.route('/api/pins')
@@ -1793,43 +1796,30 @@ _PERSONAL_TASKS_MAX = 100
 
 def _read_personal_tasks(username: str) -> list:
     """Load tasks.json for a user, pruning completed tasks older than 90 days."""
-    path = PLAYER_DATA_DIR / username / 'tasks.json'
-    if not path.exists():
+    data = _read_json(PLAYER_DATA_DIR / username / 'tasks.json', default=[])
+    if not isinstance(data, list):
         return []
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-        if not isinstance(data, list):
-            return []
-        cutoff = time.time() - 90 * 86400
-        return [t for t in data if isinstance(t, dict)
-                and not (t.get('completed') and (t.get('completedAt') or 0) < cutoff)]
-    except Exception:
-        return []
+    cutoff = time.time() - 90 * 86400
+    return [t for t in data if isinstance(t, dict)
+            and not (t.get('completed') and (t.get('completedAt') or 0) < cutoff)]
 
 
 def _write_personal_tasks(username: str, tasks: list) -> None:
-    d = PLAYER_DATA_DIR / username
-    d.mkdir(parents=True, exist_ok=True)
-    _atomic_write(d / 'tasks.json', json.dumps(tasks, indent=2))
+    _write_json(PLAYER_DATA_DIR / username / 'tasks.json', tasks)
 
 
 def _read_broadcast_tasks() -> list:
     """Load broadcast_tasks.json, pruning revoked tasks older than 90 days."""
-    if not BROADCAST_TASKS_FILE.exists():
+    data = _read_json(BROADCAST_TASKS_FILE, default=[])
+    if not isinstance(data, list):
         return []
-    try:
-        data = json.loads(BROADCAST_TASKS_FILE.read_text(encoding='utf-8'))
-        if not isinstance(data, list):
-            return []
-        cutoff = time.time() - 90 * 86400
-        return [t for t in data if isinstance(t, dict)
-                and (not t.get('revokedAt') or t['revokedAt'] > cutoff)]
-    except Exception:
-        return []
+    cutoff = time.time() - 90 * 86400
+    return [t for t in data if isinstance(t, dict)
+            and (not t.get('revokedAt') or t['revokedAt'] > cutoff)]
 
 
 def _write_broadcast_tasks(tasks: list) -> None:
-    _atomic_write(BROADCAST_TASKS_FILE, json.dumps(tasks, indent=2))
+    _write_json(BROADCAST_TASKS_FILE, tasks)
 
 
 def _validate_task_text(text) -> 'str | None':
@@ -2055,25 +2045,19 @@ _NOTES_DEFAULTS = {'general': '', 'manor_notes': '', 'impressions': {}}
 
 def _read_notes(username: str) -> dict:
     """Returns notes dict with defaults if missing."""
-    path = PLAYER_DATA_DIR / username / 'notes.json'
-    if not path.exists():
+    data = _read_json(PLAYER_DATA_DIR / username / 'notes.json', default=None)
+    if not isinstance(data, dict):
         return dict(_NOTES_DEFAULTS)
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-        return {
-            'general':     data.get('general', ''),
-            'manor_notes': data.get('manor_notes', ''),
-            'impressions': data.get('impressions', {}),
-        }
-    except Exception:
-        return dict(_NOTES_DEFAULTS)
+    return {
+        'general':     data.get('general', ''),
+        'manor_notes': data.get('manor_notes', ''),
+        'impressions': data.get('impressions', {}),
+    }
 
 
 def _write_notes(username: str, data: dict) -> None:
     """Atomic write to player_data/{username}/notes.json."""
-    d = PLAYER_DATA_DIR / username
-    d.mkdir(parents=True, exist_ok=True)
-    _atomic_write(d / 'notes.json', json.dumps(data, indent=2))
+    _write_json(PLAYER_DATA_DIR / username / 'notes.json', data)
 
 
 @app.route('/api/notes')
@@ -2171,12 +2155,7 @@ _comments_lock = threading.Lock()
 
 def _read_comments() -> list:
     """Returns comments list from comments.json. Caller must hold _comments_lock for writes."""
-    if not COMMENTS_FILE.exists():
-        return []
-    try:
-        return json.loads(COMMENTS_FILE.read_text(encoding='utf-8'))
-    except Exception:
-        return []
+    return _read_json(COMMENTS_FILE, default=[]) or []
 
 
 def _write_comments(comments: list) -> None:
@@ -2196,7 +2175,7 @@ def _write_comments(comments: list) -> None:
             return False
     if any(_is_purgeable(c) for c in comments):
         comments = [c for c in comments if not _is_purgeable(c)]
-    _atomic_write(COMMENTS_FILE, json.dumps(comments, indent=2))
+    _write_json(COMMENTS_FILE, comments)
 
 
 def _serialize_comment(c: dict, is_gm: bool) -> dict:
@@ -2370,27 +2349,71 @@ def api_restore_comment(comment_id):
     return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
 
 
+# ── NPC PURGE (LO-18) ─────────────────────────────────────────────────────────
+# When the GM permanently deletes an NPC, wipe the data that lives outside
+# binder-save.json: public comments, every player's private impressions on
+# that NPC, and every player's pin on that NPC. Without this cascade, those
+# files slowly fill with orphaned references to dead IDs.
+
+@app.route('/api/npc/<npc_id>/purge', methods=['POST'])
+@gm_required
+def api_purge_npc(npc_id):
+    err = _csrf_check()
+    if err: return err
+    if not isinstance(npc_id, str) or not npc_id:
+        return jsonify({'error': 'npc_id is required'}), 400
+
+    stats = {'comments': 0, 'impressions': 0, 'pins': 0}
+
+    # 1. Comments — drop every comment whose npcId matches (replies too).
+    with _comments_lock:
+        all_comments = _read_comments()
+        kept = [c for c in all_comments if c.get('npcId') != npc_id]
+        dropped = len(all_comments) - len(kept)
+        if dropped:
+            _write_comments(kept)
+            stats['comments'] = dropped
+
+    # 2/3. Walk every player_data/<user>/ dir and scrub notes.impressions + pins.
+    if PLAYER_DATA_DIR.exists():
+        for user_dir in PLAYER_DATA_DIR.iterdir():
+            if not user_dir.is_dir():
+                continue
+            uname = user_dir.name
+            with _player_lock(uname):
+                notes = _read_notes(uname)
+                impressions = notes.get('impressions') or {}
+                if npc_id in impressions:
+                    del impressions[npc_id]
+                    notes['impressions'] = impressions
+                    _write_notes(uname, notes)
+                    stats['impressions'] += 1
+                pins = _read_pins(uname)
+                if npc_id in pins:
+                    _write_pins(uname, [p for p in pins if p != npc_id])
+                    stats['pins'] += 1
+
+    log.info('NPC purge: %s → comments=%d impressions=%d pins=%d',
+             npc_id, stats['comments'], stats['impressions'], stats['pins'])
+    return jsonify({'ok': True, 'purged': stats})
+
+
 # ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+
+def _notifications_path(username: str) -> Path:
+    return PLAYER_DATA_DIR / username / 'notifications.json'
+
 
 def _read_notifications(username: str) -> list:
     """Returns notifications list (newest first)."""
-    path = PLAYER_DATA_DIR / username / 'notifications.json'
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    data = _read_json(_notifications_path(username), default=[])
+    return data if isinstance(data, list) else []
 
 
 def _push_notification(username: str, notif_type: str, text: str, link: str = '') -> None:
     """Append a notification to player_data/{username}/notifications.json. Cap at 50."""
     import secrets as _secrets
     with _player_lock(username):
-        d = PLAYER_DATA_DIR / username
-        d.mkdir(parents=True, exist_ok=True)
-        path = d / 'notifications.json'
         notifs = _read_notifications(username)
         notif = {
             'id':   'notif-' + _secrets.token_hex(6),
@@ -2402,7 +2425,7 @@ def _push_notification(username: str, notif_type: str, text: str, link: str = ''
         }
         notifs.insert(0, notif)
         notifs = notifs[:50]
-        _atomic_write(path, json.dumps(notifs, indent=2))
+        _write_json(_notifications_path(username), notifs)
 
 
 @app.route('/api/notifications')
@@ -2438,9 +2461,7 @@ def api_mark_notifications_read():
             if n['id'] in id_set:
                 n['read'] = True
 
-    d = PLAYER_DATA_DIR / username
-    d.mkdir(parents=True, exist_ok=True)
-    _atomic_write(d / 'notifications.json', json.dumps(notifs, indent=2))
+    _write_json(_notifications_path(username), notifs)
     return jsonify({'ok': True})
 
 
@@ -2613,7 +2634,7 @@ def _rotate_backup(save_path: Path) -> None:
         for old in backups[:-5]:
             old.unlink()
     except Exception as e:
-        print(f'  [Backup] Warning: {e}')
+        log.warning('[Backup] %s', e)
 
 # ── SAVE LOCK / RESTART FLAG ─────────────────────────────────────────────────
 # Protects all file-write operations so a restart command never kills the
@@ -2718,12 +2739,7 @@ def _npc_relationships(npc_id: str, all_npcs: list, all_rels: list, limit: int =
 
 def _load_binder() -> dict | None:
     path = get_save_path()
-    if not path or not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text(encoding='utf-8'))
-    except Exception:
-        return None
+    return _read_json(path, default=None) if path else None
 
 @app.route('/api/bot/status')
 @bot_required
@@ -2805,7 +2821,7 @@ if __name__ == '__main__':
             {'username': 'Tay',   'role': 'player',  'household': 'Westwood',  'password_hash': None},
         ]
         save_users(default_users)
-        print('  [Setup] users.json created — visit /setup to set passwords.')
+        log.info('[Setup] users.json created — visit /setup to set passwords.')
 
     ensure_certificate()
 

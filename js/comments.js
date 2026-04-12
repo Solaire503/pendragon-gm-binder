@@ -55,7 +55,7 @@ const Comments = {
     const replies    = allComments.filter(r => r.parentId === c.id);
     const isOwn      = c.author === username;
     const isDeleted  = !!c.deleted;
-    const ts         = this._relTime(c.timestamp);
+    const ts         = relTime(c.timestamp);
     const editCount  = Array.isArray(c.history) ? c.history.length - 1 : 0;
 
     let bodyHtml;
@@ -76,7 +76,7 @@ const Comments = {
         <div style="padding:4px 0;border-bottom:1px dotted var(--vellum-deep);font-size:0.78rem;color:var(--ink-soft);">
           <span style="font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase;opacity:0.6;">v${c.history.length - 1 - i}</span>
           <div style="margin-top:2px;">${esc(v.text || '')}</div>
-          ${v.timestamp ? `<div style="font-size:0.68rem;opacity:0.5;margin-top:1px;">${this._relTime(v.timestamp)}</div>` : ''}
+          ${v.timestamp ? `<div style="font-size:0.68rem;opacity:0.5;margin-top:1px;">${relTime(v.timestamp)}</div>` : ''}
         </div>`).join('');
       const histId = `comment-hist-${esc(c.id)}`;
       historyHtml = `
@@ -163,19 +163,13 @@ const Comments = {
   async loadForNpc(npcId) {
     if (this._loading[npcId]) return;
     this._loading[npcId] = true;
-    try {
-      const r = await fetch(`/api/comments/${encodeURIComponent(npcId)}`);
-      if (r.ok) {
-        const d = await r.json();
-        this._cache[npcId] = Array.isArray(d.comments) ? d.comments : [];
-        this._cacheTime[npcId] = Date.now();
-      } else {
-        // Keep existing cache if available rather than showing nothing
-        if (!this._cache[npcId]) this._cache[npcId] = [];
-      }
-    } catch {
+    const res = await API.get(`/api/comments/${encodeURIComponent(npcId)}`);
+    if (res.ok) {
+      this._cache[npcId] = Array.isArray(res.data?.comments) ? res.data.comments : [];
+      this._cacheTime[npcId] = Date.now();
+    } else if (!this._cache[npcId]) {
       // Keep existing cache if available rather than showing nothing
-      if (!this._cache[npcId]) this._cache[npcId] = [];
+      this._cache[npcId] = [];
     }
     this._loading[npcId] = false;
     // Replace placeholder in DOM if present
@@ -213,24 +207,14 @@ const Comments = {
 
     if (!text) { Toast.error('Write something first'); return; }
 
-    try {
-      const r = await fetch('/api/comments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ npcId, text, parentId: parentId || null }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        Toast.error(d.error || 'Failed to post comment');
-        return;
-      }
-      const d = await r.json();
-      if (!this._cache[npcId]) this._cache[npcId] = [];
-      if (d.comment) this._cache[npcId].push(d.comment);
-      this.refresh(npcId);
-    } catch {
-      Toast.error('Network error \u2014 comment not posted');
+    const res = await API.post('/api/comments', { npcId, text, parentId: parentId || null });
+    if (!res.ok) {
+      Toast.error(res.error || 'Failed to post comment');
+      return;
     }
+    if (!this._cache[npcId]) this._cache[npcId] = [];
+    if (res.data?.comment) this._cache[npcId].push(res.data.comment);
+    this.refresh(npcId);
   },
 
   // ── EDIT ─────────────────────────────────────────────────────
@@ -239,53 +223,37 @@ const Comments = {
     const text = ta ? ta.value.trim() : '';
     if (!text) { Toast.error('Comment cannot be empty'); return; }
 
-    try {
-      const r = await fetch(`/api/comments/${encodeURIComponent(commentId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        Toast.error(d.error || 'Failed to edit comment');
-        return;
-      }
-      const d = await r.json();
-      if (d.comment && this._cache[npcId]) {
-        const idx = this._cache[npcId].findIndex(c => c.id === commentId);
-        if (idx !== -1) this._cache[npcId][idx] = d.comment;
-      }
-      this.refresh(npcId);
-    } catch {
-      Toast.error('Network error \u2014 edit not saved');
+    const res = await API.patch(`/api/comments/${encodeURIComponent(commentId)}`, { text });
+    if (!res.ok) {
+      Toast.error(res.error || 'Failed to edit comment');
+      return;
     }
+    if (res.data?.comment && this._cache[npcId]) {
+      const idx = this._cache[npcId].findIndex(c => c.id === commentId);
+      if (idx !== -1) this._cache[npcId][idx] = res.data.comment;
+    }
+    this.refresh(npcId);
   },
 
   // ── DELETE ───────────────────────────────────────────────────
   async del(commentId, npcId) {
     if (!confirm('Delete this comment?')) return;
-    let r;
-    try { r = await fetch(`/api/comments/${encodeURIComponent(commentId)}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } }); }
-    catch { Toast.error('Network error \u2014 comment not deleted'); return; }
-    if (!r.ok) { const d = await r.json().catch(() => ({})); Toast.error(d.error || 'Failed to delete comment'); return; }
-    const d = await r.json().catch(() => ({}));
-    if (d.comment && this._cache[npcId]) {
+    const res = await API.del(`/api/comments/${encodeURIComponent(commentId)}`);
+    if (!res.ok) { Toast.error(res.error || 'Failed to delete comment'); return; }
+    if (res.data?.comment && this._cache[npcId]) {
       const idx = this._cache[npcId].findIndex(c => c.id === commentId);
-      if (idx !== -1) this._cache[npcId][idx] = d.comment;
+      if (idx !== -1) this._cache[npcId][idx] = res.data.comment;
     }
     this.refresh(npcId);
   },
 
   // ── RESTORE ──────────────────────────────────────────────────
   async restore(commentId, npcId) {
-    let r;
-    try { r = await fetch(`/api/comments/${encodeURIComponent(commentId)}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }); }
-    catch { Toast.error('Network error \u2014 comment not restored'); return; }
-    if (!r.ok) { const d = await r.json().catch(() => ({})); Toast.error(d.error || 'Failed to restore comment'); return; }
-    const d = await r.json().catch(() => ({}));
-    if (d.comment && this._cache[npcId]) {
+    const res = await API.post(`/api/comments/${encodeURIComponent(commentId)}/restore`);
+    if (!res.ok) { Toast.error(res.error || 'Failed to restore comment'); return; }
+    if (res.data?.comment && this._cache[npcId]) {
       const idx = this._cache[npcId].findIndex(c => c.id === commentId);
-      if (idx !== -1) this._cache[npcId][idx] = d.comment;
+      if (idx !== -1) this._cache[npcId][idx] = res.data.comment;
     }
     this.refresh(npcId);
   },
@@ -293,10 +261,8 @@ const Comments = {
   // ── SHRED (permanent, GM only) ────────────────────────────────
   async shred(commentId, npcId) {
     if (!confirm('Permanently delete this comment? This cannot be undone.')) return;
-    let r;
-    try { r = await fetch(`/api/comments/${encodeURIComponent(commentId)}/shred`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }); }
-    catch { Toast.error('Network error \u2014 comment not shredded'); return; }
-    if (!r.ok) { const d = await r.json().catch(() => ({})); Toast.error(d.error || 'Failed to shred comment'); return; }
+    const res = await API.post(`/api/comments/${encodeURIComponent(commentId)}/shred`);
+    if (!res.ok) { Toast.error(res.error || 'Failed to shred comment'); return; }
     if (this._cache[npcId]) {
       this._cache[npcId] = this._cache[npcId].filter(c => c.id !== commentId && c.parentId !== commentId);
     }
@@ -325,21 +291,6 @@ const Comments = {
   },
 
   // ── HELPERS ──────────────────────────────────────────────────
-  // LO-4: _relTime is duplicated in notifications.js. If a shared utils.js is
-  // added in future, consolidate both copies there.
-  _relTime(ts) {
-    if (!ts) return '';
-    const diff  = Date.now() - new Date(ts).getTime();
-    const mins  = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days  = Math.floor(diff / 86400000);
-    if (mins  < 1)  return 'just now';
-    if (mins  < 60) return `${mins}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days  < 30) return `${days}d ago`;
-    return new Date(ts).toLocaleDateString();
-  },
-
   // Deterministic colour from username string
   _authorColour(username) {
     const COLOURS = [
