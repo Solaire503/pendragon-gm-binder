@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from functools import wraps
 from pathlib import Path
@@ -730,7 +730,7 @@ def login():
                 users = load_users()
                 for u in users:
                     if u['username'].lower() == username.lower():
-                        u['lastLogin'] = datetime.utcnow().isoformat() + 'Z'
+                        u['lastLogin'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                         break
                 save_users(users)
                 next_url = request.args.get('next') or url_for('index')
@@ -915,7 +915,7 @@ def api_me():
     users = load_users()
     user  = None
     dirty = False
-    now   = datetime.utcnow()
+    now   = datetime.now(timezone.utc).replace(tzinfo=None)
     for u in users:
         if u['username'].lower() == session['username'].lower():
             user = u
@@ -966,7 +966,7 @@ def api_keep_alive():
     users = load_users()
     for u in users:
         if u['username'].lower() == session['username'].lower():
-            u['lastLogin'] = datetime.utcnow().isoformat() + 'Z'
+            u['lastLogin'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             break
     save_users(users)
     return jsonify({'ok': True})
@@ -2162,7 +2162,7 @@ def _write_comments(comments: list) -> None:
     """Atomic write to comments.json. Caller must hold _comments_lock.
     Opportunistically purges soft-deleted entries whose original creation
     timestamp is older than 30 days, keeping the file from growing forever."""
-    cutoff_dt = datetime.utcnow() - timedelta(days=30)
+    cutoff_dt = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
     def _is_purgeable(c: dict) -> bool:
         if not c.get('deleted'):
             return False
@@ -2223,7 +2223,7 @@ def api_post_comment():
 
     import secrets as _secrets
     comment_id = 'cmt-' + _secrets.token_hex(6)
-    ts = datetime.utcnow().isoformat() + 'Z'
+    ts = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     author = session['username']
     new_comment = {
         'id':             comment_id,
@@ -2279,7 +2279,7 @@ def api_edit_comment(comment_id):
         if target.get('deleted'):
             return jsonify({'error': 'Cannot edit a deleted comment'}), 400
 
-        ts = datetime.utcnow().isoformat() + 'Z'
+        ts = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         target['history'].append({'text': text, 'ts': ts})
         _write_comments(all_comments)
     is_gm = session.get('role') == 'gm'
@@ -2363,7 +2363,7 @@ def api_purge_npc(npc_id):
     if not isinstance(npc_id, str) or not npc_id:
         return jsonify({'error': 'npc_id is required'}), 400
 
-    stats = {'comments': 0, 'impressions': 0, 'pins': 0}
+    stats = {'comments': 0, 'impressions': 0, 'pins': 0, 'tree': 0}
 
     # 1. Comments — drop every comment whose npcId matches (replies too).
     with _comments_lock:
@@ -2393,8 +2393,25 @@ def api_purge_npc(npc_id):
                     _write_pins(uname, [p for p in pins if p != npc_id])
                     stats['pins'] += 1
 
-    log.info('NPC purge: %s → comments=%d impressions=%d pins=%d',
-             npc_id, stats['comments'], stats['impressions'], stats['pins'])
+    # 4. Binder save — scrub orphaned treePos / treeLock entries.
+    # Client-side STORE.deleteNpc() drops the NPC from living/dead, but the
+    # tree-display state dicts aren't keyed off the NPC list, so they leak.
+    save_path = get_save_path()
+    if save_path and save_path.exists():
+        with _save_lock:
+            save_data = _read_json(save_path, default={})
+            changed = False
+            for key in ('treePos', 'treeLock'):
+                bucket = save_data.get(key)
+                if isinstance(bucket, dict) and npc_id in bucket:
+                    del bucket[npc_id]
+                    stats['tree'] += 1
+                    changed = True
+            if changed:
+                _write_json(save_path, save_data)
+
+    log.info('NPC purge: %s → comments=%d impressions=%d pins=%d tree=%d',
+             npc_id, stats['comments'], stats['impressions'], stats['pins'], stats['tree'])
     return jsonify({'ok': True, 'purged': stats})
 
 
@@ -2421,7 +2438,7 @@ def _push_notification(username: str, notif_type: str, text: str, link: str = ''
             'text': text,
             'link': link,
             'read': False,
-            'ts':   datetime.utcnow().isoformat() + 'Z',
+            'ts':   datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
         }
         notifs.insert(0, notif)
         notifs = notifs[:50]
