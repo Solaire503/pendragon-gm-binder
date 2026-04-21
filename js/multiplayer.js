@@ -32,6 +32,29 @@ const Multiplayer = {
     // Render presence widget in header
     this._injectPresenceWidget();
 
+    // Pause timers when tab is backgrounded (battery / data on mobile).
+    // Resume + run an immediate poll when the tab returns to foreground.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (this._heartbeatTimer) { clearInterval(this._heartbeatTimer); this._heartbeatTimer = null; }
+        if (this._broadcastTimer) { clearInterval(this._broadcastTimer); this._broadcastTimer = null; }
+        if (this._presenceTimer)  { clearInterval(this._presenceTimer);  this._presenceTimer  = null; }
+      } else {
+        if (!this._heartbeatTimer) {
+          this._sendHeartbeat();
+          this._heartbeatTimer = setInterval(() => this._sendHeartbeat(), 15000);
+        }
+        if (!this._broadcastTimer) {
+          this._pollBroadcasts();
+          this._broadcastTimer = setInterval(() => this._pollBroadcasts(), 10000);
+        }
+        if (!this._presenceTimer) {
+          this._pollPresence();
+          this._presenceTimer = setInterval(() => this._pollPresence(), 15000);
+        }
+      }
+    });
+
     // Render broadcast input on GM dashboard (deferred — dashboard may not be rendered yet)
     // This is called from TabDashboard.render() instead.
   },

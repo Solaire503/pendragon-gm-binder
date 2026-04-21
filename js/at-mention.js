@@ -191,7 +191,7 @@ const AtMention = {
       // Always resolve name from store — handles renames gracefully
       const npc         = STORE.getNpc && STORE.getNpc(id);
       const displayName = npc ? npc.name : storedName;
-      result += `<span class="npc-mention" data-npc-id="${this._esc(id)}" ` +
+      result += `<span class="npc-mention" data-npc-id="${this._esc(id)}" role="button" tabindex="0" ` +
         `onmouseenter="AtMention._showTooltip(event,'${this._esc(id)}')" ` +
         `onmouseleave="AtMention._hideTooltip()" ` +
         `onclick="AtMention.peekCard('${this._esc(id)}')" ` +

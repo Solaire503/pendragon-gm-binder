@@ -109,7 +109,7 @@ const Notifications = {
       const clickHandler = n.link
         ? `onclick="Notifications._openNotif('${esc(n.id)}','${esc(n.link || '')}')"`
         : `onclick="Notifications._openNotif('${esc(n.id)}','')"`;
-      return `<div class="notif-item${unreadClass}" ${clickHandler}>
+      return `<div class="notif-item${unreadClass}" role="button" tabindex="0" ${clickHandler}>
         <span class="notif-icon">${icon}</span>
         <div style="flex:1;min-width:0;">
           <div style="font-size:0.88rem;color:var(--ink);line-height:1.4;">${esc(n.text || '')}</div>

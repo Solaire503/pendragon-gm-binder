@@ -91,7 +91,7 @@ const TabFamilies = {
         ${arr.map(n => {
           const col = roleColour(n.role);
           const age = n.year_born != null ? (STORE.year - n.year_born) : (n.age ?? null);
-          return `<div class="family-member-item" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
+          return `<div class="family-member-item" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
             <span class="family-member-role" style="background:${col};">${n.role||'?'}</span>
             <span class="family-member-name">${esc(n.name)}</span>
             ${age != null ? `<span class="family-member-age">Age ${age}</span>` : ''}

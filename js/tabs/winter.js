@@ -165,7 +165,7 @@ const TabWinter = {
         <div class="winter-death-row">
           <span class="winter-death-dot" style="background:${col};"></span>
           <div class="winter-death-name-col">
-            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+            <span class="winter-npc-name" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
             <span class="winter-death-hh">${icon ? icon + ' ' : ''}${esc(n.household || '—')}</span>
           </div>
           <span class="winter-age-str">${ageStr}</span>
@@ -237,7 +237,7 @@ const TabWinter = {
             onchange="TabWinter.toggleExempt('${n.id}', this.checked)">
         </label>
         <div style="flex:1;min-width:0;">
-          <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+          <span class="winter-npc-name" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
           ${exemptTag}
         </div>
         <span class="winter-age-str">${ageStr}</span>
@@ -489,7 +489,7 @@ const TabWinter = {
         <div class="winter-death-row">
           <span class="winter-death-dot" style="background:${col};"></span>
           <div class="winter-death-name-col">
-            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+            <span class="winter-npc-name" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
             <span class="winter-death-hh">${hh?.icon ? hh.icon+' ' : ''}${esc(n.household||'—')}</span>
           </div>
           <span class="winter-roll-detail" style="flex-shrink:0;">[${res.rolls.join(' → ')}]</span>
@@ -519,7 +519,7 @@ const TabWinter = {
         <div class="winter-death-row">
           <span class="winter-death-dot" style="background:${col};"></span>
           <div class="winter-death-name-col">
-            <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+            <span class="winter-npc-name" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
             <span class="winter-death-hh">${hh?.icon ? hh.icon+' ' : ''}${esc(n.household||'—')}</span>
           </div>
           <span class="winter-roll-detail" style="flex-shrink:0;">[${res.rolls.join(' → ')}]</span>
@@ -560,7 +560,7 @@ const TabWinter = {
       return `
         <div class="winter-npc-row birth-npc-row barren-row">
           <div class="birth-row-top">
-            <span class="winter-npc-name" style="opacity:0.45;" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+            <span class="winter-npc-name" style="opacity:0.45;" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
             <span class="birth-mod-tag barren-tag" style="font-size:0.65rem;padding:2px 10px;">Barren</span>
             <span class="winter-age-str" style="margin-left:auto;opacity:0.45;">${ageStr}</span>
           </div>
@@ -623,7 +623,7 @@ const TabWinter = {
     return `
       <div class="winter-npc-row birth-npc-row">
         <div class="birth-row-top">
-          <span class="winter-npc-name" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
+          <span class="winter-npc-name" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">${esc(n.name)}</span>
           ${spouseTag}
           <span class="winter-age-str" style="margin-left:auto;">${ageStr}</span>
         </div>
@@ -1373,7 +1373,7 @@ const TabWinter = {
       return '<div class="winter-death-row">' +
         '<span class="winter-death-dot" style="background:' + col + ';"></span>' +
         '<div class="winter-death-name-col">' +
-          '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
+          '<span class="winter-npc-name" data-npc-hover="' + n.id + '" role="button" tabindex="0" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
           '<span class="winter-death-hh">' + (hh?.icon ? hh.icon + ' ' : '') + esc(n.household || '—') + '</span>' +
         '</div>' +
         '<span class="winter-roll-detail" style="flex-shrink:0;">[' + rollStr + ']</span>' +
@@ -1496,7 +1496,7 @@ const TabWinter = {
 
     return '<div class="winter-npc-row birth-npc-row">' +
       '<div class="birth-row-top">' +
-        '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
+        '<span class="winter-npc-name" data-npc-hover="' + n.id + '" role="button" tabindex="0" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
         roleTag +
         '<span style="' + TAG + 'background:rgba(90,74,58,0.15);border:1px solid rgba(90,74,58,0.35);color:var(--ink);margin-left:6px;">+' + mod + ' age mod</span>' +
         orientSel +
@@ -1589,7 +1589,7 @@ const TabWinter = {
 
     return '<div class="winter-npc-row birth-npc-row">' +
       '<div class="birth-row-top">' +
-        '<span class="winter-npc-name" data-npc-hover="' + n.id + '" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
+        '<span class="winter-npc-name" data-npc-hover="' + n.id + '" role="button" tabindex="0" onclick="Components.openNpcCard(\'' + n.id + '\')">' + esc(n.name) + '</span>' +
         roleTag +
         '<span style="' + TAG + 'background:rgba(40,80,120,0.15);border:1px solid rgba(40,80,120,0.35);color:var(--ink);margin-left:6px;">Courtesy ' + courtesy + '</span>' +
         (waitYears > 0 ? '<span style="' + TAG + 'background:rgba(90,50,90,0.15);border:1px solid rgba(90,50,90,0.35);color:var(--ink);">+' + waitYears + ' yr waited</span>' : '') +

@@ -52,7 +52,7 @@ const TabSolos = {
       if (!npc) return '';
       const hasNote = !!(npc.personalityNote && npc.personalityNote.trim());
       return `<span class="solos-knight-pill">` +
-          `<span class="solos-pill-name" ` +
+          `<span class="solos-pill-name" role="button" tabindex="0" ` +
             `onclick="Components.openNpcCard('${id}')" ` +
             `onmouseenter="TabSolos._showPillTooltip(event,'${id}')" ` +
             `onmouseleave="TabSolos._hidePillTooltip()" ` +

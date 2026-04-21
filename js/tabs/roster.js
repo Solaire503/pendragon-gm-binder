@@ -89,7 +89,7 @@ const TabRoster = {
             <button class="btn btn-primary" style="width:100%;" onclick="Components.openAddNpc()">+ Add NPC</button>
             <button class="btn btn-ghost" style="width:100%;font-size:0.68rem;" onclick="Components.openImportNpc()" title="Import a single NPC from a Claude.ai-generated JSON">⬇ Import from Claude.ai</button>
             ` : ''}
-            <div id="rosterOosFooter" style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.08em;text-align:center;color:#8a7a5a;opacity:0.8;cursor:pointer;padding:2px 0;" onclick="APP.switchTab('mausoleum')" title="View in Mausoleum → Out of Story tab"></div>
+            <div id="rosterOosFooter" style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.08em;text-align:center;color:#8a7a5a;opacity:0.8;cursor:pointer;padding:2px 0;" role="button" tabindex="0" onclick="APP.switchTab('mausoleum')" title="View in Mausoleum → Out of Story tab"></div>
           </div>
         </div>
         <div class="pane-content" id="rosterDetail">
@@ -232,7 +232,7 @@ const TabRoster = {
       ? '<span title="Knight of the Round Table" style="font-size:0.65rem;color:var(--gold);">⊕</span>'
       : '';
 
-    return `<div class="npc-list-item${this._selectedId===n.id?' selected':''}${n.round_table?' round-table-item':''}" data-npc-id="${n.id}" onclick="TabRoster.select('${n.id}')">
+    return `<div class="npc-list-item${this._selectedId===n.id?' selected':''}${n.round_table?' round-table-item':''}" data-npc-id="${n.id}" role="button" tabindex="0" onclick="TabRoster.select('${n.id}')">
       <span class="hh-pip" style="${hhPipStyle(n.household)}"></span>
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
@@ -286,7 +286,7 @@ const TabRoster = {
       : (r.type === 'Squire' ? 'Squire' : 'Page');
     const name     = other ? other.name : (r.notes || '—');
     const clickAttr = other
-      ? `data-npc-hover="${other.id}" onclick="event.stopPropagation();Components.openNpcCard('${other.id}')" style="cursor:pointer;"`
+      ? `data-npc-hover="${other.id}" role="button" tabindex="0" onclick="event.stopPropagation();Components.openNpcCard('${other.id}')" style="cursor:pointer;"`
       : '';
     return `<span class="training-line" ${clickAttr}>${label}: <strong>${esc(name)}</strong></span>`;
   },

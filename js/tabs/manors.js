@@ -215,7 +215,7 @@ const TabManors = {
     const stewardFallback = stewardStr.length > 0 ? STORE.living.find(n => n.name.toLowerCase().includes(stewardStr.toLowerCase())) : null;
 
     const npcBtn = (npc, placeholder, field) => {
-      if (npc) return `<span class="npc-inline-link" data-npc-hover="${npc.id}" onclick="Components.openNpcCard('${npc.id}')">${npc.name}</span>` +
+      if (npc) return `<span class="npc-inline-link" data-npc-hover="${npc.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${npc.id}')">${npc.name}</span>` +
         (readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;margin-left:4px;" onclick="TabManors._pickPersonnel('${key}','${field}')">✎</button>`);
       if (readOnly) return '<span style="opacity:0.4;font-style:italic;">—</span>';
       return `<button class="btn btn-ghost" style="padding:3px 10px;font-size:0.55rem;" onclick="TabManors._pickPersonnel('${key}','${field}')">+ Set ${placeholder}</button>`;
@@ -312,13 +312,13 @@ const TabManors = {
     // ── Household members (collapsed) ─────────────────────
     const household = STORE.householdMembers(key);
     const membersHtml = household.length ? `
-      <div class="section-title mt-16" style="cursor:pointer;user-select:none;" onclick="TabManors._toggleMembers('${key}')">
+      <div class="section-title mt-16" style="cursor:pointer;user-select:none;" role="button" tabindex="0" onclick="TabManors._toggleMembers('${key}')">
         <span id="membersCaret-${key}">▶</span> Household Members (${household.length})
       </div>
       <div id="membersPanel-${key}" style="display:none;">
         <div class="family-member-list mt-8">
           ${household.sort((a,b)=>a.name.localeCompare(b.name)).map(n=>`
-            <div class="family-member-item" onclick="Components.openNpcCard('${n.id}')">
+            <div class="family-member-item" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
               <span class="family-member-role" style="background:${roleColour(n.role)};padding:2px 7px;border-radius:10px;font-family:var(--font-heading);font-size:0.48rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--vellum);">${n.role||'?'}</span>
               <span class="family-member-name">${esc(n.name)}</span>
               ${n.glory?`<span class="family-member-age">${n.glory.toLocaleString()} gl.</span>`:''}
@@ -427,7 +427,7 @@ const TabManors = {
           <div style="text-align:right;flex-shrink:0;margin-right:8px;">
             <div style="font-family:var(--font-heading);font-size:0.6rem;color:${col};margin-bottom:2px;">${v.tenure||'—'}</div>
             <div class="improvement-meta">
-              ${knight ? `<span class="npc-inline-link" data-npc-hover="${knight.id}" onclick="Components.openNpcCard('${knight.id}')">${knight.name}</span>` : '<span style="opacity:0.5;">No knight set</span>'}
+              ${knight ? `<span class="npc-inline-link" data-npc-hover="${knight.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${knight.id}')">${knight.name}</span>` : '<span style="opacity:0.5;">No knight set</span>'}
             </div>
           </div>
           <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.5rem;" onclick="TabManors.openEditVassal('${key}',${v.id})">✎</button>
@@ -584,7 +584,7 @@ const TabManors = {
         </tr>` : '';
 
       return `
-        <tr class="ledger-summary-row" style="cursor:pointer;" onclick="TabManors._toggleSummaryRow('${key}', ${h.year})">
+        <tr class="ledger-summary-row" style="cursor:pointer;" role="button" tabindex="0" onclick="TabManors._toggleSummaryRow('${key}', ${h.year})">
           <td style="font-family:var(--font-heading);font-size:0.7rem;color:var(--ink-soft);padding:4px 8px;white-space:nowrap;">${h.year} AD</td>
           <td style="padding:4px 6px;">${luckBadge}</td>
           <td style="padding:4px 6px;">${conflictBadge(h.conflict)}</td>
@@ -1579,7 +1579,7 @@ const TabManors = {
         </tr>` : '';
 
       return `
-        <tr class="history-row" style="cursor:pointer;" onclick="TabManors._toggleRow('${yKey}')">
+        <tr class="history-row" style="cursor:pointer;" role="button" tabindex="0" onclick="TabManors._toggleRow('${yKey}')">
           <td>
             <span style="font-family:var(--font-heading);font-size:0.88rem;">${h.year} AD</span>
           </td>

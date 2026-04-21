@@ -33,7 +33,7 @@ const TabDashboard = {
       const improvements = (m.improvements || []).filter(i => i.status === 'active').length;
       const damage = (m.propertyDamage || []).filter(d => d.status === 'damaged').length;
 
-      return `<div class="pk-card" style="border-top-color:${col};" onclick="APP.switchTab('manors');TabManors.selectManor('${key}')">
+      return `<div class="pk-card" style="border-top-color:${col};" role="button" tabindex="0" onclick="APP.switchTab('manors');TabManors.selectManor('${key}')">
         <div class="pk-card-name">${esc(m.knight || key)}</div>
         <div class="pk-card-player" style="color:${col}aa">${hh ? hh.icon : '◆'} ${m.player ? 'Player: ' + esc(m.player) : esc(key)}</div>
         <div class="pk-stat"><span class="pk-stat-label">Treasury</span><span class="pk-stat-value">${treasury} L</span></div>
@@ -120,7 +120,7 @@ const TabDashboard = {
     // Households at a glance
     const hhHtml = STORE.households.map(h => {
       const members = STORE.householdMembers(h.name);
-      return `<div class="pk-stat" style="cursor:pointer;" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${h.name}')">
+      return `<div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${h.name}')">
         <span class="pk-stat-label"><span style="color:${h.colour}">${h.icon}</span> ${h.name}</span>
         <span class="pk-stat-value" style="color:${h.colour}">${members.length}</span>
       </div>`;
@@ -157,7 +157,7 @@ const TabDashboard = {
         <div class="card">
           <div class="section-title">Recent Deaths</div>
           ${recentDead.slice(0,8).map(n => `
-            <div class="pk-stat" style="cursor:pointer;" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
+            <div class="pk-stat" style="cursor:pointer;" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
               <span class="pk-stat-label">† ${esc(n.name)}</span>
               <span class="pk-stat-value" style="color:var(--crimson-mid)">${n.year_died} AD</span>
             </div>`).join('')}
@@ -167,7 +167,7 @@ const TabDashboard = {
         <div class="card" style="border-top:3px solid var(--crimson-mid);">
           <div class="section-title" style="margin-bottom:12px;color:var(--crimson-mid);">⚜ Succession Needed</div>
           ${successionFlags.map(({ household: h, headName, isDead }) => `
-            <div class="pk-stat" style="cursor:pointer;" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${h.name}')">
+            <div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${h.name}')">
               <span class="pk-stat-label" style="font-size:0.78rem;"><span style="color:${h.colour}">${h.icon}</span> ${esc(h.name)} — ${isDead ? '† ' + esc(headName) + ' has fallen' : 'Head of House missing'}</span>
               <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.6;">choose heir →</span>
             </div>`).join('')}
@@ -177,7 +177,7 @@ const TabDashboard = {
         <div class="card" style="border-top:3px solid var(--gold);">
           <div class="section-title" style="margin-bottom:12px;">⏳ Pending Age Transitions</div>
           ${ageFlags.map(({ n, label }) => `
-            <div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCard('${n.id}')">
+            <div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
               <span class="pk-stat-label" style="font-size:0.78rem;">${label}</span>
               <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.6;">open →</span>
             </div>`).join('')}
@@ -187,7 +187,7 @@ const TabDashboard = {
         <div class="card" style="border-top:3px solid #7a4a7a;">
           <div class="section-title" style="margin-bottom:12px;">💍 Eligible for Marriage</div>
           ${marriageFlags.map(({ n, label }) => `
-            <div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCard('${n.id}')">
+            <div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
               <span class="pk-stat-label" style="font-size:0.78rem;">${label}</span>
               <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.6;">open →</span>
             </div>`).join('')}
@@ -228,7 +228,7 @@ const TabDashboard = {
       const col = n.household ? hhColour(n.household) : roleColour(n.role);
       const age = n.year_born ? year - n.year_born : null;
       const dead = n.status === 'Dead';
-      return `<div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCardPopup('${n.id}')">
+      return `<div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="Components.openNpcCardPopup('${n.id}')">
         <span class="pk-stat-label" style="color:${col};${dead ? 'opacity:0.55;' : ''}">${dead ? '† ' : ''}${esc(n.name)}</span>
         <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.7;">${esc(n.role||'—')}${age !== null ? ' · ' + age : ''}</span>
       </div>`;
@@ -359,7 +359,7 @@ const TabDashboard = {
           </div>` : ''}
           ${activeImpr.length ? `<div class="pk-stat" style="margin-top:8px;"><span class="pk-stat-label">Improvements</span><span class="pk-stat-value">${activeImpr.length} active</span></div>` : ''}
           ${damaged.length ? `
-            <div class="pk-stat" style="cursor:pointer;" onclick="TabDashboard.toggleDamage()">
+            <div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="TabDashboard.toggleDamage()">
               <span class="pk-stat-label" style="color:var(--crimson-mid);">⚠ Property Damage</span>
               <span class="pk-stat-value" style="color:var(--crimson-mid);">${damaged.length} item${damaged.length!==1?'s':''} ${this._damageExpanded?'▴':'▾'}</span>
             </div>
@@ -460,7 +460,7 @@ const TabDashboard = {
 
     const rosterRows = (this._rosterExpanded ? sortedMembers : sortedMembers.slice(0,8)).map(n => {
       const age = n.year_born ? year - n.year_born : null;
-      return `<div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCard('${n.id}')">
+      return `<div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
         <span class="pk-stat-label">${esc(n.name)}</span>
         <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.7;">${esc(n.role||'—')}${age!==null?' · '+age:''}
         </span>
@@ -498,7 +498,7 @@ const TabDashboard = {
         <div class="section-title" style="margin-bottom:12px;">Recent Deaths</div>
         ${recentDead.slice(0,6).map(n => {
           const isOwn = (n.household||'').toLowerCase() === household.toLowerCase();
-          return `<div class="pk-stat" style="cursor:pointer;" onclick="Components.openNpcCard('${n.id}')">
+          return `<div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
             <span class="pk-stat-label" style="${isOwn?'color:var(--crimson-mid);font-weight:600;':''}">† ${esc(n.name)}</span>
             <span class="pk-stat-value" style="color:var(--crimson-mid);font-size:0.65rem;">${n.year_died} AD</span>
           </div>`;
@@ -707,7 +707,7 @@ const TabDashboard = {
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;max-height:320px;overflow-y:auto;padding:2px;">
         ${candidates.length ? candidates.map(n => {
           const age = n.year_born ? year - n.year_born : null;
-          return `<div id="suc-card-${n.id}" style="${cardStyle}" onclick="TabDashboard._successionSelect('${n.id}')">
+          return `<div id="suc-card-${n.id}" style="${cardStyle}" role="button" tabindex="0" onclick="TabDashboard._successionSelect('${n.id}')">
             <div style="font-size:1.2rem;line-height:1;">⚔</div>
             <div style="font-family:var(--font-heading);font-size:0.62rem;letter-spacing:0.05em;">${n.name}</div>
             <div style="font-size:0.6rem;color:var(--ink-soft);">${n.role || '—'}</div>

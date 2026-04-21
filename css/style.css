@@ -53,6 +53,17 @@
   --shadow-mid:     rgba(26,18,8,0.25);
   --shadow-soft:    rgba(26,18,8,0.12);
 
+  /* Status glows (palette-aligned) */
+  --presence-glow:  rgba(96,168,130,0.55);
+  --fate-glow:      rgba(61,122,98,0.55);
+
+  /* Common tints (top-5 consolidations; deeper palette sweep pending) */
+  --gold-tint-1:      rgba(184,134,11,0.1);
+  --gold-tint-2:      rgba(184,134,11,0.2);
+  --gold-tint-3:      rgba(184,134,11,0.3);
+  --verdigris-tint-2: rgba(45,90,74,0.2);
+  --crimson-tint-2:   rgba(160,30,30,0.2);
+
   /* Layout */
   --sidebar-w:      340px;
   --header-h:       60px;
@@ -184,7 +195,7 @@ body {
 .nav-tab.active {
   color: var(--gold-pale);
   border-bottom-color: var(--gold-bright);
-  background: rgba(184,134,11,0.1);
+  background: var(--gold-tint-1);
 }
 
 /* FATE DROPDOWN */
@@ -233,7 +244,7 @@ body {
 .nav-dropdown-item:last-child { border-bottom: none; }
 .nav-dropdown-item:hover {
   color: var(--gold-pale);
-  background: rgba(184,134,11,0.1);
+  background: var(--gold-tint-1);
 }
 .nav-dropdown-item .nav-icon { font-size: 0.85rem; }
 html.is-gm .nav-dropdown-item.gm-only { display: flex !important; }
@@ -274,7 +285,7 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
   transition: all 0.15s;
 }
 .hdr-dropdown-item:last-child { border-bottom: none; }
-.hdr-dropdown-item:hover { color: var(--gold-pale); background: rgba(184,134,11,0.1); }
+.hdr-dropdown-item:hover { color: var(--gold-pale); background: var(--gold-tint-1); }
 .hdr-dropdown-item-crimson { color: rgba(220,120,120,0.8); }
 .hdr-dropdown-item-crimson:hover { background: rgba(122,28,28,0.2); }
 .hdr-dropdown-divider { height: 1px; background: var(--vellum-deep); margin: 4px 0; }
@@ -333,7 +344,7 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
   align-items: center;
   gap: 4px;
   padding: 0 10px;
-  border-right: 1px solid rgba(184,134,11,0.2);
+  border-right: 1px solid var(--gold-tint-2);
   cursor: default;
   flex-shrink: 0;
 }
@@ -385,14 +396,14 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
 .hdr-btn-crimson:hover { background: rgba(122,28,28,0.28); border-color: var(--crimson-pale); }
 .hdr-btn-version {
   background: transparent;
-  border-color: rgba(184,134,11,0.2);
+  border-color: var(--gold-tint-2);
   color: var(--gold);
   opacity: 0.55;
   font-size: 0.55rem;
   letter-spacing: 0.12em;
   padding: 4px 8px;
 }
-.hdr-btn-version:hover { opacity: 1; background: rgba(184,134,11,0.1); }
+.hdr-btn-version:hover { opacity: 1; background: var(--gold-tint-1); }
 .hdr-btn-guide {
   background: transparent;
   border-color: rgba(45,90,74,0.3);
@@ -457,7 +468,7 @@ html.is-player .player-readonly-banner {
 
 .hdr-btn-outline {
   background: transparent;
-  border-color: rgba(184,134,11,0.2);
+  border-color: var(--gold-tint-2);
   color: var(--gold);
   opacity: 0.6;
   font-size: 0.55rem;
@@ -467,7 +478,7 @@ html.is-player .player-readonly-banner {
   display: inline-flex;
   align-items: center;
 }
-.hdr-btn-outline:hover { opacity: 1; background: rgba(184,134,11,0.1); }
+.hdr-btn-outline:hover { opacity: 1; background: var(--gold-tint-1); }
 .header-user {
   display: flex;
   align-items: center;
@@ -729,8 +740,8 @@ html.is-player .player-readonly-banner {
   font-family: var(--font-heading);
   font-size: 0.75rem;
   color: var(--gold);
-  background: rgba(184,134,11,0.1);
-  border: 1px solid rgba(184,134,11,0.3);
+  background: var(--gold-tint-1);
+  border: 1px solid var(--gold-tint-3);
   border-radius: var(--radius);
   padding: 3px 10px;
   display: inline-block;
@@ -805,7 +816,7 @@ html.is-player .player-readonly-banner {
   cursor: pointer;
   transition: all 0.12s;
 }
-.manor-link:hover { background: rgba(45,90,74,0.2); }
+.manor-link:hover { background: var(--verdigris-tint-2); }
 
 /* Edit controls */
 .edit-input {
@@ -1170,7 +1181,7 @@ html.is-player .player-readonly-banner {
 .conflict-badge.pillaged { background: rgba(122,28,28,0.15); color: var(--crimson-mid); border: 1px solid rgba(122,28,28,0.3); }
 .conflict-badge.raided   { background: rgba(122,28,28,0.08); color: var(--crimson-mid); border: 1px solid rgba(122,28,28,0.2); }
 .conflict-badge.bandits  { background: rgba(74,58,30,0.12); color: var(--amber-mid); border: 1px solid rgba(74,58,30,0.25); }
-.conflict-badge.none     { background: rgba(45,90,74,0.08); color: var(--verdigris-mid); border: 1px solid rgba(45,90,74,0.2); }
+.conflict-badge.none     { background: rgba(45,90,74,0.08); color: var(--verdigris-mid); border: 1px solid var(--verdigris-tint-2); }
 .harvest-badge {
   display: inline-block;
   padding: 1px 6px;
@@ -1180,7 +1191,7 @@ html.is-player .player-readonly-banner {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.harvest-badge.excellent { background: rgba(45,90,74,0.2); color: var(--verdigris); border: 1px solid rgba(45,90,74,0.4); }
+.harvest-badge.excellent { background: var(--verdigris-tint-2); color: var(--verdigris); border: 1px solid rgba(45,90,74,0.4); }
 .harvest-badge.good      { background: rgba(45,90,74,0.12); color: var(--verdigris-mid); border: 1px solid rgba(45,90,74,0.25); }
 .harvest-badge.regular   { background: transparent; color: var(--ink-soft); border: 1px solid var(--vellum-deep); }
 .harvest-badge.meager    { background: rgba(122,28,28,0.06); color: var(--crimson-mid); border: 1px solid rgba(122,28,28,0.15); }
@@ -1657,7 +1668,7 @@ html.is-player .player-readonly-banner {
 .toast-broadcast {
   background: linear-gradient(180deg, #3a2a10 0%, #2a1c08 100%);
   border: 2px solid var(--gold);
-  box-shadow: 0 4px 16px var(--shadow), 0 0 12px rgba(184,134,11,0.2);
+  box-shadow: 0 4px 16px var(--shadow), 0 0 12px var(--gold-tint-2);
 }
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -1702,7 +1713,7 @@ html.is-player .player-readonly-banner {
   padding: 10px 18px;
   background: linear-gradient(180deg, #2a1c08 0%, #1c1206 100%);
   border-bottom: 2px solid var(--gold);
-  border-top: 1px solid rgba(184,134,11,0.3);
+  border-top: 1px solid var(--gold-tint-3);
   box-shadow: inset 0 1px 0 rgba(255,220,150,0.06), 0 4px 12px var(--shadow);
   animation: broadcastSlide 0.3s ease-out;
   position: relative;
@@ -1735,7 +1746,7 @@ html.is-player .player-readonly-banner {
 }
 .broadcast-dismiss {
   background: none;
-  border: 1px solid rgba(184,134,11,0.2);
+  border: 1px solid var(--gold-tint-2);
   border-radius: var(--radius);
   color: var(--gold);
   opacity: 0.4;
@@ -1805,8 +1816,8 @@ html.is-player .player-readonly-banner {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #4caf50;
-  box-shadow: 0 0 6px rgba(76,175,80,0.6);
+  background: var(--verdigris-pale);
+  box-shadow: 0 0 6px var(--presence-glow);
   flex-shrink: 0;
 }
 .presence-count {
@@ -1825,7 +1836,7 @@ html.is-player .player-readonly-banner {
   margin-top: 6px;
   min-width: 180px;
   background: linear-gradient(180deg, #1c1208 0%, #110a03 100%);
-  border: 1px solid rgba(184,134,11,0.3);
+  border: 1px solid var(--gold-tint-3);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px var(--shadow);
   z-index: var(--z-presence);
@@ -1857,8 +1868,8 @@ html.is-player .player-readonly-banner {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #4caf50;
-  box-shadow: 0 0 4px rgba(76,175,80,0.5);
+  background: var(--verdigris-pale);
+  box-shadow: 0 0 4px var(--presence-glow);
   flex-shrink: 0;
 }
 .presence-name {
@@ -1945,7 +1956,7 @@ html.is-player .player-readonly-banner {
   .year-label   { display: none; }
   .year-value   { font-size: 0.9rem; min-width: 28px; }
   /* Nav tabs: stack icon over label so labels stay visible at 360px */
-  .nav-label    { display: block; font-size: 0.38rem; letter-spacing: 0.08em; margin-top: 1px; }
+  .nav-label    { display: block; font-size: 0.55rem; letter-spacing: 0.08em; margin-top: 1px; }
   .nav-tab      { flex-direction: column; gap: 2px; padding: 6px 8px; align-items: center; border-bottom-width: 2px; }
   .nav-tab .nav-icon { font-size: 0.9rem; line-height: 1; }
   .nav-dropdown-trigger { flex-direction: column; gap: 2px; padding: 6px 8px; }
@@ -2008,22 +2019,21 @@ html.is-player .player-readonly-banner {
   filter: drop-shadow(0 0 4px rgba(212,160,23,0.7));
 }
 .fate-pip {
-  color: #2a8a40;
+  color: var(--verdigris-mid);
   font-size: 0.75rem;
   line-height: 1;
   margin-left: 3px;
   cursor: default;
-  filter: drop-shadow(0 0 3px rgba(42,138,64,0.5));
+  filter: drop-shadow(0 0 3px var(--fate-glow));
 }
 .fate-pip-lg {
-  color: #2a8a40;
+  color: var(--verdigris-mid);
   font-size: 1rem;
   margin-left: 4px;
   cursor: default;
-  filter: drop-shadow(0 0 4px rgba(42,138,64,0.6));
+  filter: drop-shadow(0 0 4px var(--fate-glow));
 }
-/* Fate-touched NPC list item — subtle green left border */
-.npc-list-item:has(.fate-pip) { border-left: 2px solid #2a8a40; }
+.npc-list-item:has(.fate-pip) { border-left: 2px solid var(--verdigris-mid); }
 
 /* ── ROSTER — AGE FLAGS & TRAINING LINE ─────────────────────── */
 .npc-item-subline {
@@ -2347,7 +2357,7 @@ html.is-player .player-readonly-banner {
 
 .winter-npc-row.dead-row {
   background: rgba(160,30,30,0.07);
-  border: 1px solid rgba(160,30,30,0.2);
+  border: 1px solid var(--crimson-tint-2);
 }
 
 .winter-exempt-check {
@@ -2457,7 +2467,7 @@ html.is-player .player-readonly-banner {
   gap: 8px;
   padding: 8px 14px;
   background: rgba(160,30,30,0.09);
-  border-bottom: 1px solid rgba(160,30,30,0.2);
+  border-bottom: 1px solid var(--crimson-tint-2);
   font-family: var(--font-heading);
   font-size: 0.68rem;
   font-weight: 700;
@@ -2544,7 +2554,7 @@ html.is-player .player-readonly-banner {
   gap: 8px;
   padding: 8px 14px;
   background: rgba(45,90,74,0.09);
-  border-bottom: 1px solid rgba(45,90,74,0.2);
+  border-bottom: 1px solid var(--verdigris-tint-2);
   font-family: var(--font-heading);
   font-size: 0.68rem;
   font-weight: 700;
@@ -2655,7 +2665,7 @@ html.is-player .player-readonly-banner {
   display: inline-block;
   padding: 1px 6px;
   background: rgba(160,30,30,0.1);
-  border: 1px solid rgba(160,30,30,0.2);
+  border: 1px solid var(--crimson-tint-2);
   border-radius: 8px;
   font-family: var(--font-heading);
   font-size: 0.52rem;
@@ -2700,7 +2710,7 @@ html.is-player .player-readonly-banner {
 /* ── Record birth modal pieces ───────────────────────────── */
 .birth-bastard-notice {
   background: rgba(160,30,30,0.08);
-  border: 1px solid rgba(160,30,30,0.2);
+  border: 1px solid var(--crimson-tint-2);
   border-radius: 4px;
   padding: 8px 12px;
   margin-bottom: 12px;
@@ -3091,7 +3101,7 @@ html.is-player .player-readonly-banner {
 .hdr-btn-notif {
   position: relative;
   background: transparent;
-  border: 1px solid rgba(184,134,11,0.3);
+  border: 1px solid var(--gold-tint-3);
   color: var(--ink);
   font-size: 1rem;
   padding: 3px 10px;
@@ -3297,4 +3307,48 @@ html.is-player .player-readonly-banner {
   opacity: 0.7;
   min-width: 48px;
   text-align: right;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE / TOUCH POLISH
+   Adds safe-area padding for notched phones, unhides hover-only
+   buttons on touch devices, and bumps undersized tap targets.
+   Lives at the bottom so it overrides anything above.
+══════════════════════════════════════════════════════════════ */
+
+/* Touch devices (no hover, coarse pointer): keep action buttons
+   visible that were gated behind :hover on desktop. */
+@media (hover: none) and (pointer: coarse) {
+  .rel-edit-btn,
+  .tasks-item .tasks-action-btn,
+  .family-member-item .rel-edit-btn {
+    opacity: 0.65;
+  }
+  .rel-edit-btn:active,
+  .tasks-action-btn:active { opacity: 1; }
+}
+
+/* iPhone notch / home-bar safe areas. No-ops on devices without insets. */
+.app-header      { padding-top:   max(var(--pad-y, 0px), env(safe-area-inset-top)); }
+.modal-overlay   { padding-right: max(6px, env(safe-area-inset-right));
+                   padding-left:  max(6px, env(safe-area-inset-left)); }
+.toast-container { right:         max(20px, env(safe-area-inset-right));
+                   bottom:        max(20px, env(safe-area-inset-bottom)); }
+.npc-card-sidebar{ padding-right: max(0px, env(safe-area-inset-right)); }
+
+/* CardPopup layered above Modal — enforce vertical scroll so small
+   screens don't trap users below the fold. */
+.card-popup-box,
+.npc-card-popup {
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+/* Touch-target bumps at the mobile breakpoint (640px). */
+@media (max-width: 640px) {
+  .year-btn        { padding: 8px 10px; min-width: 32px; min-height: 32px; font-size: 1.2rem; }
+  .hdr-btn         { min-height: 36px; padding: 6px 9px; }
+  .modal-close,
+  .npc-sidebar-close { width: 40px; height: 40px; }
+  .filter-chip     { min-height: 32px; display: inline-flex; align-items: center; }
 }

@@ -105,7 +105,7 @@ const TabMausoleum = {
       const lived = (n.year_born && n.year_died) ? ` · aged ${n.year_died - n.year_born}` : '';
       const notePrev = n.notes ? (n.notes.length > 120 ? n.notes.slice(0, 120).replace(/\s+\S*$/, '') + '…' : n.notes) : '';
 
-      return `<div class="dead-card" style="border-top-color:${col};" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
+      return `<div class="dead-card" style="border-top-color:${col};" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
           <div class="dead-name">${esc(n.name)}</div>
           ${hh ? `<span style="font-size:0.8rem;">${hh.icon}</span>` : ''}
@@ -132,7 +132,7 @@ const TabMausoleum = {
       const age = n.year_born ? STORE.year - n.year_born : null;
       const ageStr = age !== null ? `b. ${n.year_born} AD · age ${age}` : '';
 
-      return `<div class="dead-card" style="border-top-color:${col};opacity:0.82;" data-npc-hover="${n.id}" onclick="Components.openNpcCard('${n.id}')">
+      return `<div class="dead-card" style="border-top-color:${col};opacity:0.82;" data-npc-hover="${n.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
           <div class="dead-name" style="color:var(--ink-soft);">${esc(n.name)}</div>
           ${hh ? `<span style="font-size:0.8rem;">${hh.icon}</span>` : ''}

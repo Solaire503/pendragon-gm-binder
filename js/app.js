@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.9.1';
+const APP_VERSION = '2.9.2';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────
@@ -366,7 +366,7 @@ const APP = {
         const click  = e.type === 'dir'
           ? `APP._fpNavigate('${escP(e.path)}')`
           : (isJson ? `APP._fpSelectFile('${escP(e.path)}')` : '');
-        return `<div class="fp-entry" style="${style}" onclick="${click}">
+        return `<div class="fp-entry" style="${style}" role="button" tabindex="0" onclick="${click}">
           <span class="fp-icon">${icon}</span>
           <span class="fp-name">${escText(e.name)}</span>
         </div>`;
@@ -476,7 +476,7 @@ const APP = {
       const click  = e.type === 'dir'
         ? `APP._fpNavigate('${escP2(e.path)}')`
         : (isJson ? `APP._fpSelectFile('${escP2(e.path)}')` : '');
-      return `<div class="fp-entry" style="${style}" onclick="${click}">
+      return `<div class="fp-entry" style="${style}" role="button" tabindex="0" onclick="${click}">
         <span class="fp-icon">${icon}</span>
         <span class="fp-name">${escText2(e.name)}</span>
       </div>`;

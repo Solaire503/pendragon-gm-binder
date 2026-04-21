@@ -364,6 +364,48 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '2.9.2',
+    date:    '2026-04-21',
+    sections: [
+      {
+        heading: 'Accessibility',
+        items: [
+          'The entire binder is now keyboard-navigable. Every clickable card, list item, and inline name can be focused with Tab and triggered with Enter or Space — no mouse required.',
+        ],
+      },
+      {
+        heading: 'Mobile Polish',
+        items: [
+          'Hover-only action buttons (edit pencils on family tree relationships, row actions on Tasks) now appear at partial opacity on touch devices so they\'re actually tappable.',
+          'Touch targets bumped to WCAG-friendly sizes at mobile width: year arrows, header buttons, modal close buttons, filter chips — all now at least 32–40px tall.',
+          'NPC card popup inside a modal now scrolls vertically on phones instead of trapping content below the fold.',
+          'Notched iPhones now respect safe-area insets on the header, modals, toast notifications, and the NPC sidebar drawer — no content hidden under the camera cutout or home bar.',
+          'Navigation labels enlarged on narrow screens (was ~6px, now ~9px — actually readable).',
+          'Backgrounded tab no longer polls — heartbeat, presence, and broadcast checks pause when you switch away from the app, saving battery and data. They resume instantly when you come back.',
+          'Family-tree right-click menu now stays inside the viewport instead of clipping off-screen on phones.',
+        ],
+      },
+      {
+        heading: 'Visual Consistency',
+        items: [
+          'Online-presence dots and Fate-touched pips were using a bright out-of-palette green. They now use the existing medieval verdigris tones — small change, but the UI looks a lot more cohesive at a glance.',
+        ],
+      },
+      {
+        heading: 'Security',
+        items: [
+          '"Forgot password" endpoint now returns in constant time regardless of whether the email address is registered, closing an email-enumeration timing side-channel. The reset email fires in the background instead of blocking the response.',
+        ],
+      },
+      {
+        heading: 'Data Safety',
+        items: [
+          'Nightly off-host backups. Every night at 3 AM, the full binder (save file, submissions, comments, broadcasts, player data, user accounts, and Caliburn bot config) is packaged and uploaded to cloud storage with 30-day rolling retention. If the server ever dies — disk, VM, or entire box — the campaign survives.',
+        ],
+      },
+    ],
+  },
+  {
     version: '2.9.1',
     date:    '2026-04-09',
     sections: [

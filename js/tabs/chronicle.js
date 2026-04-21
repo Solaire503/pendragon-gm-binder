@@ -237,7 +237,7 @@ const TabChronicle = {
     if (!npc) return `<span style="color:var(--ink-soft);font-style:italic;">(unknown)</span>`;
     const isDead = !!STORE.dead.find(d => d.id === npc.id);
     const col = isDead ? '#a02020' : '#6a3a10';
-    return `<span style="cursor:pointer;color:${col};text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:600;"
+    return `<span style="cursor:pointer;color:${col};text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:600;" role="button" tabindex="0"
       onclick="Components.openNpcCard('${npc.id}')">${esc(npc.name)}</span>`;
   },
 

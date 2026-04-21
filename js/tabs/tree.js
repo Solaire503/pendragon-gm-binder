@@ -1681,7 +1681,11 @@ const TabTree = {
 
     const menu = document.createElement('div');
     menu.id = 'treeCtxMenu';
-    menu.style.cssText = `position:fixed;top:${cy}px;left:${cx}px;background:var(--vellum);border:1px solid var(--gold);border-radius:var(--radius);box-shadow:0 4px 16px var(--shadow);z-index:9999;min-width:185px;overflow:hidden;`;
+    const menuW = 185;
+    const menuH = 320;
+    const safeX = Math.max(8, Math.min(cx, window.innerWidth  - menuW - 8));
+    const safeY = Math.max(8, Math.min(cy, window.innerHeight - menuH - 8));
+    menu.style.cssText = `position:fixed;top:${safeY}px;left:${safeX}px;background:var(--vellum);border:1px solid var(--gold);border-radius:var(--radius);box-shadow:0 4px 16px var(--shadow);z-index:9999;min-width:185px;overflow:hidden;`;
 
     const items = [
       { label: '👤 Open NPC Card',    action: () => Components.openNpcCardInTree(npcId) },

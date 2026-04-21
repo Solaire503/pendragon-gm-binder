@@ -628,15 +628,11 @@ RESET_INVALID_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE +
 """
 
 
-def _send_reset_email(to_addr: str, token: str) -> bool:
+def _send_reset_email(to_addr: str, token: str, base_url: str) -> bool:
     smtp_user = SECRETS.get('SMTP_USER', '')
     smtp_pass = SECRETS.get('SMTP_PASS', '')
     if not smtp_user or not smtp_pass:
         return False
-    if SECRETS.get('CF_TUNNEL'):
-        base_url = 'https://pendragon-binder.com'
-    else:
-        base_url = request.host_url.rstrip('/')
     reset_url = f"{base_url}/reset/{token}"
     body = f"""Hello,
 
@@ -778,7 +774,15 @@ def api_forgot_password():
         token = _secrets_mod.token_urlsafe(32)
         with _reset_tokens_lock:
             _reset_tokens[token] = {'username': matched['username'], 'expires': time.time() + 3600}
-        _send_reset_email(matched['email'], token)
+        if SECRETS.get('CF_TUNNEL'):
+            base_url = 'https://pendragon-binder.com'
+        else:
+            base_url = request.host_url.rstrip('/')
+        threading.Thread(
+            target=_send_reset_email,
+            args=(matched['email'], token, base_url),
+            daemon=True,
+        ).start()
     return jsonify({'ok': True, 'message': 'If that email is registered, a reset link has been sent.'})
 
 

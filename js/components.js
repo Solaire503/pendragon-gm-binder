@@ -15,6 +15,18 @@ const esc = s => String(s == null ? '' : s)
   .replace(/'/g, '&#39;');
 window.esc = esc;
 
+// Any element with role="button" (used on non-<button> clickable divs/spans)
+// should trigger its onclick on Enter/Space for keyboard users. One delegated
+// listener handles every such element across the app (MD-5).
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  const t = ev.target;
+  if (!t || t.getAttribute('role') !== 'button') return;
+  if (t.tagName === 'BUTTON' || t.tagName === 'A' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return;
+  ev.preventDefault();
+  t.click();
+});
+
 // ── API FETCH HELPER ──────────────────────────────────────────
 // Standardized fetch wrapper. All network calls should prefer this over raw
 // fetch() so error handling and JSON parsing are consistent.
@@ -366,7 +378,7 @@ function buildNpcCardHtml(npc, opts = {}) {
   // Find linked manor
   const manorKey = npc.manor ? STORE.manorKeys().find(k => npc.manor.toLowerCase().includes(k.toLowerCase())) : null;
   const manorLinkHtml = manorKey
-    ? `<span class="manor-link" onclick="APP.goToManor('${manorKey}')">${hhIcon(manorKey)} ${manorKey} Manor</span>`
+    ? `<span class="manor-link" role="button" tabindex="0" onclick="APP.goToManor('${manorKey}')">${hhIcon(manorKey)} ${manorKey} Manor</span>`
     : (npc.manor ? `<span style="font-size:0.9rem;color:var(--ink-soft)">${esc(npc.manor)}</span>` : '');
 
   // Relationships
@@ -451,7 +463,7 @@ function buildNpcCardHtml(npc, opts = {}) {
       bastardBadge = `<span class="bastard-ack-badge" style="${bStyle}">${bSymbol} ${bStatus}</span>`;
     }
 
-    return `<div class="family-member-item" onclick="Components.openNpcCard('${other.id}')">
+    return `<div class="family-member-item" role="button" tabindex="0" onclick="Components.openNpcCard('${other.id}')">
       <span class="family-member-role" style="background:${roleColour(r.type)}">${displayType}</span>
       <span class="family-member-name" style="${nameStyle}">${esc(other.name)}</span>
       ${bastardBadge}
@@ -474,7 +486,7 @@ function buildNpcCardHtml(npc, opts = {}) {
         const deathNote = dead && s.year_died ? `<span class="rel-death-note">† ${s.year_died}</span>` : '';
         const sAge = s.year_born ? (dead && s.year_died ? s.year_died - s.year_born : STORE.year - s.year_born) : null;
         const sibColour = sibType === 'Full Sibling' ? '#5a4a7a' : sibType === 'Half-Sibling' ? '#6a5a3a' : '#4a5a6a';
-        return `<div class="family-member-item" onclick="Components.openNpcCard('${s.id}')">
+        return `<div class="family-member-item" role="button" tabindex="0" onclick="Components.openNpcCard('${s.id}')">
           <span class="family-member-role" style="background:${sibColour};">${sibType}</span>
           <span class="family-member-name" style="${nameStyle}">${esc(s.name)}</span>
           ${deathNote}
@@ -505,7 +517,7 @@ function buildNpcCardHtml(npc, opts = {}) {
         const bSymbol = bStatus === 'Legitimized' ? '⚜' : bStatus === 'Acknowledged' ? '◈' : '✗';
         bastardBadge = `<span class="bastard-ack-badge" style="${bStyle}">${bSymbol} ${bStatus}</span>`;
       }
-      return `<div class="family-member-item" onclick="Components.openNpcCard('${s.id}')">
+      return `<div class="family-member-item" role="button" tabindex="0" onclick="Components.openNpcCard('${s.id}')">
         <span class="family-member-role" style="background:${colorFn(role)};">${role}</span>
         <span class="family-member-name" style="${nameStyle}">${esc(s.name)}</span>
         ${bastardBadge}
@@ -598,7 +610,7 @@ function buildNpcCardHtml(npc, opts = {}) {
     const nameStyle = isDead ? 'color:var(--ink-soft);text-decoration:line-through;' : '';
     const deathNote = isDead ? `<span class="rel-death-note">† ${other.year_died || 'deceased'}</span>` : '';
     const noteText  = r.notes ? `<span style="font-size:0.78rem;color:var(--ink-soft);font-style:italic;"> — ${AtMention.render(r.notes)}</span>` : '';
-    return `<div class="family-member-item" ${other ? `onclick="Components.openNpcCard('${other.id}')"` : ''}>
+    return `<div class="family-member-item" ${other ? `role="button" tabindex="0" onclick="Components.openNpcCard('${other.id}')"` : ''}>
       <span class="family-member-role" style="background:var(--violet-mid);color:#fff;">${label}</span>
       <span class="family-member-name" style="${nameStyle}">${esc(name)}${noteText}</span>
       ${deathNote}
@@ -1764,7 +1776,7 @@ const Components = {
     const gridHtml = categories.map(cat => {
       const templates = STAT_BLOCK_TEMPLATES.filter(t => t.category === cat);
       const cards = templates.map(t => `
-        <div class="statblock-card" onclick="Components._applyStatblockTemplate('${esc(t.name)}')">
+        <div class="statblock-card" role="button" tabindex="0" onclick="Components._applyStatblockTemplate('${esc(t.name)}')">
           <div style="font-family:var(--font-display);font-size:0.85rem;color:var(--ink);margin-bottom:3px;">${esc(t.name)}</div>
           <div style="font-size:0.72rem;color:var(--ink-soft);font-style:italic;margin-bottom:6px;">${esc(t.description)}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
