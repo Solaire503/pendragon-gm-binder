@@ -1545,7 +1545,7 @@ const TabSolos = {
 
     Modal.open(`
       <div style="min-width:360px;">
-        <div class="modal-header"><h2 style="margin:0;font-size:1rem;">Bastard Birth Roll — ${npc.name}</h2></div>
+        <div class="modal-header"><h2 style="margin:0;font-size:1rem;">Bastard Birth Roll — ${esc(npc.name)}</h2></div>
         <div style="padding:16px 20px;">
           <p style="margin:0 0 8px;font-size:0.85rem;color:var(--ink-soft);">
             Roll: [${result.rolls.join(' → ')}] — <strong>${result.result}</strong>

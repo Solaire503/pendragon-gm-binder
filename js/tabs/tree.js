@@ -246,8 +246,8 @@ const TabTree = {
       item.className   = 'tree-pocket-item';
       item.draggable   = true;
       item.innerHTML   = `<span class="tree-pocket-pip" style="background:${col};"></span>
-        <span class="tree-pocket-name">${n.name}</span>
-        <span class="tree-pocket-role">${n.role || ''}</span>`;
+        <span class="tree-pocket-name">${esc(n.name)}</span>
+        <span class="tree-pocket-role">${esc(n.role || '')}</span>`;
       item.addEventListener('dragstart', e => {
         e.dataTransfer.setData('text/plain', n.id);
         e.dataTransfer.effectAllowed = 'move';
@@ -1463,8 +1463,8 @@ const TabTree = {
       if (!filtered.length) { results.style.display = 'none'; return; }
       results.innerHTML = filtered.slice(0, 12).map(n =>
         `<div class="npc-search-item" data-id="${n.id}">
-          <span class="npc-search-name">${n.name}</span>
-          ${n.role      ? `<span class="npc-search-role">${n.role}</span>` : ''}
+          <span class="npc-search-name">${esc(n.name)}</span>
+          ${n.role      ? `<span class="npc-search-role">${esc(n.role)}</span>` : ''}
           ${n.household ? `<span class="npc-search-hh" style="color:${STORE.householdColour(n.household)}">${STORE.householdIcon(n.household)}</span>` : ''}
         </div>`
       ).join('');
@@ -1505,8 +1505,8 @@ const TabTree = {
     if (!wrap) return;
     wrap.innerHTML = this._bulkSelected.map(s =>
       `<span class="bulk-chip">
-        <span class="bulk-chip-name">${s.name}</span>
-        ${s.role ? `<span class="bulk-chip-role">${s.role}</span>` : ''}
+        <span class="bulk-chip-name">${esc(s.name)}</span>
+        ${s.role ? `<span class="bulk-chip-role">${esc(s.role)}</span>` : ''}
         <button class="bulk-chip-remove" onclick="TabTree._removeBulkChip('${s.id}')" title="Remove">×</button>
       </span>`
     ).join('');

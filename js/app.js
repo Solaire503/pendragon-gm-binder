@@ -240,7 +240,7 @@ const APP = {
       const userEl = document.createElement('div');
       userEl.className = 'header-user';
       userEl.innerHTML =
-        `<span class="header-username">${user.username}</span>` +
+        `<span class="header-username">${esc(user.username)}</span>` +
         `<a href="/account" class="hdr-btn hdr-btn-outline" title="Change passphrase">🗝</a>` +
         `<form method="POST" action="/logout" style="display:inline;margin:0;">
   <button type="submit" class="hdr-btn hdr-btn-outline" title="Sign out">Sign out</button>
@@ -577,6 +577,7 @@ const APP = {
       case 'winter':     TabWinter.render();     break;
       case 'mausoleum':  TabMausoleum.render();   break;
       case 'chronicle':  TabChronicle.render();   break;
+      case 'battle':     if (typeof TabBattle !== 'undefined') TabBattle.render(); break;
       case 'journal':    if (typeof TabJournal !== 'undefined') TabJournal.render(); break;
     }
   },

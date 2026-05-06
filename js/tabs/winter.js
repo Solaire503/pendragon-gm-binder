@@ -375,10 +375,10 @@ const TabWinter = {
     if (!npc) return;
     Modal.open(`
       <div style="min-width:340px;">
-        <div class="modal-header"><h2 style="margin:0;font-size:1rem;">Confirm Death — ${npc.name}</h2></div>
+        <div class="modal-header"><h2 style="margin:0;font-size:1rem;">Confirm Death — ${esc(npc.name)}</h2></div>
         <div style="padding:16px 20px;">
           <p style="margin:0 0 12px;font-size:0.9rem;color:var(--ink-soft);">
-            Winter claimed <strong>${npc.name}</strong>. Record the cause for the chronicles?
+            Winter claimed <strong>${esc(npc.name)}</strong>. Record the cause for the chronicles?
           </p>
           <div class="detail-field mb-8">
             <div class="detail-label">Year of Death</div>
@@ -890,12 +890,12 @@ const TabWinter = {
     Modal.open(`
       <div style="min-width:440px;max-width:560px;">
         <div class="modal-header">
-          <h2 style="margin:0;font-size:1rem;">${titleLabel} — ${mother.name}</h2>
+          <h2 style="margin:0;font-size:1rem;">${titleLabel} — ${esc(mother.name)}</h2>
         </div>
         <div style="padding:16px 20px;">
           ${bastard ? `<div class="birth-bastard-notice">⚔ Bastard Birth — father unknown or unacknowledged</div>` : ''}
           <p style="margin:0 0 14px;font-size:0.85rem;color:var(--ink-soft);">
-            <strong>${mother.name}</strong> bore ${children.length===1?'a child':children.length+' children'} in ${STORE.year} AD.
+            <strong>${esc(mother.name)}</strong> bore ${children.length===1?'a child':children.length+' children'} in ${STORE.year} AD.
           </p>
           ${childRows}
           <div style="border-top:1px solid var(--vellum-deep);padding-top:12px;margin-top:8px;">
@@ -964,7 +964,7 @@ const TabWinter = {
 
     if (ft === 'child_dies') {
       body = `
-        <p style="margin:0 0 12px;">A ${sexStr} was born to <strong>${npc.name}</strong> but did not survive.</p>
+        <p style="margin:0 0 12px;">A ${sexStr} was born to <strong>${esc(npc.name)}</strong> but did not survive.</p>
         <div class="detail-field mb-12">
           <div class="detail-label">Child's Name (optional — for records)</div>
           <input class="edit-input" id="trag-child-name" placeholder="Leave blank to skip">
@@ -976,7 +976,7 @@ const TabWinter = {
         </div>`;
     } else if (ft === 'mother_dies') {
       body = `
-        <p style="margin:0 0 12px;"><strong>${npc.name}</strong> died in childbirth.</p>
+        <p style="margin:0 0 12px;"><strong>${esc(npc.name)}</strong> died in childbirth.</p>
         <div class="detail-field mb-12">
           <div class="detail-label">Cause of Death</div>
           <input class="edit-input" id="trag-cause" value="Died in childbirth">
@@ -987,7 +987,7 @@ const TabWinter = {
         </div>`;
     } else if (ft === 'both_die') {
       body = `
-        <p style="margin:0 0 12px;"><strong>${npc.name}</strong> and her ${sexStr} both perished.</p>
+        <p style="margin:0 0 12px;"><strong>${esc(npc.name)}</strong> and her ${sexStr} both perished.</p>
         <div class="detail-field mb-8">
           <div class="detail-label">Child's Name (optional)</div>
           <input class="edit-input" id="trag-child-name" placeholder="Leave blank to skip">
@@ -1002,14 +1002,14 @@ const TabWinter = {
         </div>`;
     } else if (ft === 'difficult_birth') {
       body = `
-        <p style="margin:0 0 12px;"><strong>${npc.name}</strong> survived a difficult birth but suffers a permanent −1 to CON (currently ${npc.con||13}).</p>
+        <p style="margin:0 0 12px;"><strong>${esc(npc.name)}</strong> survived a difficult birth but suffers a permanent −1 to CON (currently ${npc.con||13}).</p>
         <div class="btn-row">
           <button class="btn btn-danger" onclick="TabWinter._doResolveTragedy('${npcId}','difficult_birth')">Apply −1 CON</button>
           <button class="btn btn-ghost"  onclick="Modal.close()">Cancel</button>
         </div>`;
     } else if (ft === 'barren') {
       body = `
-        <p style="margin:0 0 12px;">After this ordeal, <strong>${npc.name}</strong> will bear no more children. This is permanent.</p>
+        <p style="margin:0 0 12px;">After this ordeal, <strong>${esc(npc.name)}</strong> will bear no more children. This is permanent.</p>
         <div class="btn-row">
           <button class="btn btn-danger" onclick="TabWinter._doResolveTragedy('${npcId}','barren')">Mark as Barren</button>
           <button class="btn btn-ghost"  onclick="Modal.close()">Cancel</button>
@@ -1018,7 +1018,7 @@ const TabWinter = {
 
     Modal.open(`
       <div style="min-width:360px;">
-        <div class="modal-header"><h2 style="margin:0;font-size:1rem;">⚠ Tragedy — ${npc.name}</h2></div>
+        <div class="modal-header"><h2 style="margin:0;font-size:1rem;">⚠ Tragedy — ${esc(npc.name)}</h2></div>
         <div style="padding:16px 20px;font-size:0.88rem;color:var(--ink);line-height:1.6;">${body}</div>
       </div>`);
   },

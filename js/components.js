@@ -1479,8 +1479,8 @@ const Components = {
     // Vassal                      → source=vassal (younger), target=liege (older)
     // Ward                        → source=ward (younger),  target=guardian (older)
     // Guardian                    → source=guardian (older), target=ward (younger)
-    const childTypes  = new Set(['Child', 'Adopted Child', 'Bastard']);
-    const parentTypes = new Set(['Parent', 'Adoptive Parent']);
+    const childTypes  = new Set(['Child', 'Bastard']);
+    const parentTypes = new Set(['Parent']);
     // senior-first: source should be the older NPC
     const seniorFirst = new Set(['Squire', 'Former Squire', 'Guardian']);
     // junior-first: source should be the younger NPC

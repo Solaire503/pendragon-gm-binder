@@ -364,6 +364,45 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '2.10.0',
+    date:    '2026-05-06',
+    sections: [
+      {
+        heading: 'Battle Records — Foundation',
+        items: [
+          'New Battle tab with placeholder UI — the conroi assembles here when the GM calls to arms.',
+          'Server-side battle storage (battles.json) with thread-safe read/write helpers.',
+        ],
+      },
+      {
+        heading: 'Manor Improvements',
+        items: [
+          'Recording a year no longer resets when you add property damage mid-form. The damage modal now saves without wiping your progress.',
+          'Property Damage section added directly inside the Record Year form — view active damage and add new entries without leaving the form.',
+          'Steward now shows Industry skill alongside Stewardship when the NPC has it (e.g. ladies of the house or spouses).',
+        ],
+      },
+      {
+        heading: 'Family & Relationships',
+        items: [
+          'Adopted children now carry through to all inferred relationships: grandparents, grandchildren, in-laws, aunts, uncles, nieces, and nephews all recognize adoptive family links.',
+          'Fixed: Adding an adoption relationship no longer flips the direction when the adopted child is older than the adoptive parent. The birth-year auto-swap heuristic now only applies to biological parent/child types.',
+        ],
+      },
+      {
+        heading: 'Security',
+        items: [
+          'CSRF protection added to password change and AI proxy endpoints.',
+          'Rate limiter on password reset now uses the real client IP behind Cloudflare instead of always seeing localhost.',
+          'Player-load and relationship-save error responses no longer leak filesystem paths or raw exceptions.',
+          'Backend source files (.py) are now blocked from being served to authenticated users.',
+          'User credentials file permissions tightened to owner-only (600) on every save.',
+          'XSS sweep: ~20 unescaped NPC name/role/username spots across the tree, dashboard, winter, solos, and app now use esc().',
+        ],
+      },
+    ],
+  },
+  {
     version: '2.9.2',
     date:    '2026-04-21',
     sections: [

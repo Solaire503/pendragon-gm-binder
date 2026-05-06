@@ -709,8 +709,8 @@ const TabDashboard = {
           const age = n.year_born ? year - n.year_born : null;
           return `<div id="suc-card-${n.id}" style="${cardStyle}" role="button" tabindex="0" onclick="TabDashboard._successionSelect('${n.id}')">
             <div style="font-size:1.2rem;line-height:1;">⚔</div>
-            <div style="font-family:var(--font-heading);font-size:0.62rem;letter-spacing:0.05em;">${n.name}</div>
-            <div style="font-size:0.6rem;color:var(--ink-soft);">${n.role || '—'}</div>
+            <div style="font-family:var(--font-heading);font-size:0.62rem;letter-spacing:0.05em;">${esc(n.name)}</div>
+            <div style="font-size:0.6rem;color:var(--ink-soft);">${esc(n.role || '—')}</div>
             ${age !== null ? `<div style="font-size:0.58rem;opacity:0.5;">${age} yrs</div>` : ''}
           </div>`;
         }).join('') : `<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--ink-soft);font-style:italic;">

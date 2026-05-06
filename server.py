@@ -41,7 +41,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '2.9.1'   # keep in sync with js/app.js
+APP_VERSION  = '2.10.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -50,6 +50,7 @@ BACKUP_DIR   = BASE_DIR / 'backups'
 PLAYER_DATA_DIR  = BASE_DIR / 'player_data'
 SUBMISSIONS_FILE     = BASE_DIR / 'submissions.json'
 BROADCAST_TASKS_FILE = BASE_DIR / 'broadcast_tasks.json'
+BATTLES_FILE         = BASE_DIR / 'battles.json'
 CERT_FILE    = BASE_DIR / 'cert.pem'
 KEY_FILE     = BASE_DIR / 'key.pem'
 PORT         = 8765
@@ -58,10 +59,10 @@ PORT         = 8765
 BLOCKED_FILES = {
     'secrets.env', 'users.json', 'cert.pem', 'key.pem',
     'cert.pem.bak', 'key.pem.bak',
-    'config.json', '.env',
+    'config.json', '.env', 'server.py',
 }
 # Any file whose name ends with one of these suffixes is also blocked
-BLOCKED_SUFFIXES = ('.pem', '.pem.bak', '.key')
+BLOCKED_SUFFIXES = ('.pem', '.pem.bak', '.key', '.py')
 
 # ── SECRETS ──────────────────────────────────────────────────────────────────
 
@@ -313,6 +314,7 @@ def load_users() -> list:
 def save_users(users: list) -> None:
     with _users_lock:
         _write_json(USERS_FILE, users)
+        USERS_FILE.chmod(0o600)
 
 def get_user(username: str) -> dict | None:
     for u in load_users():
@@ -762,7 +764,7 @@ def forgot_password():
 
 @app.route('/api/forgot-password', methods=['POST'])
 def api_forgot_password():
-    ip = request.remote_addr or 'unknown'
+    ip = request.headers.get('CF-Connecting-IP') or request.remote_addr or 'unknown'
     if _is_rate_limited(f'reset:{ip}'):
         return jsonify({'ok': True, 'message': 'If that email is registered, a reset link has been sent.'}), 200
     _record_attempt(f'reset:{ip}')
@@ -827,6 +829,8 @@ def account():
     success = None
 
     if request.method == 'POST':
+        err = _csrf_check()
+        if err: return err
         current = request.form.get('current', '')
         new_pw  = request.form.get('new', '').strip()
         confirm = request.form.get('confirm', '').strip()
@@ -1049,7 +1053,7 @@ def api_player_load():
     if not path:
         return jsonify({'status': 'no_config'})
     if not path.exists():
-        return jsonify({'status': 'file_missing', 'path': str(path)})
+        return jsonify({'status': 'file_missing'})
     try:
         data = path.read_text(encoding='utf-8')
         binder = json.loads(data)
@@ -1068,8 +1072,8 @@ def api_player_load():
                         for f in _GM_NPC_FIELDS:
                             npc.pop(f, None)
         return app.response_class(json.dumps(binder), mimetype='application/json')
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return jsonify({'error': 'Failed to load save data'}), 500
 
 
 @app.route('/api/save', methods=['POST'])
@@ -1161,8 +1165,8 @@ def api_save_relationships():
     with _save_lock:
         try:
             binder = json.loads(path.read_text(encoding='utf-8'))
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+        except Exception:
+            return jsonify({'error': 'Failed to read save data'}), 500
 
         if session.get('role') != 'gm':
             user_hh = (session.get('household') or '').lower()
@@ -1293,6 +1297,8 @@ def api_ai():
     """Proxy to Anthropic API. GM only.
     Only forwards specific safe fields — prevents model/token abuse via
     a stolen GM session or crafted request body."""
+    err = _csrf_check()
+    if err: return err
     api_key = SECRETS.get('ANTHROPIC_KEY', '').strip()
     if not api_key:
         return jsonify({'error': 'No Anthropic API key configured'}), 400
@@ -2351,6 +2357,22 @@ def api_restore_comment(comment_id):
         target['deletedBy'] = None
         _write_comments(all_comments)
     return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
+
+
+# ── BATTLES ───────────────────────────────────────────────────────────────────
+
+_battles_lock = threading.Lock()
+
+def _read_battles() -> dict:
+    with _battles_lock:
+        data = _read_json(BATTLES_FILE, default={'battles': {}})
+        if not isinstance(data, dict) or 'battles' not in data:
+            return {'battles': {}}
+        return data
+
+def _write_battles(data: dict) -> None:
+    with _battles_lock:
+        _write_json(BATTLES_FILE, data)
 
 
 # ── NPC PURGE (LO-18) ─────────────────────────────────────────────────────────

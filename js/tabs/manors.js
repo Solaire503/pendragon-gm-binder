@@ -215,14 +215,17 @@ const TabManors = {
     const stewardFallback = stewardStr.length > 0 ? STORE.living.find(n => n.name.toLowerCase().includes(stewardStr.toLowerCase())) : null;
 
     const npcBtn = (npc, placeholder, field) => {
-      if (npc) return `<span class="npc-inline-link" data-npc-hover="${npc.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${npc.id}')">${npc.name}</span>` +
+      if (npc) return `<span class="npc-inline-link" data-npc-hover="${npc.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${npc.id}')">${esc(npc.name)}</span>` +
         (readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;margin-left:4px;" onclick="TabManors._pickPersonnel('${key}','${field}')">✎</button>`);
       if (readOnly) return '<span style="opacity:0.4;font-style:italic;">—</span>';
       return `<button class="btn btn-ghost" style="padding:3px 10px;font-size:0.55rem;" onclick="TabManors._pickPersonnel('${key}','${field}')">+ Set ${placeholder}</button>`;
     };
 
-    const stewardSkillDisplay = (stewardNpc || stewardFallback)
+    const stewardRef = stewardNpc || stewardFallback;
+    const stewardIndustryMatch = stewardRef?.skills?.match(/Industry[:\s]+(\d+)/i);
+    const stewardSkillDisplay = stewardRef
       ? `<span style="font-family:var(--font-heading);font-size:0.78rem;color:var(--verdigris-mid);margin-left:8px;" title="Stewardship skill — used in manor fate checks">Stewardship: <strong>${m.steward_skill ?? '?'}</strong></span>` +
+        (stewardIndustryMatch ? `<span style="font-family:var(--font-heading);font-size:0.78rem;color:var(--verdigris-mid);margin-left:8px;" title="Industry skill — extra income from steward">Industry: <strong>${stewardIndustryMatch[1]}</strong></span>` : '') +
         (readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 6px;font-size:0.48rem;margin-left:4px;" onclick="TabManors._editStewardSkill('${key}')">✎</button>`)
       : '';
 
@@ -427,7 +430,7 @@ const TabManors = {
           <div style="text-align:right;flex-shrink:0;margin-right:8px;">
             <div style="font-family:var(--font-heading);font-size:0.6rem;color:${col};margin-bottom:2px;">${v.tenure||'—'}</div>
             <div class="improvement-meta">
-              ${knight ? `<span class="npc-inline-link" data-npc-hover="${knight.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${knight.id}')">${knight.name}</span>` : '<span style="opacity:0.5;">No knight set</span>'}
+              ${knight ? `<span class="npc-inline-link" data-npc-hover="${knight.id}" role="button" tabindex="0" onclick="Components.openNpcCard('${knight.id}')">${esc(knight.name)}</span>` : '<span style="opacity:0.5;">No knight set</span>'}
             </div>
           </div>
           <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.5rem;" onclick="TabManors.openEditVassal('${key}',${v.id})">✎</button>
@@ -998,6 +1001,22 @@ const TabManors = {
           <div class="detail-label">Care After</div>
           <input class="edit-input" id="ry-care" type="number" value="${m.care??0}">
         </div>
+      </div>
+
+      <!-- Property Damage (inline) -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div class="section-title" style="margin-bottom:0;">Property Damage</div>
+        <button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;" onclick="TabManors.openAddDamage('${key}')">+ Add Damage</button>
+      </div>
+      <div style="background:var(--vellum-deep);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:0.78rem;color:var(--ink-soft);">
+        ${(m.propertyDamage||[]).filter(d=>d.status==='damaged').length
+          ? (m.propertyDamage||[]).filter(d=>d.status==='damaged').map(d =>
+              `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--vellum-mid);">
+                <span><strong>${esc(d.type)}</strong> — ${esc(d.description)}${d.numFields ? ` (${d.numFields} field${d.numFields!==1?'s':''})` : ''}</span>
+                <span style="white-space:nowrap;margin-left:8px;color:var(--crimson-mid);">${d.repairCost ? d.repairCost+' L' : ''}</span>
+              </div>`
+            ).join('')
+          : '<span style="font-style:italic;">No active damage</span>'}
       </div>
 
       <!-- Notes -->
@@ -1790,7 +1809,7 @@ const TabManors = {
     Modal.open(`
       <div style="min-width:300px;">
         <div class="page-title" style="font-size:1rem;margin-bottom:6px;">Stewardship Skill</div>
-        ${npc ? `<div style="font-size:0.9rem;color:var(--ink-soft);margin-bottom:14px;">${npc.name}</div>` : ''}
+        ${npc ? `<div style="font-size:0.9rem;color:var(--ink-soft);margin-bottom:14px;">${esc(npc.name)}</div>` : ''}
         <div class="detail-field mb-12">
           <div class="detail-label">Stewardship Skill Level</div>
           <input class="edit-input" id="ss-skill" type="number" min="1" max="30"
@@ -2374,7 +2393,7 @@ const TabManors = {
     STORE.save();
     Toast.success('Damage logged');
     Modal.close();
-    this._renderManor();
+    if (!this._recordOpen) this._renderManor();
   },
 
   // ══════════════════════════════════════════════════════════

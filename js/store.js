@@ -509,6 +509,24 @@ const STORE = {
     return ids;
   },
 
+  _getAllParentIds(npcId) {
+    const ids = new Set();
+    this.relationships.forEach(r => {
+      if ((r.type === 'Child' || r.type === 'Bastard' || r.type === 'Adopted Child') && r.sourceId === npcId) ids.add(r.targetId);
+      if ((r.type === 'Parent' || r.type === 'Adoptive Parent') && r.targetId === npcId) ids.add(r.sourceId);
+    });
+    return ids;
+  },
+
+  _getAllChildIds(npcId) {
+    const ids = new Set();
+    this.relationships.forEach(r => {
+      if ((r.type === 'Child' || r.type === 'Bastard' || r.type === 'Adopted Child') && r.targetId === npcId) ids.add(r.sourceId);
+      if ((r.type === 'Parent' || r.type === 'Adoptive Parent') && r.sourceId === npcId) ids.add(r.targetId);
+    });
+    return ids;
+  },
+
   _getSpouseIds(npcId) {
     const ids = new Set();
     this.relationships.forEach(r => {
@@ -529,9 +547,9 @@ const STORE = {
     const result = [];
     const seen = new Set([npcId]);
 
-    // Parents' parents → Grandparents
-    this._getBioParentIds(npcId).forEach(parentId => {
-      this._getBioParentIds(parentId).forEach(gpId => {
+    // Parents' parents → Grandparents (includes adoptive)
+    this._getAllParentIds(npcId).forEach(parentId => {
+      this._getAllParentIds(parentId).forEach(gpId => {
         if (seen.has(gpId) || storedIds.has(gpId)) return;
         seen.add(gpId);
         const npc = this.getNpc(gpId);
@@ -539,9 +557,9 @@ const STORE = {
       });
     });
 
-    // Children's children → Grandchildren
-    this._getBioChildIds(npcId).forEach(childId => {
-      this._getBioChildIds(childId).forEach(gcId => {
+    // Children's children → Grandchildren (includes adoptive)
+    this._getAllChildIds(npcId).forEach(childId => {
+      this._getAllChildIds(childId).forEach(gcId => {
         if (seen.has(gcId) || storedIds.has(gcId)) return;
         seen.add(gcId);
         const npc = this.getNpc(gcId);
@@ -564,8 +582,8 @@ const STORE = {
     const result = [];
     const seen = new Set([npcId]);
 
-    // Aunts/Uncles: each bio parent's stored + inferred bio siblings
-    this._getBioParentIds(npcId).forEach(parentId => {
+    // Aunts/Uncles: each parent's stored + inferred siblings (includes adoptive)
+    this._getAllParentIds(npcId).forEach(parentId => {
       const parentSibIds = new Set();
       this.relationships.forEach(r => {
         if (r.type !== 'Sibling' && r.type !== 'Half-Sibling') return;
@@ -596,7 +614,7 @@ const STORE = {
       .forEach(s => subjectSibIds.add(s.npc.id));
 
     subjectSibIds.forEach(sibId => {
-      this._getBioChildIds(sibId).forEach(nephId => {
+      this._getAllChildIds(sibId).forEach(nephId => {
         if (seen.has(nephId) || storedIds.has(nephId)) return;
         seen.add(nephId);
         const npc = this.getNpc(nephId);
@@ -628,8 +646,8 @@ const STORE = {
     const spouseIds = this._getSpouseIds(npcId);
 
     spouseIds.forEach(spouseId => {
-      // Good-Father / Good-Mother: spouse's bio parents
-      this._getBioParentIds(spouseId).forEach(parentId => {
+      // Good-Father / Good-Mother: spouse's parents (includes adoptive)
+      this._getAllParentIds(spouseId).forEach(parentId => {
         if (seen.has(parentId) || storedIds.has(parentId)) return;
         seen.add(parentId);
         const npc = this.getNpc(parentId);
@@ -651,8 +669,8 @@ const STORE = {
       });
     });
 
-    // Good-Son / Good-Daughter: bio children's spouses
-    this._getBioChildIds(npcId).forEach(childId => {
+    // Good-Son / Good-Daughter: children's spouses (includes adoptive)
+    this._getAllChildIds(npcId).forEach(childId => {
       this._getSpouseIds(childId).forEach(spouseId => {
         if (seen.has(spouseId) || storedIds.has(spouseId)) return;
         seen.add(spouseId);

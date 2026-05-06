@@ -28,6 +28,11 @@ planning/
 # ===== Claude Code local config =====
 .claude/
 
+# ===== storybloq runtime =====
+.story/snapshots/
+.story/sessions/
+.story/status.json
+
 # ===== Python =====
 __pycache__/
 *.pyc
