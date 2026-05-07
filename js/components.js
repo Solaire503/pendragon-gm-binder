@@ -578,6 +578,14 @@ function buildNpcCardHtml(npc, opts = {}) {
     return null;
   })();
 
+  const pageWarning = (() => {
+    if (!calcAgeNow || npc.came_of_age || npc.page_placed) return null;
+    const role = (npc.role || '').toLowerCase();
+    if (role === 'page' && !npc.page_court) return 'no-court';
+    if (['baby','child','infant',''].includes(role) && npc.page_court && calcAgeNow >= 7) return 'no-role';
+    return null;
+  })();
+
   const ageFlagHtml = ageFlag === 'page'
     ? `<div class="npc-age-flag npc-age-flag-amber">⚑ Needs Page Placement — age ${calcAgeNow}</div>`
     : ageFlag === 'training'
@@ -589,6 +597,12 @@ function buildNpcCardHtml(npc, opts = {}) {
        </div>`
     : npc.came_of_age
     ? `<div class="npc-age-flag npc-age-flag-done">✓ Came of Age${calcAgeNow ? ' (age ' + calcAgeNow + ')' : ''}</div>`
+    : '';
+
+  const pageWarningHtml = pageWarning === 'no-court'
+    ? `<div class="npc-age-flag npc-age-flag-amber">⚠ Role is Page but no placement assigned</div>`
+    : pageWarning === 'no-role'
+    ? `<div class="npc-age-flag npc-age-flag-amber">⚠ Placement assigned but role is still ${esc(npc.role || 'unset')}</div>`
     : '';
 
   // ── Training history block ───────────────────────────────────
@@ -699,6 +713,7 @@ function buildNpcCardHtml(npc, opts = {}) {
       </div>
 
       ${ageFlagHtml}
+      ${pageWarningHtml}
       ${npc.notes    ? `<div class="detail-block"><div class="detail-label">Notes</div><div class="detail-value atm-rendered">${AtMention.render(npc.notes)}</div></div>` : ''}
       ${isGM() && npc.passions ? `<div class="detail-block"><div class="detail-label">Passions &amp; Traits</div><div class="detail-value atm-rendered">${AtMention.render(npc.passions)}</div></div>` : ''}
       ${isGM() && npc.skills   ? `<div class="detail-block"><div class="detail-label">Skills</div><div class="detail-value atm-rendered">${AtMention.render(npc.skills)}</div></div>` : ''}
@@ -1420,6 +1435,13 @@ const Components = {
       // Free text — clear any previously linked NPC
       changes.training_npc_id = '';
       changes.training_where  = g('ef-training-where')?.value?.trim() || '';
+    }
+
+    const roleLower = (changes.role || '').toLowerCase();
+    if (roleLower === 'page' && changes.page_court) {
+      changes.page_placed = true;
+    } else if (!['page','squire'].includes(roleLower) && !changes.page_court) {
+      changes.page_placed = false;
     }
 
     STORE.updateNpc(id, changes);

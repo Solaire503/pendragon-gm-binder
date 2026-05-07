@@ -8,6 +8,8 @@ key.pem
 # ===== Live runtime state =====
 # Campaign save data — tracked separately via auto-backup (planned post-Linux migration)
 binder-save.json
+battles.json
+config.json
 # Phase 2 broadcast/presence/submissions runtime files
 announcements.json
 submissions.json
@@ -16,11 +18,22 @@ broadcast_tasks.json
 # GM session notes (runtime, not source-controlled)
 comments.json
 
+# ===== Old exports / one-off files =====
+DEAD_NPCs.csv
+LIVING_NPCs.csv
+npc_data_extraction.json
+Launch Binder.bat
+
 # ===== Per-player data (horses, pins, notes) =====
 player_data/
 
 # ===== Local backups =====
 backups/
+
+# ===== Saved ledgers / old exports =====
+Saved Ledgers/
+pendragon_manor_ledger.*
+britannia_ledger*
 
 # ===== Planning & internal docs =====
 planning/

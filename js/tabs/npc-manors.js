@@ -117,6 +117,25 @@ const TabNpcManors = {
 
     const notesHtml = m.notes ? `<div style="font-size:0.75rem;color:var(--ink-soft);margin-top:6px;font-style:italic;border-top:1px dotted var(--vellum-deep);padding-top:6px;white-space:pre-line;">${esc(m.notes)}</div>` : '';
 
+    const related = (m.relatedNpcs || []).map(r => {
+      const npc = STORE.getNpc(r.npcId);
+      if (!npc) return '';
+      const dead = npc.status === 'Dead';
+      return `<div style="display:flex;align-items:center;gap:4px;font-size:0.78rem;">
+        <span class="npc-inline-link" data-npc-hover="${npc.id}" role="button" tabindex="0" onclick="event.stopPropagation();Components.openNpcCard('${npc.id}')" style="${dead ? 'text-decoration:line-through;color:var(--ink-soft);' : ''}">${esc(npc.name)}</span>
+        ${r.role ? `<span style="color:var(--ink-soft);font-size:0.7rem;">(${esc(r.role)})</span>` : ''}
+        ${gm ? `<button class="btn btn-ghost" style="font-size:0.45rem;padding:1px 4px;color:var(--crimson-mid);margin-left:auto;" onclick="event.stopPropagation();TabNpcManors.removeRelatedNpc('${m.id}','${npc.id}')">✕</button>` : ''}
+      </div>`;
+    }).filter(Boolean).join('');
+
+    const relatedHtml = related || (m.relatedNpcs?.length ? '' : '');
+    const relatedSection = related || gm ? `
+      <div style="margin-top:6px;border-top:1px dotted var(--vellum-deep);padding-top:6px;">
+        <div style="font-family:var(--font-heading);font-size:0.46rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px;">Related NPCs</div>
+        ${related || '<span style="font-size:0.75rem;opacity:0.4;font-style:italic;">None</span>'}
+        ${gm ? `<button class="btn btn-ghost" style="font-size:0.5rem;padding:2px 6px;margin-top:4px;" onclick="TabNpcManors.openAddRelated('${m.id}')">+ Add</button>` : ''}
+      </div>` : '';
+
     const buttonsHtml = gm ? `
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
           ${holderDead ? `<button class="btn btn-primary" style="font-size:0.55rem;padding:3px 8px;" onclick="TabNpcManors.openSuccession('${m.id}')">Trigger Succession</button>` : ''}
@@ -135,6 +154,7 @@ const TabNpcManors = {
         <div class="manor-key-val"><span class="key">Status</span><span class="val">${this._statusWithTip(m.status)}</span></div>
         <div class="manor-key-val"><span class="key">Location</span><span class="val">${esc(m.location || '—')}</span></div>
         <div class="manor-key-val"><span class="key">Faction</span><span class="val">${esc(m.faction || '—')}</span></div>
+        ${relatedSection}
         ${notesHtml}
         ${buttonsHtml}
       </div>`;
@@ -600,6 +620,53 @@ const TabNpcManors = {
     STORE.save();
     Toast.success(`${esc(holderName)} assumes ${esc(m.name)}`);
     Modal.close();
+    this.render();
+  },
+
+  openAddRelated(id) {
+    const m = (STORE.npcManors || []).find(x => x.id === id);
+    if (!m) return;
+    Modal.open(`
+      <div style="min-width:380px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Add Related NPC — ${esc(m.name)}</div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">NPC</div>
+          <input class="edit-input" id="rn-search" placeholder="Search NPC by name…" autocomplete="off">
+          <input type="hidden" id="rn-npc-id">
+          <div id="rn-results" class="npc-search-results" style="display:none;"></div>
+        </div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Role at Manor</div>
+          <input class="edit-input" id="rn-role" placeholder="e.g. Household Knight, Chaplain, Steward…">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="TabNpcManors._saveAddRelated('${m.id}')">Add</button>
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+        </div>
+      </div>`, { onOpen: () => this._initHolderSearch('rn-search', 'rn-npc-id', 'rn-results') });
+  },
+
+  _saveAddRelated(id) {
+    const m = (STORE.npcManors || []).find(x => x.id === id);
+    if (!m) return;
+    const npcId = document.getElementById('rn-npc-id')?.value;
+    if (!npcId) { Toast.error('Select an NPC'); return; }
+    const role = document.getElementById('rn-role')?.value?.trim() || '';
+    if (!m.relatedNpcs) m.relatedNpcs = [];
+    if (m.relatedNpcs.some(r => r.npcId === npcId)) { Toast.error('Already linked'); return; }
+    m.relatedNpcs.push({ npcId, role });
+    STORE.save();
+    const npc = STORE.getNpc(npcId);
+    Toast.success(`${esc(npc?.name || 'NPC')} linked to ${esc(m.name)}`);
+    Modal.close();
+    this.render();
+  },
+
+  removeRelatedNpc(manorId, npcId) {
+    const m = (STORE.npcManors || []).find(x => x.id === manorId);
+    if (!m || !m.relatedNpcs) return;
+    m.relatedNpcs = m.relatedNpcs.filter(r => r.npcId !== npcId);
+    STORE.save();
     this.render();
   },
 

@@ -377,6 +377,29 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '2.11.0',
+    date:    '2026-05-07',
+    sections: [
+      {
+        heading: 'NPC Manors — Full Release',
+        items: [
+          'Related NPCs — each manor card now shows associated NPCs (household knights, chaplains, etc.) with role labels. GM can add and remove links.',
+          'Trust system — assigning an underage holder or selecting an underage heir during succession now prompts a trustee flow. Cards show "In Trust" / "Ready to Assume" badges. "End Trust" confirms the transition with a chronicle entry.',
+          'NPC Manors tab is now visible to players (read-only). All edit controls remain GM-only.',
+          'Bulk imported 44 Salisbury manors from the campaign spreadsheet, with 40 holders auto-linked to existing NPCs.',
+          'NPC search dropdowns in modals now float over content instead of expanding the box.',
+        ],
+      },
+      {
+        heading: 'NPC Improvements',
+        items: [
+          'Page placement flag now auto-clears when both the role is changed to Page AND a page court is assigned.',
+          'New warnings on NPC cards: "Role is Page but no placement assigned" and "Placement assigned but role is still Child" flag half-completed transitions.',
+        ],
+      },
+    ],
+  },
+  {
     version: '2.10.0',
     date:    '2026-05-06',
     sections: [
