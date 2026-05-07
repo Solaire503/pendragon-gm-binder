@@ -13,6 +13,8 @@ const TabNpcManors = {
   render() {
     const panel = document.getElementById('tab-npc-manors');
     if (!panel) return;
+    const scrollEl = document.getElementById('npc-manors-scroll');
+    const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
 
     const gm = isGM();
     const manors = STORE.npcManors || [];
@@ -58,11 +60,15 @@ const TabNpcManors = {
           ${gm ? `<button class="btn btn-verdigris" style="margin-left:auto;font-size:0.6rem;" onclick="TabNpcManors.openAdd()">+ Add Manor</button>` : ''}
         </div>
       </div>
-      <div style="padding:0 20px 24px;overflow-y:auto;flex:1;">
+      <div id="npc-manors-scroll" style="padding:0 20px 24px;overflow-y:auto;flex:1;">
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
           ${cardsHtml}
         </div>
       </div>`;
+    requestAnimationFrame(() => {
+      const el = document.getElementById('npc-manors-scroll');
+      if (el) el.scrollTop = scrollTop;
+    });
   },
 
   _isVacant(m) {
@@ -115,20 +121,26 @@ const TabNpcManors = {
           ? '<div style="position:absolute;top:6px;right:8px;font-size:0.52rem;font-family:var(--font-heading);letter-spacing:0.1em;text-transform:uppercase;color:var(--verdigris-mid);background:var(--verdigris-pale);padding:2px 6px;border-radius:4px;">Ready to Assume</div>'
           : '';
 
-    const notesHtml = m.notes ? `<div style="font-size:0.75rem;color:var(--ink-soft);margin-top:6px;font-style:italic;border-top:1px dotted var(--vellum-deep);padding-top:6px;white-space:pre-line;">${esc(m.notes)}</div>` : '';
+    const notesHtml = m.notes ? `<div style="font-size:0.75rem;color:var(--ink-soft);margin-top:6px;font-style:italic;border-top:1px dotted var(--vellum-deep);padding-top:6px;white-space:pre-line;" class="atm-rendered">${AtMention.render(m.notes)}</div>` : '';
 
-    const related = (m.relatedNpcs || []).map(r => {
+    const related = (m.relatedNpcs || []).map((r, idx) => {
       const npc = STORE.getNpc(r.npcId);
       if (!npc) return '';
       const dead = npc.status === 'Dead';
-      return `<div style="display:flex;align-items:center;gap:4px;font-size:0.78rem;">
-        <span class="npc-inline-link" data-npc-hover="${npc.id}" role="button" tabindex="0" onclick="event.stopPropagation();Components.openNpcCard('${npc.id}')" style="${dead ? 'text-decoration:line-through;color:var(--ink-soft);' : ''}">${esc(npc.name)}</span>
-        ${r.role ? `<span style="color:var(--ink-soft);font-size:0.7rem;">(${esc(r.role)})</span>` : ''}
-        ${gm ? `<button class="btn btn-ghost" style="font-size:0.45rem;padding:1px 4px;color:var(--crimson-mid);margin-left:auto;" onclick="event.stopPropagation();TabNpcManors.removeRelatedNpc('${m.id}','${npc.id}')">✕</button>` : ''}
+      const noteRendered = r.notes ? `<div style="font-size:0.7rem;color:var(--ink-soft);font-style:italic;margin-left:20px;white-space:pre-line;" class="atm-rendered">${AtMention.render(r.notes)}</div>` : '';
+      return `<div style="margin-bottom:4px;">
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.78rem;">
+          <span class="npc-inline-link" data-npc-hover="${npc.id}" role="button" tabindex="0" onclick="event.stopPropagation();Components.openNpcCard('${npc.id}')" style="${dead ? 'text-decoration:line-through;color:var(--ink-soft);' : ''}">${esc(npc.name)}</span>
+          ${r.role ? `<span style="color:var(--ink-soft);font-size:0.7rem;">(${esc(r.role)})</span>` : ''}
+          ${gm ? `<span style="margin-left:auto;display:flex;gap:2px;">
+            <button class="btn btn-ghost" style="font-size:0.45rem;padding:1px 4px;" onclick="event.stopPropagation();TabNpcManors.openEditRelated('${m.id}',${idx})">Edit</button>
+            <button class="btn btn-ghost" style="font-size:0.45rem;padding:1px 4px;color:var(--crimson-mid);" onclick="event.stopPropagation();TabNpcManors.removeRelatedNpc('${m.id}','${npc.id}')">✕</button>
+          </span>` : ''}
+        </div>
+        ${noteRendered}
       </div>`;
     }).filter(Boolean).join('');
 
-    const relatedHtml = related || (m.relatedNpcs?.length ? '' : '');
     const relatedSection = related || gm ? `
       <div style="margin-top:6px;border-top:1px dotted var(--vellum-deep);padding-top:6px;">
         <div style="font-family:var(--font-heading);font-size:0.46rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px;">Related NPCs</div>
@@ -136,10 +148,12 @@ const TabNpcManors = {
         ${gm ? `<button class="btn btn-ghost" style="font-size:0.5rem;padding:2px 6px;margin-top:4px;" onclick="TabNpcManors.openAddRelated('${m.id}')">+ Add</button>` : ''}
       </div>` : '';
 
+    const hasLivingHolder = holder && !holderDead;
     const buttonsHtml = gm ? `
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
           ${holderDead ? `<button class="btn btn-primary" style="font-size:0.55rem;padding:3px 8px;" onclick="TabNpcManors.openSuccession('${m.id}')">Trigger Succession</button>` : ''}
           ${vacant && !holderDead ? `<button class="btn btn-verdigris" style="font-size:0.55rem;padding:3px 8px;" onclick="TabNpcManors.openAssign('${m.id}')">Assign Holder</button>` : ''}
+          ${hasLivingHolder && !inTrust ? `<button class="btn btn-ghost" style="font-size:0.55rem;padding:3px 8px;" onclick="TabNpcManors.openAbdicate('${m.id}')">Abdicate</button>` : ''}
           ${trustReady ? `<button class="btn btn-verdigris" style="font-size:0.55rem;padding:3px 8px;" onclick="TabNpcManors.openEndTrust('${m.id}')">End Trust</button>` : ''}
           <button class="btn btn-ghost" style="font-size:0.55rem;padding:3px 8px;" onclick="TabNpcManors.openEdit('${m.id}')">Edit</button>
           <button class="btn btn-ghost" style="font-size:0.55rem;padding:3px 8px;color:var(--crimson-mid);" onclick="TabNpcManors.confirmDelete('${m.id}')">Delete</button>
@@ -253,12 +267,24 @@ const TabNpcManors = {
     if (!m) return;
     const name = document.getElementById('em-name')?.value?.trim();
     if (!name) { Toast.error('Manor name required'); return; }
+    const newHolderId = document.getElementById('em-holder-id')?.value || '';
+    const holderChanged = newHolderId && newHolderId !== m.holderId;
+
     m.name     = name;
     m.location = document.getElementById('em-location')?.value?.trim() || '';
     m.status   = document.getElementById('em-status')?.value || 'Granted';
     m.faction  = document.getElementById('em-faction')?.value?.trim() || '';
-    m.holderId = document.getElementById('em-holder-id')?.value || '';
+    m.holderId = newHolderId;
     m.notes    = document.getElementById('em-notes')?.value?.trim() || '';
+
+    const npc = newHolderId ? STORE.getNpc(newHolderId) : null;
+    if (holderChanged && npc && !this._isOfAge(npc)) {
+      STORE.save();
+      Modal.close();
+      this._openTrustSetupForAssign(id, newHolderId, m.yearGranted || STORE.year, m.status);
+      return;
+    }
+
     STORE.save();
     Toast.success('Manor updated');
     Modal.close();
@@ -276,6 +302,7 @@ const TabNpcManors = {
           <input class="edit-input" id="as-holder-search" placeholder="Search NPC by name…" autocomplete="off">
           <input type="hidden" id="as-holder-id">
           <div id="as-holder-results" class="npc-search-results" style="display:none;"></div>
+          <button class="btn btn-ghost" style="font-size:0.55rem;margin-top:4px;" onclick="TabNpcManors._openQuickCreate('as-holder-search','as-holder-id')">+ Create New NPC</button>
         </div>
         <div class="detail-field mb-8">
           <div class="detail-label">Year Granted</div>
@@ -347,6 +374,7 @@ const TabNpcManors = {
             <input class="edit-input" id="ta-trustee-search" placeholder="Search NPC by name…" autocomplete="off">
             <input type="hidden" id="ta-trustee-id">
             <div id="ta-trustee-results" class="npc-search-results" style="display:none;"></div>
+            <button class="btn btn-ghost" style="font-size:0.55rem;margin-top:4px;" onclick="TabNpcManors._openQuickCreate('ta-trustee-search','ta-trustee-id')">+ Create New NPC</button>
           </div>
         </div>
         <div class="detail-field mb-8">
@@ -424,6 +452,7 @@ const TabNpcManors = {
             <input class="edit-input" id="sc-holder-search" placeholder="Search NPC by name…" autocomplete="off">
             <input type="hidden" id="sc-holder-id">
             <div id="sc-holder-results" class="npc-search-results" style="display:none;"></div>
+            <button class="btn btn-ghost" style="font-size:0.55rem;margin-top:4px;" onclick="TabNpcManors._openQuickCreate('sc-holder-search','sc-holder-id')">+ Create New NPC</button>
           </div>
         </div>
         <div class="detail-field mb-8">
@@ -519,6 +548,7 @@ const TabNpcManors = {
             <input class="edit-input" id="ts-trustee-search" placeholder="Search NPC by name…" autocomplete="off">
             <input type="hidden" id="ts-trustee-id">
             <div id="ts-trustee-results" class="npc-search-results" style="display:none;"></div>
+            <button class="btn btn-ghost" style="font-size:0.55rem;margin-top:4px;" onclick="TabNpcManors._openQuickCreate('ts-trustee-search','ts-trustee-id')">+ Create New NPC</button>
           </div>
         </div>
         <div class="detail-field mb-8">
@@ -623,6 +653,110 @@ const TabNpcManors = {
     this.render();
   },
 
+  openAbdicate(id) {
+    const m = (STORE.npcManors || []).find(x => x.id === id);
+    if (!m) return;
+    const holder = m.holderId ? STORE.getNpc(m.holderId) : null;
+    const holderName = holder ? esc(holder.name) : 'the current holder';
+    const isGifted = (m.status || '').toLowerCase() === 'gifted';
+
+    Modal.open(`
+      <div style="min-width:440px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:6px;">Abdication — ${esc(m.name)}</div>
+        <p style="margin:0 0 14px;font-size:0.85rem;color:var(--ink-soft);">
+          ${holderName} is stepping down from ${esc(m.name)}.${isGifted ? ' As a gifted manor, the land reverts to the liege unless reassigned.' : ''}
+        </p>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Reason</div>
+          <input class="edit-input" id="ab-reason" placeholder="e.g. Infirmity, retirement, took holy orders…">
+        </div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Outcome</div>
+          <select class="edit-input edit-select" id="ab-outcome" onchange="TabNpcManors._onAbdicateOutcomeChange()">
+            <option value="successor">Name a Successor</option>
+            <option value="revert">Revert to Liege</option>
+          </select>
+        </div>
+        <div id="ab-successor-section">
+          <div class="detail-field mb-8">
+            <div class="detail-label">Successor</div>
+            <input class="edit-input" id="ab-holder-search" placeholder="Search NPC by name…" autocomplete="off">
+            <input type="hidden" id="ab-holder-id">
+            <div id="ab-holder-results" class="npc-search-results" style="display:none;"></div>
+            <button class="btn btn-ghost" style="font-size:0.55rem;margin-top:4px;" onclick="TabNpcManors._openQuickCreate('ab-holder-search','ab-holder-id')">+ Create New NPC</button>
+          </div>
+        </div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Year</div>
+          <input class="edit-input" id="ab-year" type="number" value="${STORE.year}" style="width:100px;">
+        </div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Notes</div>
+          <textarea class="edit-input edit-textarea" id="ab-notes" placeholder="Optional notes… use @ to mention NPCs"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="TabNpcManors._saveAbdicate('${m.id}')">Confirm</button>
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+        </div>
+      </div>`, { onOpen: () => this._initHolderSearch('ab-holder-search', 'ab-holder-id', 'ab-holder-results') });
+  },
+
+  _onAbdicateOutcomeChange() {
+    const outcome = document.getElementById('ab-outcome')?.value;
+    const section = document.getElementById('ab-successor-section');
+    if (section) section.style.display = outcome === 'revert' ? 'none' : 'block';
+  },
+
+  _saveAbdicate(id) {
+    const m = (STORE.npcManors || []).find(x => x.id === id);
+    if (!m) return;
+    const outcome = document.getElementById('ab-outcome')?.value;
+    const year = parseInt(document.getElementById('ab-year')?.value, 10) || STORE.year;
+    const reason = document.getElementById('ab-reason')?.value?.trim() || 'abdication';
+    const notes = document.getElementById('ab-notes')?.value?.trim() || '';
+    const prev = m.holderId ? STORE.getNpc(m.holderId) : null;
+    const prevName = prev?.name || 'the previous holder';
+
+    if (outcome === 'revert') {
+      m.holderId = '';
+      m.trusteeId = '';
+      m.status = 'Escheated';
+      m.yearGranted = year;
+      if (notes) m.notes = notes;
+      this._writeChronicle(year, `${prevName} abdicated ${m.name} (${reason}); manor reverted to the liege`);
+      STORE.save();
+      Toast.success(`${esc(m.name)} reverted to liege`);
+      Modal.close();
+      this.render();
+      return;
+    }
+
+    const holderId = document.getElementById('ab-holder-id')?.value;
+    if (!holderId) { Toast.error('Select a successor'); return; }
+    const heir = STORE.getNpc(holderId);
+
+    if (heir && !this._isOfAge(heir)) {
+      m.yearGranted = year;
+      if (notes) m.notes = notes;
+      STORE.save();
+      Modal.close();
+      this._openTrustSetupForAssign(id, holderId, year, m.status);
+      return;
+    }
+
+    const heirName = heir?.name || 'Unknown';
+    const heirRole = heir?.role || 'holder';
+    m.holderId = holderId;
+    m.trusteeId = '';
+    m.yearGranted = year;
+    if (notes) m.notes = notes;
+    this._writeChronicle(year, `${prevName} abdicated ${m.name} (${reason}); ${heirName} succeeded as ${heirRole} of ${m.name}`);
+    STORE.save();
+    Toast.success(`${esc(heirName)} succeeds at ${esc(m.name)}`);
+    Modal.close();
+    this.render();
+  },
+
   openAddRelated(id) {
     const m = (STORE.npcManors || []).find(x => x.id === id);
     if (!m) return;
@@ -639,6 +773,10 @@ const TabNpcManors = {
           <div class="detail-label">Role at Manor</div>
           <input class="edit-input" id="rn-role" placeholder="e.g. Household Knight, Chaplain, Steward…">
         </div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Notes</div>
+          <textarea class="edit-input edit-textarea" id="rn-notes" placeholder="Optional notes… use @ to mention NPCs"></textarea>
+        </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="TabNpcManors._saveAddRelated('${m.id}')">Add</button>
           <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
@@ -652,12 +790,57 @@ const TabNpcManors = {
     const npcId = document.getElementById('rn-npc-id')?.value;
     if (!npcId) { Toast.error('Select an NPC'); return; }
     const role = document.getElementById('rn-role')?.value?.trim() || '';
+    const notes = document.getElementById('rn-notes')?.value?.trim() || '';
     if (!m.relatedNpcs) m.relatedNpcs = [];
     if (m.relatedNpcs.some(r => r.npcId === npcId)) { Toast.error('Already linked'); return; }
-    m.relatedNpcs.push({ npcId, role });
+    m.relatedNpcs.push({ npcId, role, notes });
     STORE.save();
     const npc = STORE.getNpc(npcId);
     Toast.success(`${esc(npc?.name || 'NPC')} linked to ${esc(m.name)}`);
+    Modal.close();
+    this.render();
+  },
+
+  openEditRelated(manorId, idx) {
+    const m = (STORE.npcManors || []).find(x => x.id === manorId);
+    if (!m || !m.relatedNpcs || !m.relatedNpcs[idx]) return;
+    const r = m.relatedNpcs[idx];
+    const npc = STORE.getNpc(r.npcId);
+    const npcName = npc ? esc(npc.name) : 'Unknown NPC';
+    Modal.open(`
+      <div style="min-width:380px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Related NPC — ${npcName}</div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">NPC</div>
+          <input class="edit-input" id="er-search" placeholder="Search NPC by name…" autocomplete="off" value="${npcName}">
+          <input type="hidden" id="er-npc-id" value="${r.npcId}">
+          <div id="er-results" class="npc-search-results" style="display:none;"></div>
+        </div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Role at Manor</div>
+          <input class="edit-input" id="er-role" value="${esc(r.role || '')}" placeholder="e.g. Household Knight, Chaplain, Steward…">
+        </div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Notes</div>
+          <textarea class="edit-input edit-textarea" id="er-notes" placeholder="Optional notes… use @ to mention NPCs">${esc(r.notes || '')}</textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="TabNpcManors._saveEditRelated('${manorId}',${idx})">Save</button>
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+        </div>
+      </div>`, { onOpen: () => this._initHolderSearch('er-search', 'er-npc-id', 'er-results') });
+  },
+
+  _saveEditRelated(manorId, idx) {
+    const m = (STORE.npcManors || []).find(x => x.id === manorId);
+    if (!m || !m.relatedNpcs || !m.relatedNpcs[idx]) return;
+    const npcId = document.getElementById('er-npc-id')?.value;
+    if (!npcId) { Toast.error('Select an NPC'); return; }
+    m.relatedNpcs[idx].npcId = npcId;
+    m.relatedNpcs[idx].role = document.getElementById('er-role')?.value?.trim() || '';
+    m.relatedNpcs[idx].notes = document.getElementById('er-notes')?.value?.trim() || '';
+    STORE.save();
+    Toast.success('Updated');
     Modal.close();
     this.render();
   },
@@ -668,6 +851,64 @@ const TabNpcManors = {
     m.relatedNpcs = m.relatedNpcs.filter(r => r.npcId !== npcId);
     STORE.save();
     this.render();
+  },
+
+  _openQuickCreate(searchInputId, hiddenInputId) {
+    CardPopup.open(`
+      <div style="min-width:360px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Quick Create NPC</div>
+        <div class="detail-field mb-8"><div class="detail-label">Name</div><input class="edit-input" id="qc-name" placeholder="e.g. Sir Gareth ap Owain"></div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Role</div>
+          <select class="edit-input edit-select" id="qc-role">
+            <option>Knight</option><option>Vassal Knight</option><option>Estate Holder</option>
+            <option>Baron</option><option>Banneret</option><option>Steward</option>
+            <option>Baby</option><option>Child</option><option>Page</option><option>Squire</option>
+            <option>Priest</option><option>Druid</option><option>Other</option>
+          </select>
+        </div>
+        <div class="detail-field mb-8"><div class="detail-label">Year Born</div><input class="edit-input" id="qc-year-born" type="number" placeholder="e.g. 470" style="width:100px;"></div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Pronoun</div>
+          <select class="edit-input edit-select" id="qc-pronoun">
+            <option>He/him</option><option>She/her</option><option>They/Them</option>
+          </select>
+        </div>
+        <div class="detail-field mb-8"><div class="detail-label">Household</div><input class="edit-input" id="qc-household" placeholder="Optional"></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="TabNpcManors._saveQuickCreate('${searchInputId}','${hiddenInputId}')">Create & Select</button>
+          <button class="btn btn-ghost" onclick="CardPopup.closeTop()">Cancel</button>
+        </div>
+      </div>`);
+  },
+
+  _saveQuickCreate(searchInputId, hiddenInputId) {
+    const name = document.getElementById('qc-name')?.value?.trim();
+    if (!name) { Toast.error('Name required'); return; }
+    const npc = {
+      status: 'Alive',
+      name,
+      role: document.getElementById('qc-role')?.value || 'Knight',
+      year_born: parseInt(document.getElementById('qc-year-born')?.value, 10) || null,
+      pronoun: document.getElementById('qc-pronoun')?.value || 'He/him',
+      household: document.getElementById('qc-household')?.value?.trim() || '',
+      glory: 0, year_died: null, age: null,
+      manor: '', eligibility: '', dowry: '', notes: '',
+      passions: '', skills: '', stats: '', statblock_template: '',
+      blessed: false, blessed_note: '', fate_touched: false,
+      page_placed: false, page_court: '',
+      training_path: '', training_where: '',
+      came_of_age: false, retired: false,
+      treeX: null, treeY: null,
+    };
+    const id = STORE.addNpc(npc);
+    STORE.save();
+    const searchInput = document.getElementById(searchInputId);
+    const hiddenInput = document.getElementById(hiddenInputId);
+    if (searchInput) searchInput.value = name;
+    if (hiddenInput) hiddenInput.value = id;
+    CardPopup.closeTop();
+    Toast.success(`${esc(name)} created & selected`);
   },
 
   confirmDelete(id) {
