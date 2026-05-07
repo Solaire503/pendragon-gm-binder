@@ -242,14 +242,14 @@ const FEATURES = [
     heading: 'NPC Manors',
     icon: '🏛',
     items: [
-      'A GM ledger of non-player manors across the realm — track manor name, title holder, status (Granted, Gifted, Seized, Purchased, Escheated), location, faction, and freeform notes with @mention support.',
+      'A GM ledger of non-player manors across the realm — track manor name, title holder, status (Granted, Gifted, Seized, Purchased, Escheated, or Other), location, faction, and freeform notes with @mention support.',
       'Assign holders via NPC search. When a holder dies, the manor is flagged Vacant and appears in the GM dashboard\'s "Vacant NPC Manors" card.',
       'Trigger Succession — when a holder falls, choose to pass the manor to an heir or escheat it to the liege. Both outcomes are recorded in the Chronicle.',
       'Abdicate — a living holder can step down. Name a successor or revert the manor to the liege, with a reason for the abdication. Chronicle entry is written automatically.',
       'Trust system — if the heir has not come of age, appoint a trustee. The card shows "In Trust" with the trustee\'s name. When the heir comes of age, "End Trust" confirms the transition and writes to the Chronicle. Trust is checked on succession, assignment, edit, and abdication.',
       'Related NPCs — link household knights, chaplains, and other associated NPCs to a manor with a role label and notes. Editable inline.',
       'Quick Create NPC — every NPC search field has a "+ Create New NPC" button to create an NPC on the spot without leaving the current flow.',
-      'Status tooltips explain the feudal meaning of Granted, Gifted, and Escheated on hover.',
+      'Status tooltips explain the feudal meaning of Granted, Gifted, and Escheated — click or tap the status badge to see them.',
       'Filter by All / Vacant / Held. Sort by name, location, or faction.',
       'Players can view all NPC manors (read-only). All edit controls are GM-only.',
     ],
@@ -261,7 +261,7 @@ const FEATURES = [
       'Any user can pin NPCs to their personal Persons of Interest list using the ☆ Pin button on any NPC card.',
       'Each user\'s pinned characters appear in a ★ Persons of Interest widget on their own dashboard. Clicking opens the NPC card without leaving the dashboard.',
       'Pins are per-user and independent — the GM\'s list is separate from each player\'s. No cap on pins.',
-      'GM pins are stored alongside player pins in player_data/{username}/pins.json.',
+      'GM pins work exactly like player pins — the GM\'s list is stored and loaded independently.',
     ],
   },
   {
@@ -269,7 +269,7 @@ const FEATURES = [
     icon: '🐴',
     items: [
       'Each manor has a Stables section tab (alongside Overview, History, and Improvements). The GM can add, edit, and manage horses for any household.',
-      'Horses belong to the player whose household owns the manor — data is stored per-player on the server, separate from the main binder save.',
+      'Horses belong to the player whose household owns the manor — each player\'s stable is tracked independently.',
       'Add horses with full details: name, type, age, rider (assigned from household members), and notes. Year Born is calculated automatically from the age entered.',
       'Mark a living horse as Dead (✝) or Ruined (⚠) manually if needed outside a survival roll, or delete it entirely.',
       'All horse types are supported. War Horses and Riding Horses get the 🎲 Roll button for survival. Work Horses appear in the stable but have no required roll.',
@@ -400,8 +400,8 @@ const PATCH_NOTES = [
       {
         heading: 'NPC Improvements',
         items: [
-          'Page placement flag now auto-clears when both the role is changed to Page AND a page court is assigned.',
-          'New warnings on NPC cards: "Role is Page but no placement assigned" and "Placement assigned but role is still Child" flag half-completed transitions.',
+          'Page placement is now smarter — the flag auto-clears once a child\'s role is set to Page and a court is assigned.',
+          'NPC cards now warn when a page transition is half-done: "Role is Page but no placement assigned" or "Placement assigned but role is still Child."',
         ],
       },
     ],
@@ -417,10 +417,9 @@ const PATCH_NOTES = [
           'Assign holders via NPC search, with chronicle entries logged automatically when a holder is granted a manor.',
           'Status tooltips on Granted, Gifted, and Escheated explain the feudal distinction on hover.',
           'Succession system — when a holder dies, "Trigger Succession" lets the GM pass the manor to an heir or escheat it to the liege. Both outcomes write to the chronicle.',
-          'Trust system — if the heir has not come of age, the GM appoints a trustee to hold the manor. Cards show "In Trust" badge with the trustee\'s name. When the heir comes of age, the card flags "Ready to Assume" and an "End Trust" button confirms the transition.',
-          'Trust also triggers on fresh assignments — assigning an underage holder prompts the same trustee flow.',
+          'Trust system — if the heir has not come of age, the GM appoints a trustee to hold the manor. Cards show "In Trust" badge with the trustee\'s name.',
           'Vacant manor count shown on the GM dashboard with a quick-link to the NPC Manors tab.',
-          'Players can now view NPC Manors (read-only) — all edit controls are GM-only.',
+          'Players can view NPC Manors (read-only) — all edit controls are GM-only.',
         ],
       },
       {
@@ -436,7 +435,7 @@ const PATCH_NOTES = [
           'Recording a year no longer resets when you add property damage mid-form. The damage modal now saves without wiping your progress.',
           'Property Damage section added directly inside the Record Year form — view active damage and add new entries without leaving the form.',
           'Steward now shows Industry skill alongside Stewardship when the NPC has it (e.g. ladies of the house or spouses).',
-          'NPC search dropdowns in modals now float over content instead of expanding the modal.',
+          'NPC search dropdowns in modals now float over content instead of expanding the box.',
         ],
       },
       {
