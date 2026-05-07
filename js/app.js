@@ -90,7 +90,10 @@ const APP = {
         e.stopPropagation();
         const opening = !fateMenu.classList.contains('open');
         fateMenu.classList.toggle('open');
-        if (opening) document.getElementById('navRecordsMenu')?.classList.remove('open');
+        if (opening) {
+          document.getElementById('navManorsMenu')?.classList.remove('open');
+          document.getElementById('navRecordsMenu')?.classList.remove('open');
+        }
       });
       fateMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -101,6 +104,28 @@ const APP = {
       document.addEventListener('click', () => fateMenu.classList.remove('open'));
     }
 
+    // Wire Manors dropdown
+    const manorsTrigger = document.getElementById('navManorsBtn');
+    const manorsMenu    = document.getElementById('navManorsMenu');
+    if (manorsTrigger && manorsMenu) {
+      manorsTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        const opening = !manorsMenu.classList.contains('open');
+        manorsMenu.classList.toggle('open');
+        if (opening) {
+          document.getElementById('navFateMenu')?.classList.remove('open');
+          document.getElementById('navRecordsMenu')?.classList.remove('open');
+        }
+      });
+      manorsMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
+        item.addEventListener('click', () => {
+          this.switchTab(item.dataset.tab);
+          manorsMenu.classList.remove('open');
+        });
+      });
+      document.addEventListener('click', () => manorsMenu.classList.remove('open'));
+    }
+
     // Wire Records dropdown
     const recordsTrigger = document.getElementById('navRecordsBtn');
     const recordsMenu    = document.getElementById('navRecordsMenu');
@@ -109,7 +134,10 @@ const APP = {
         e.stopPropagation();
         const opening = !recordsMenu.classList.contains('open');
         recordsMenu.classList.toggle('open');
-        if (opening) document.getElementById('navFateMenu')?.classList.remove('open');
+        if (opening) {
+          document.getElementById('navManorsMenu')?.classList.remove('open');
+          document.getElementById('navFateMenu')?.classList.remove('open');
+        }
       });
       recordsMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -547,6 +575,9 @@ const APP = {
     document.querySelectorAll('.nav-tab').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === name);
     });
+    // Manors dropdown button: active when manors or npc-manors is showing
+    const manorsBtn = document.getElementById('navManorsBtn');
+    if (manorsBtn) manorsBtn.classList.toggle('active', name === 'manors' || name === 'npc-manors');
     // Fate dropdown button: active when winter or mausoleum is showing
     const fateBtn = document.getElementById('navFateBtn');
     if (fateBtn) fateBtn.classList.toggle('active', name === 'winter' || name === 'mausoleum');
@@ -554,6 +585,8 @@ const APP = {
     const recordsBtn = document.getElementById('navRecordsBtn');
     if (recordsBtn) recordsBtn.classList.toggle('active', name === 'chronicle' || name === 'journal');
     // Close dropdowns on any tab switch
+    const manorsMenu = document.getElementById('navManorsMenu');
+    if (manorsMenu) manorsMenu.classList.remove('open');
     const fateMenu = document.getElementById('navFateMenu');
     if (fateMenu) fateMenu.classList.remove('open');
     const recordsMenu = document.getElementById('navRecordsMenu');
@@ -573,6 +606,7 @@ const APP = {
       case 'dashboard':  TabDashboard.render();  break;
       case 'roster':     TabRoster.render();     break;
       case 'manors':     TabManors.render();     break;
+      case 'npc-manors': if (typeof TabNpcManors !== 'undefined') TabNpcManors.render(); break;
       case 'families':   TabFamilies.render();   break;
       case 'winter':     TabWinter.render();     break;
       case 'mausoleum':  TabMausoleum.render();   break;

@@ -508,8 +508,9 @@ html.is-player .player-readonly-banner {
   overflow: hidden;
 }
 .tab-panel.active { display: flex; flex-direction: column; }
-#tab-chronicle { overflow-y: auto; background: var(--vellum); }
-#tab-journal   { overflow-y: auto; background: var(--vellum); }
+#tab-chronicle  { overflow-y: auto; background: var(--vellum); }
+#tab-journal    { overflow-y: auto; background: var(--vellum); }
+#tab-npc-manors { overflow-y: auto; background: var(--vellum); }
 
 /* ── PARCHMENT SURFACE ───────────────────────────────────────── */
 .parchment {
@@ -754,7 +755,7 @@ html.is-player .player-readonly-banner {
   gap: 12px;
   margin-bottom: 16px;
 }
-.detail-field { display: flex; flex-direction: column; gap: 2px; }
+.detail-field { display: flex; flex-direction: column; gap: 2px; position: relative; }
 .detail-label {
   font-family: var(--font-heading);
   font-size: 0.52rem;

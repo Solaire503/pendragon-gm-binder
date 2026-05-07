@@ -193,6 +193,21 @@ const TabDashboard = {
             </div>`).join('')}
         </div>` : ''}
 
+        ${typeof TabNpcManors !== 'undefined' && TabNpcManors.getVacantCount() ? `
+        <div class="card" style="border-top:3px solid var(--crimson-mid);">
+          <div class="section-title" style="margin-bottom:12px;color:var(--crimson-mid);">🏛 Vacant NPC Manors</div>
+          ${TabNpcManors.getVacantManors().map(m => {
+            const holder = m.holderId ? STORE.getNpc(m.holderId) : null;
+            const reason = holder && holder.status === 'Dead'
+              ? `† ${esc(holder.name)} has fallen`
+              : 'No holder assigned';
+            return `<div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="APP.switchTab('npc-manors')">
+              <span class="pk-stat-label" style="font-size:0.78rem;">${esc(m.name)}${m.location ? ` <span style="opacity:0.55;">(${esc(m.location)})</span>` : ''} — ${reason}</span>
+              <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.6;">assign →</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+
         ${this._buildPoiWidget(year)}
 
         <div class="card">

@@ -239,6 +239,19 @@ const FEATURES = [
     ],
   },
   {
+    heading: 'NPC Manors',
+    icon: '🏛',
+    items: [
+      'A GM ledger of non-player manors across the realm — track manor name, title holder, status (Granted, Gifted, Seized, Purchased, Escheated), location, faction, and freeform notes.',
+      'Assign holders via NPC search. When a holder dies, the manor is flagged Vacant and appears in the GM dashboard\'s "Vacant NPC Manors" card.',
+      'Trigger Succession — when a holder falls, choose to pass the manor to an heir or escheat it to the liege. Both outcomes are recorded in the Chronicle.',
+      'Trust system — if the heir has not come of age, appoint a trustee. The card shows "In Trust" with the trustee\'s name. When the heir comes of age, "End Trust" confirms the transition and writes to the Chronicle.',
+      'Status tooltips explain the feudal meaning of Granted, Gifted, and Escheated on hover.',
+      'Filter by All / Vacant / Held. Sort by name, location, or faction.',
+      'Players can view all NPC manors (read-only). All edit controls are GM-only.',
+    ],
+  },
+  {
     heading: 'Persons of Interest',
     icon: '★',
     items: [
@@ -368,6 +381,19 @@ const PATCH_NOTES = [
     date:    '2026-05-06',
     sections: [
       {
+        heading: 'NPC Manors',
+        items: [
+          'New NPC Manors subtab under Manors — a full ledger of non-player manors with title holder, status, location, faction, and notes.',
+          'Assign holders via NPC search, with chronicle entries logged automatically when a holder is granted a manor.',
+          'Status tooltips on Granted, Gifted, and Escheated explain the feudal distinction on hover.',
+          'Succession system — when a holder dies, "Trigger Succession" lets the GM pass the manor to an heir or escheat it to the liege. Both outcomes write to the chronicle.',
+          'Trust system — if the heir has not come of age, the GM appoints a trustee to hold the manor. Cards show "In Trust" badge with the trustee\'s name. When the heir comes of age, the card flags "Ready to Assume" and an "End Trust" button confirms the transition.',
+          'Trust also triggers on fresh assignments — assigning an underage holder prompts the same trustee flow.',
+          'Vacant manor count shown on the GM dashboard with a quick-link to the NPC Manors tab.',
+          'Players can now view NPC Manors (read-only) — all edit controls are GM-only.',
+        ],
+      },
+      {
         heading: 'Battle Records — Foundation',
         items: [
           'New Battle tab with placeholder UI — the conroi assembles here when the GM calls to arms.',
@@ -380,6 +406,7 @@ const PATCH_NOTES = [
           'Recording a year no longer resets when you add property damage mid-form. The damage modal now saves without wiping your progress.',
           'Property Damage section added directly inside the Record Year form — view active damage and add new entries without leaving the form.',
           'Steward now shows Industry skill alongside Stewardship when the NPC has it (e.g. ladies of the house or spouses).',
+          'NPC search dropdowns in modals now float over content instead of expanding the modal.',
         ],
       },
       {

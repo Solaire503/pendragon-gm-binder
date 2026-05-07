@@ -13,6 +13,7 @@ const LS = {
   TREE_LOCK:     'pb_tree_lock',      // { householdName: true/false }
   YEAR:          'pb_year',
   CHRONICLE:     'pb_chronicle',      // { "490": [{id, text, cat, ts}] }
+  NPC_MANORS:    'pb_npc_manors',    // [ { id, name, location, status, holderId, faction, notes } ]
   VERSION:       'pb_version',
 };
 
@@ -163,6 +164,7 @@ const STORE = {
     this.relationships = [];
     this.treePos    = {};
     this.treeLock   = {};
+    this.npcManors  = [];
     this._save();
   },
 
@@ -175,6 +177,7 @@ const STORE = {
     try { this.treePos    = JSON.parse(localStorage.getItem(LS.TREE_POS))   || {}; } catch(e) { this.treePos    = {}; }
     try { this.treeLock   = JSON.parse(localStorage.getItem(LS.TREE_LOCK))  || {}; } catch(e) { this.treeLock   = {}; }
     try { this.chronicle  = JSON.parse(localStorage.getItem(LS.CHRONICLE))  || {}; } catch(e) { this.chronicle  = {}; }
+    try { this.npcManors  = JSON.parse(localStorage.getItem(LS.NPC_MANORS)) || []; } catch(e) { this.npcManors  = []; }
     try { this.year       = parseInt(localStorage.getItem(LS.YEAR), 10)     || 498; } catch(e) { this.year      = 498; }
   },
 
@@ -188,6 +191,7 @@ const STORE = {
       localStorage.setItem(LS.TREE_POS,      JSON.stringify(this.treePos));
       localStorage.setItem(LS.TREE_LOCK,     JSON.stringify(this.treeLock));
       localStorage.setItem(LS.CHRONICLE,     JSON.stringify(this.chronicle));
+      localStorage.setItem(LS.NPC_MANORS,    JSON.stringify(this.npcManors));
       localStorage.setItem(LS.YEAR,          String(this.year));
     } catch(e) {
       console.warn('localStorage save failed', e);
@@ -827,6 +831,7 @@ const STORE = {
       treePos: this.treePos,
       treeLock: this.treeLock,
       chronicle: this.chronicle,
+      npcManors: this.npcManors,
     }, null, 2);
   },
 
@@ -842,6 +847,7 @@ const STORE = {
       this.treePos       = data.treePos || {};
       this.treeLock      = data.treeLock || {};
       this.chronicle     = data.chronicle || {};
+      this.npcManors     = data.npcManors || [];
       this._dedupeRelationships();
       this.year          = data.year || 498;
 
