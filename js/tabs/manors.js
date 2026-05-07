@@ -1008,7 +1008,7 @@ const TabManors = {
         <div class="section-title" style="margin-bottom:0;">Property Damage</div>
         <button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;" onclick="TabManors.openAddDamage('${key}')">+ Add Damage</button>
       </div>
-      <div style="background:var(--vellum-deep);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:0.78rem;color:var(--ink-soft);">
+      <div id="ry-damage-list" style="background:var(--vellum-deep);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:0.78rem;color:var(--ink-soft);">
         ${(m.propertyDamage||[]).filter(d=>d.status==='damaged').length
           ? (m.propertyDamage||[]).filter(d=>d.status==='damaged').map(d =>
               `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--vellum-mid);">
@@ -2393,7 +2393,27 @@ const TabManors = {
     STORE.save();
     Toast.success('Damage logged');
     Modal.close();
-    if (!this._recordOpen) this._renderManor();
+    if (this._recordOpen) {
+      this._refreshRecordDamage(key);
+    } else {
+      this._renderManor();
+    }
+  },
+
+  _refreshRecordDamage(key) {
+    const m = STORE.getManor(key);
+    if (!m) return;
+    const container = document.getElementById('ry-damage-list');
+    if (!container) return;
+    const damaged = (m.propertyDamage||[]).filter(d => d.status === 'damaged');
+    container.innerHTML = damaged.length
+      ? damaged.map(d =>
+          `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--vellum-mid);">
+            <span><strong>${esc(d.type)}</strong> — ${esc(d.description)}${d.numFields ? ` (${d.numFields} field${d.numFields!==1?'s':''})` : ''}</span>
+            <span style="white-space:nowrap;margin-left:8px;color:var(--crimson-mid);">${d.repairCost ? d.repairCost+' L' : ''}</span>
+          </div>`
+        ).join('')
+      : '<span style="font-style:italic;">No active damage</span>';
   },
 
   // ══════════════════════════════════════════════════════════
