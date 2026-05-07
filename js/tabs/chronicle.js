@@ -427,7 +427,7 @@ const TabChronicle = {
       <div style="margin-bottom:16px;">
         <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">NARRATIVE</label>
         <textarea class="edit-input" id="sub-edit-text" rows="7"
-          style="width:100%;resize:vertical;">${currentText.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+          style="width:100%;resize:vertical;">${esc(currentText)}</textarea>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>

@@ -1638,14 +1638,14 @@ const TabTree = {
     Modal.open(`
       <div style="min-width:340px;">
         <div class="page-title" style="font-size:1rem;margin-bottom:12px;">Edit Relationship</div>
-        <div style="font-size:0.9rem;margin-bottom:12px;color:var(--ink-soft);">${(src?.name||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')} ↔ ${(tgt?.name||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        <div style="font-size:0.9rem;margin-bottom:12px;color:var(--ink-soft);">${esc(src?.name||'')} ↔ ${esc(tgt?.name||'')}</div>
         <div class="detail-field mb-8">
           <div class="detail-label">Type</div>
           <select class="edit-input edit-select" id="edit-rel-type">${typeOpts}</select>
         </div>
         <div class="detail-field mb-8">
           <div class="detail-label">Notes</div>
-          <input class="edit-input" id="edit-rel-notes" value="${rel.notes || ''}">
+          <input class="edit-input" id="edit-rel-notes" value="${esc(rel.notes || '')}">
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="TabTree._updateEdge('${relId}')">Save</button>

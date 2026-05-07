@@ -33,7 +33,7 @@ const TabDashboard = {
       const improvements = (m.improvements || []).filter(i => i.status === 'active').length;
       const damage = (m.propertyDamage || []).filter(d => d.status === 'damaged').length;
 
-      return `<div class="pk-card" style="border-top-color:${col};" role="button" tabindex="0" onclick="APP.switchTab('manors');TabManors.selectManor('${key}')">
+      return `<div class="pk-card" style="border-top-color:${col};" role="button" tabindex="0" onclick="APP.switchTab('manors');TabManors.selectManor('${esc(key)}')">
         <div class="pk-card-name">${esc(m.knight || key)}</div>
         <div class="pk-card-player" style="color:${col}aa">${hh ? hh.icon : '◆'} ${m.player ? 'Player: ' + esc(m.player) : esc(key)}</div>
         <div class="pk-stat"><span class="pk-stat-label">Treasury</span><span class="pk-stat-value">${treasury} L</span></div>
@@ -50,7 +50,7 @@ const TabDashboard = {
     const marriageFlags = [];
     STORE.living.forEach(n => {
       const age = n.year_born ? year - n.year_born : null;
-      const hh  = n.household ? ` <span style="opacity:0.55;">(${n.household})</span>` : '';
+      const hh  = n.household ? ` <span style="opacity:0.55;">(${esc(n.household)})</span>` : '';
 
       // Age transitions
       if (age !== null) {
@@ -120,8 +120,8 @@ const TabDashboard = {
     // Households at a glance
     const hhHtml = STORE.households.map(h => {
       const members = STORE.householdMembers(h.name);
-      return `<div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${h.name}')">
-        <span class="pk-stat-label"><span style="color:${h.colour}">${h.icon}</span> ${h.name}</span>
+      return `<div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${esc(h.name)}')">
+        <span class="pk-stat-label"><span style="color:${h.colour}">${h.icon}</span> ${esc(h.name)}</span>
         <span class="pk-stat-value" style="color:${h.colour}">${members.length}</span>
       </div>`;
     }).join('');
@@ -142,7 +142,7 @@ const TabDashboard = {
           <div class="pk-stat"><span class="pk-stat-label">Living NPCs</span><span class="pk-stat-value">${living}</span></div>
           <div class="pk-stat"><span class="pk-stat-label">In the Mausoleum</span><span class="pk-stat-value">${dead}</span></div>
           <div style="margin-top:12px;border-top:1px dotted var(--vellum-deep);padding-top:10px;">
-            ${topRoles.map(([r, c]) => `<div class="pk-stat"><span class="pk-stat-label">${r||'(no role)'}</span><span class="pk-stat-value">${c}</span></div>`).join('')}
+            ${topRoles.map(([r, c]) => `<div class="pk-stat"><span class="pk-stat-label">${esc(r||'(no role)')}</span><span class="pk-stat-value">${c}</span></div>`).join('')}
           </div>
         </div>
 
@@ -167,7 +167,7 @@ const TabDashboard = {
         <div class="card" style="border-top:3px solid var(--crimson-mid);">
           <div class="section-title" style="margin-bottom:12px;color:var(--crimson-mid);">⚜ Succession Needed</div>
           ${successionFlags.map(({ household: h, headName, isDead }) => `
-            <div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${h.name}')">
+            <div class="pk-stat" style="cursor:pointer;" role="button" tabindex="0" onclick="APP.switchTab('families');TabFamilies.selectHousehold('${esc(h.name)}')">
               <span class="pk-stat-label" style="font-size:0.78rem;"><span style="color:${h.colour}">${h.icon}</span> ${esc(h.name)} — ${isDead ? '† ' + esc(headName) + ' has fallen' : 'Head of House missing'}</span>
               <span class="pk-stat-value" style="font-size:0.6rem;opacity:0.6;">choose heir →</span>
             </div>`).join('')}

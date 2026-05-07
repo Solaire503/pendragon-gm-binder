@@ -62,7 +62,7 @@ const TabRoster = {
     ).join('');
 
     const hhChips = STORE.households.map(h =>
-      `<button class="filter-chip${this._hh===h.name?' active':''}" data-hh="${h.name}" onclick="TabRoster.setHH('${h.name}')">${h.icon} ${h.name}</button>`
+      `<button class="filter-chip${this._hh===h.name?' active':''}" data-hh="${esc(h.name)}" onclick="TabRoster.setHH('${esc(h.name)}')">${h.icon} ${esc(h.name)}</button>`
     ).join('');
 
     panel.innerHTML = `

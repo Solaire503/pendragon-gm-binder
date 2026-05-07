@@ -367,7 +367,7 @@ const STORE = {
     const m = this.getManor(manorKey);
     if (!m) return;
     if (!m.vassals) m.vassals = [];
-    const id = Date.now();
+    const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
     m.vassals.push({ id, ...vassal });
     this.save();
     return id;

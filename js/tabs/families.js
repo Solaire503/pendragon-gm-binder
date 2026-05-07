@@ -16,9 +16,9 @@ const TabFamilies = {
 
     const navHtml = STORE.households.map(h => {
       const count = STORE.householdMembers(h.name).length;
-      return `<button class="family-nav-btn${this._current===h.name?' active':''}" onclick="TabFamilies.selectHousehold('${h.name}')">
+      return `<button class="family-nav-btn${this._current===h.name?' active':''}" onclick="TabFamilies.selectHousehold('${esc(h.name)}')">
         <span class="fam-icon">${h.icon}</span>
-        <span class="fam-name">${h.name}</span>
+        <span class="fam-name">${esc(h.name)}</span>
         <span class="fam-count">${count}</span>
       </button>`;
     }).join('');
@@ -41,7 +41,7 @@ const TabFamilies = {
   selectHousehold(name) {
     this._current = name;
     document.querySelectorAll('.family-nav-btn').forEach(el => el.classList.remove('active'));
-    document.querySelector(`.family-nav-btn[onclick*="'${name}'"]`)?.classList.add('active');
+    document.querySelector(`.family-nav-btn[onclick*="'${CSS.escape(name)}'"]`)?.classList.add('active');
     this._renderHousehold();
   },
 
@@ -110,7 +110,7 @@ const TabFamilies = {
         <div class="pk-stat"><span class="pk-stat-label">Treasury</span><span class="pk-stat-value">${STORE.manorTreasury(name)} L</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Improvements</span><span class="pk-stat-value">${(manor.improvements||[]).filter(i=>i.status==='active').length}</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Hatred / Care</span><span class="pk-stat-value">${manor.hatred} / ${manor.care}</span></div>
-        <button class="btn btn-ghost mt-8" style="width:100%;font-size:0.55rem;" onclick="APP.switchTab('manors');TabManors.selectManor('${name}')">Open Manor Ledger →</button>
+        <button class="btn btn-ghost mt-8" style="width:100%;font-size:0.55rem;" onclick="APP.switchTab('manors');TabManors.selectManor('${esc(name)}')">Open Manor Ledger →</button>
       </div>` : '';
 
     // Relationships summary for tree preview
@@ -124,10 +124,10 @@ const TabFamilies = {
       <div class="family-header-banner" style="background:linear-gradient(135deg,${hh.colour}cc,${hh.colour}88);border-color:${hh.colour}44;">
         <div class="family-banner-icon">${hh.icon}</div>
         <div>
-          <div class="family-banner-name">House ${name}</div>
+          <div class="family-banner-name">House ${esc(name)}</div>
           <div class="family-banner-tagline">${members.length} member${members.length!==1?'s':''} · ${esc(name)} Household${hh.household_head ? ` · ⚜ ${esc(STORE.getNpc(hh.household_head)?.name || '')}` : ''}</div>
         </div>
-        <button class="tree-btn" style="margin-left:auto;" onclick="TabTree.open('${name}')">
+        <button class="tree-btn" style="margin-left:auto;" onclick="TabTree.open('${esc(name)}')">
           🌳 Family Tree
         </button>
       </div>
@@ -138,7 +138,7 @@ const TabFamilies = {
           <div class="card">
             <div class="section-title">Family Tree</div>
             ${relSummary}
-            <button class="tree-btn mt-8" onclick="TabTree.open('${name}')">Open Family Tree</button>
+            <button class="tree-btn mt-8" onclick="TabTree.open('${esc(name)}')">Open Family Tree</button>
           </div>
         </div>
         <div>

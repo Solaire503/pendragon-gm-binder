@@ -179,8 +179,8 @@ const TabManors = {
       <div style="display:flex;align-items:center;gap:12px;padding:14px 20px 0;flex-wrap:wrap;flex-shrink:0;">
         <div style="width:40px;height:40px;border-radius:var(--radius);background:${col}22;border:2px solid ${col};display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;">${icon}</div>
         <div>
-          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--ink);">${key} Manor</div>
-          <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ink-soft);opacity:0.55;">${m.knight||''} · ${m.player?'Player: '+m.player:''}</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--ink);">${esc(key)} Manor</div>
+          <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ink-soft);opacity:0.55;">${esc(m.knight||'')} · ${m.player?'Player: '+esc(m.player):''}</div>
         </div>
         <div style="margin-left:auto;display:flex;gap:6px;">${secBtns}</div>
       </div>
@@ -351,7 +351,7 @@ const TabManors = {
           </div>
           <div class="manor-key-val">
             <span class="key">Faction</span>
-            <span class="val">${m.faction||'—'}</span>
+            <span class="val">${esc(m.faction||'—')}</span>
           </div>
         </div>
 
@@ -467,7 +467,7 @@ const TabManors = {
         <div class="page-title" style="font-size:1rem;margin-bottom:14px;">${isEdit?'Edit':'Add'} Vassal Manor</div>
         <div class="detail-field mb-8">
           <div class="detail-label">Manor Name</div>
-          <input class="edit-input" id="vas-name" value="${v?.manorName||''}">
+          <input class="edit-input" id="vas-name" value="${esc(v?.manorName||'')}">
         </div>
         <div class="detail-field mb-8">
           <div class="detail-label">Tenure</div>
@@ -488,7 +488,7 @@ const TabManors = {
         </div>
         <div class="detail-field mb-8">
           <div class="detail-label">Notes</div>
-          <input class="edit-input" id="vas-notes" value="${v?.notes||''}">
+          <input class="edit-input" id="vas-notes" value="${esc(v?.notes||'')}">
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="TabManors._saveVassal('${key}',${v?.id||'null'})">Save</button>
@@ -1188,8 +1188,8 @@ const TabManors = {
               <div class="detail-field mb-6"><div class="detail-label">${f.charAt(0).toUpperCase()+f.slice(1)}</div>
               <input class="edit-input" id="hy-fate-${f}" type="number" value="${fate(f)}"></div>`).join('')}
             <div class="section-title mb-8 mt-10">Notes</div>
-            <div class="detail-field mb-4"><textarea class="edit-input edit-textarea" id="hy-notes">${h.notes||''}</textarea></div>
-            <div class="detail-field"><textarea class="edit-input edit-textarea" id="hy-notes2">${h.notes2||''}</textarea></div>
+            <div class="detail-field mb-4"><textarea class="edit-input edit-textarea" id="hy-notes">${esc(h.notes||'')}</textarea></div>
+            <div class="detail-field"><textarea class="edit-input edit-textarea" id="hy-notes2">${esc(h.notes2||'')}</textarea></div>
           </div>
 
         </div>
@@ -1840,15 +1840,15 @@ const TabManors = {
     const m = STORE.getManor(key);
     Modal.open(`
       <div style="min-width:420px;">
-        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Manor Notes — ${key}</div>
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Manor Notes — ${esc(key)}</div>
         <div class="detail-field mb-8">
           <div class="detail-label">Notes</div>
-          <textarea class="edit-input edit-textarea" id="mn-notes" style="min-height:100px;">${m?.notes||''}</textarea>
+          <textarea class="edit-input edit-textarea" id="mn-notes" style="min-height:100px;">${esc(m?.notes||'')}</textarea>
         </div>
         <div class="npc-detail-grid">
           <div class="detail-field">
             <div class="detail-label">Faction</div>
-            <input class="edit-input" id="mn-faction" value="${m?.faction||''}">
+            <input class="edit-input" id="mn-faction" value="${esc(m?.faction||'')}">
           </div>
           <div class="detail-field">
             <div class="detail-label">Lifestyle</div>
@@ -2164,7 +2164,7 @@ const TabManors = {
   openAddImprovement(key) {
     Modal.open(`
       <div style="min-width:420px;">
-        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Add Improvement — ${key}</div>
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Add Improvement — ${esc(key)}</div>
         <div class="npc-detail-grid">
           <div class="detail-field"><div class="detail-label">Name</div><input class="edit-input" id="ai-name" placeholder="Apiary, Mill, Tower…"></div>
           <div class="detail-field"><div class="detail-label">Category</div>
@@ -2225,9 +2225,9 @@ const TabManors = {
     const catOpts = ['improvement','fortification'].map(v=>`<option${v===i.cat?' selected':''}>${v}</option>`).join('');
     Modal.open(`
       <div style="min-width:420px;">
-        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Improvement — ${key}</div>
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Improvement — ${esc(key)}</div>
         <div class="npc-detail-grid">
-          <div class="detail-field"><div class="detail-label">Name</div><input class="edit-input" id="ei-name" value="${i.name}"></div>
+          <div class="detail-field"><div class="detail-label">Name</div><input class="edit-input" id="ei-name" value="${esc(i.name)}"></div>
           <div class="detail-field"><div class="detail-label">Category</div>
             <select class="edit-input edit-select" id="ei-cat">${catOpts}</select>
           </div>
@@ -2235,13 +2235,13 @@ const TabManors = {
           <div class="detail-field"><div class="detail-label">Build Cost (L)</div><input class="edit-input" id="ei-cost" type="number" value="${i.buildCost||0}"></div>
           <div class="detail-field"><div class="detail-label">Maintenance (L/yr)</div><input class="edit-input" id="ei-maint" type="number" value="${i.maintenance||0}" step="0.5"></div>
           <div class="detail-field"><div class="detail-label">Fixed Income (L/yr)</div><input class="edit-input" id="ei-income" type="number" value="${i.income||0}" step="0.5"></div>
-          <div class="detail-field"><div class="detail-label">Dice Income (e.g. 1d2)</div><input class="edit-input" id="ei-income-note" value="${i.incomeNote||''}" placeholder="1d2, 1d3+1…"></div>
+          <div class="detail-field"><div class="detail-label">Dice Income (e.g. 1d2)</div><input class="edit-input" id="ei-income-note" value="${esc(i.incomeNote||'')}" placeholder="1d2, 1d3+1…"></div>
           <div class="detail-field"><div class="detail-label">DV Modifier</div><input class="edit-input" id="ei-dv" type="number" value="${i.dvMod||0}"></div>
-          <div class="detail-field"><div class="detail-label">DV Note</div><input class="edit-input" id="ei-dv-note" value="${i.dvNote||''}" placeholder="Optional description"></div>
+          <div class="detail-field"><div class="detail-label">DV Note</div><input class="edit-input" id="ei-dv-note" value="${esc(i.dvNote||'')}" placeholder="Optional description"></div>
         </div>
         <div class="detail-field mt-8 mb-8">
           <div class="detail-label">Notes</div>
-          <textarea class="edit-input edit-textarea" id="ei-notes">${i.notes||''}</textarea>
+          <textarea class="edit-input edit-textarea" id="ei-notes">${esc(i.notes||'')}</textarea>
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="TabManors._saveEditImprovement('${key}',${imprId})">Save</button>
@@ -2277,7 +2277,7 @@ const TabManors = {
   openAddDamage(key) {
     Modal.open(`
       <div style="min-width:380px;">
-        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Log Property Damage — ${key}</div>
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Log Property Damage — ${esc(key)}</div>
         <div class="detail-field mb-8">
           <div class="detail-label">Type</div>
           <select class="edit-input edit-select" id="ad-type" onchange="TabManors._onDamageTypeChange()">
@@ -2313,7 +2313,7 @@ const TabManors = {
       `<option${v===(d.type||'General')?' selected':''}>${v}</option>`).join('');
     Modal.open(`
       <div style="min-width:380px;">
-        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Damage — ${key}</div>
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Damage — ${esc(key)}</div>
         <div class="detail-field mb-8">
           <div class="detail-label">Type</div>
           <select class="edit-input edit-select" id="ed-type" onchange="TabManors._onEditDamageTypeChange()">${typeOpts}</select>
@@ -2322,7 +2322,7 @@ const TabManors = {
           <div class="detail-label">Number of Fields Damaged</div>
           <input class="edit-input" id="ed-num-fields" type="number" value="${d.numFields||1}" min="1">
         </div>
-        <div class="detail-field mb-8"><div class="detail-label">Description</div><input class="edit-input" id="ed-desc" value="${d.description||''}"></div>
+        <div class="detail-field mb-8"><div class="detail-label">Description</div><input class="edit-input" id="ed-desc" value="${esc(d.description||'')}"></div>
         <div class="detail-field mb-8"><div class="detail-label">Repair Cost (L)</div><input class="edit-input" id="ed-cost" type="number" value="${d.repairCost||0}"></div>
         <div class="detail-field mb-8">
           <div class="detail-label">Estimated Year Repaired</div>
@@ -2330,7 +2330,7 @@ const TabManors = {
         </div>
         <div class="detail-field mb-8">
           <div class="detail-label">Notes</div>
-          <textarea class="edit-input edit-textarea" id="ed-notes">${d.notes||''}</textarea>
+          <textarea class="edit-input edit-textarea" id="ed-notes">${esc(d.notes||'')}</textarea>
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="TabManors._saveEditDamage('${key}',${id})">Save</button>

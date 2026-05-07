@@ -263,7 +263,7 @@ function hhTagHtml(name) {
   if (!name) return '';
   const col = hhColour(name);
   const icon = hhIcon(name);
-  return `<span class="hh-tag" style="background:${col};">${icon} ${name}</span>`;
+  return `<span class="hh-tag" style="background:${col};">${icon} ${esc(name)}</span>`;
 }
 
 // ── FACTIONS ──────────────────────────────────────────────────
@@ -1501,8 +1501,8 @@ const Components = {
     // Vassal                      → source=vassal (younger), target=liege (older)
     // Ward                        → source=ward (younger),  target=guardian (older)
     // Guardian                    → source=guardian (older), target=ward (younger)
-    const childTypes  = new Set(['Child', 'Bastard']);
-    const parentTypes = new Set(['Parent']);
+    const childTypes  = new Set(['Child', 'Bastard', 'Adopted Child']);
+    const parentTypes = new Set(['Parent', 'Adoptive Parent']);
     // senior-first: source should be the older NPC
     const seniorFirst = new Set(['Squire', 'Former Squire', 'Guardian']);
     // junior-first: source should be the younger NPC
@@ -1853,7 +1853,7 @@ const Components = {
     const seasons = ['spring','summer','autumn','winter'];
     Modal.open(`
       <div style="min-width:min(420px,90vw);">
-        <div class="page-title" style="font-size:1rem;margin-bottom:16px;">Add Life Event — ${npc.name}</div>
+        <div class="page-title" style="font-size:1rem;margin-bottom:16px;">Add Life Event — ${esc(npc.name)}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <div class="detail-field">
             <div class="detail-label">Year</div>
@@ -1920,11 +1920,11 @@ const Components = {
         </div>
         <div class="detail-field mb-8">
           <div class="detail-label">Mechanical Outcome</div>
-          <textarea class="edit-input" id="sev-mech" rows="2" style="resize:vertical;">${ev.mechDesc||''}</textarea>
+          <textarea class="edit-input" id="sev-mech" rows="2" style="resize:vertical;">${esc(ev.mechDesc||'')}</textarea>
         </div>
         <div class="detail-field mb-8">
           <div class="detail-label">Notes</div>
-          <textarea class="edit-input" id="sev-notes" rows="3" placeholder="Personal notes about this event…" style="resize:vertical;">${ev.userNotes||''}</textarea>
+          <textarea class="edit-input" id="sev-notes" rows="3" placeholder="Personal notes about this event…" style="resize:vertical;">${esc(ev.userNotes||'')}</textarea>
         </div>
         <div class="btn-row">
           <button class="btn btn-primary"  onclick="Components.saveSoloEventEdit('${npcId}','${eventId}')">Save</button>
@@ -2165,23 +2165,23 @@ const HoverCard = {
     if (spRel) {
       const spId  = spRel.sourceId === npc.id ? spRel.targetId : spRel.sourceId;
       const sp    = STORE.getNpc(spId);
-      if (sp) spouseLine = sp.status === 'Dead' ? `† ${sp.name}` : sp.name;
+      if (sp) spouseLine = sp.status === 'Dead' ? `† ${esc(sp.name)}` : esc(sp.name);
     }
 
     // Glory
     const glory = npc.glory && npc.glory !== 0 ? npc.glory.toLocaleString() : null;
 
     // Notes preview
-    const notes = npc.notes ? npc.notes.slice(0, 90) + (npc.notes.length > 90 ? '…' : '') : null;
+    const notes = npc.notes ? esc(npc.notes.slice(0, 90)) + (npc.notes.length > 90 ? '…' : '') : null;
 
     const pips = (npc.blessed ? ' <span class="blessed-pip" title="Blessed Birth" style="font-size:0.7rem;">✦</span>' : '')
                + (npc.fate_touched ? ' <span class="fate-pip" title="Fate-Touched" style="font-size:0.7rem;">◈</span>' : '');
 
     const hhTag = npc.household
-      ? `<span class="nhc-hh" style="background:${col};">${hhIcon(npc.household)} ${npc.household}</span>`
+      ? `<span class="nhc-hh" style="background:${col};">${hhIcon(npc.household)} ${esc(npc.household)}</span>`
       : '';
 
-    const rolePronouns = [icon + ' ' + (npc.role || 'NPC'), npc.pronoun].filter(Boolean).join(' · ');
+    const rolePronouns = [icon + ' ' + esc(npc.role || 'NPC'), esc(npc.pronoun || '')].filter(Boolean).join(' · ');
 
     const rows = [];
     if (age)       rows.push(`<div class="nhc-row"><span class="nhc-row-label">BORN</span><span>${age}</span></div>`);
@@ -2190,7 +2190,7 @@ const HoverCard = {
 
     return `
       ${isDead ? `<div class="nhc-deceased">† DECEASED${npc.year_died ? ' ' + npc.year_died + ' AD' : ''}</div>` : ''}
-      <div class="nhc-name">${npc.name}${pips}</div>
+      <div class="nhc-name">${esc(npc.name)}${pips}</div>
       <div class="nhc-role" style="color:${col};">${rolePronouns}</div>
       ${hhTag}${npc.faction ? ' ' + factionTagHtml(npc.faction) : ''}
       ${rows.length ? `<hr class="nhc-divider">${rows.join('')}` : ''}

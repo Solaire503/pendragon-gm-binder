@@ -305,7 +305,7 @@ def _write_json(path: Path, data, indent: int = 2) -> None:
 
 # ── USER MANAGEMENT ───────────────────────────────────────────────────────────
 
-_users_lock = threading.Lock()
+_users_lock = threading.RLock()
 
 def load_users() -> list:
     with _users_lock:
@@ -725,12 +725,13 @@ def login():
                 session['role']      = user['role']
                 session['household'] = user.get('household')
                 # Record last login timestamp
-                users = load_users()
-                for u in users:
-                    if u['username'].lower() == username.lower():
-                        u['lastLogin'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
-                        break
-                save_users(users)
+                with _users_lock:
+                    users = load_users()
+                    for u in users:
+                        if u['username'].lower() == username.lower():
+                            u['lastLogin'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+                            break
+                    save_users(users)
                 next_url = request.args.get('next') or url_for('index')
                 # Prevent open-redirect: only allow same-origin relative paths.
                 if not next_url.startswith('/') or next_url.startswith('//'):
@@ -805,16 +806,17 @@ def api_reset_password(token):
         return jsonify({'error': 'Invalid or expired reset link.'}), 400
     data     = request.get_json(force=True, silent=True) or {}
     password = data.get('password', '')
-    users = load_users()
-    current_hash = next((u['password_hash'] for u in users if u['username'].lower() == entry['username'].lower()), None)
-    policy_err = _check_password_policy(password, current_hash)
-    if policy_err:
-        return jsonify({'error': policy_err}), 400
-    for u in users:
-        if u['username'].lower() == entry['username'].lower():
-            u['password_hash'] = generate_password_hash(password)
-            break
-    save_users(users)
+    with _users_lock:
+        users = load_users()
+        current_hash = next((u['password_hash'] for u in users if u['username'].lower() == entry['username'].lower()), None)
+        policy_err = _check_password_policy(password, current_hash)
+        if policy_err:
+            return jsonify({'error': policy_err}), 400
+        for u in users:
+            if u['username'].lower() == entry['username'].lower():
+                u['password_hash'] = generate_password_hash(password)
+                break
+        save_users(users)
     with _reset_tokens_lock:
         _reset_tokens.pop(token, None)
         expired = [t for t, v in _reset_tokens.items() if v['expires'] < time.time()]
@@ -843,12 +845,13 @@ def account():
         else:
             error = _check_password_policy(new_pw, user.get('password_hash'))
         if not error:
-            users = load_users()
-            for u in users:
-                if u['username'].lower() == session['username'].lower():
-                    u['password_hash'] = generate_password_hash(new_pw)
-                    break
-            save_users(users)
+            with _users_lock:
+                users = load_users()
+                for u in users:
+                    if u['username'].lower() == session['username'].lower():
+                        u['password_hash'] = generate_password_hash(new_pw)
+                        break
+                save_users(users)
             success = "Passphrase updated successfully."
 
     return render_template_string(ACCOUNT_HTML,
@@ -920,24 +923,25 @@ def api_me():
     """Return current user info for the frontend. Stamps lastLogin at most
     once per 60 seconds so persistent sessions stay current without hammering
     users.json on every page load."""
-    users = load_users()
-    user  = None
-    dirty = False
-    now   = datetime.now(timezone.utc).replace(tzinfo=None)
-    for u in users:
-        if u['username'].lower() == session['username'].lower():
-            user = u
-            prev = u.get('lastLogin', '')
-            try:
-                prev_dt = datetime.strptime(prev, '%Y-%m-%dT%H:%M:%S.%fZ')
-            except (ValueError, TypeError):
-                prev_dt = None
-            if prev_dt is None or (now - prev_dt).total_seconds() > 60:
-                u['lastLogin'] = now.isoformat() + 'Z'
-                dirty = True
-            break
-    if dirty:
-        save_users(users)
+    with _users_lock:
+        users = load_users()
+        user  = None
+        dirty = False
+        now   = datetime.now(timezone.utc).replace(tzinfo=None)
+        for u in users:
+            if u['username'].lower() == session['username'].lower():
+                user = u
+                prev = u.get('lastLogin', '')
+                try:
+                    prev_dt = datetime.strptime(prev, '%Y-%m-%dT%H:%M:%S.%fZ')
+                except (ValueError, TypeError):
+                    prev_dt = None
+                if prev_dt is None or (now - prev_dt).total_seconds() > 60:
+                    u['lastLogin'] = now.isoformat() + 'Z'
+                    dirty = True
+                break
+        if dirty:
+            save_users(users)
     return jsonify({
         'username':  session['username'],
         'role':      session['role'],
@@ -955,12 +959,13 @@ def api_set_my_email():
     email = data.get('email', '').strip().lower()
     if not email or '@' not in email or '.' not in email.split('@')[-1]:
         return jsonify({'error': 'Please enter a valid email address.'}), 400
-    users = load_users()
-    for u in users:
-        if u['username'].lower() == session['username'].lower():
-            u['email'] = email
-            break
-    save_users(users)
+    with _users_lock:
+        users = load_users()
+        for u in users:
+            if u['username'].lower() == session['username'].lower():
+                u['email'] = email
+                break
+        save_users(users)
     return jsonify({'ok': True})
 
 
@@ -971,12 +976,13 @@ def api_keep_alive():
     err = _csrf_check()
     if err: return err
     session.modified = True
-    users = load_users()
-    for u in users:
-        if u['username'].lower() == session['username'].lower():
-            u['lastLogin'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
-            break
-    save_users(users)
+    with _users_lock:
+        users = load_users()
+        for u in users:
+            if u['username'].lower() == session['username'].lower():
+                u['lastLogin'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+                break
+        save_users(users)
     return jsonify({'ok': True})
 
 
@@ -1121,8 +1127,8 @@ def api_save():
                             disk_keys.add(key)
                     gm_binder['relationships'] = merged_rels
                     body = json.dumps(gm_binder, ensure_ascii=False)
-                except Exception:
-                    pass  # fall back to writing the GM body as-is
+                except Exception as e:
+                    log.warning('[Save] Relationship merge failed: %s', e)
             _atomic_write(path, body)
 
         now = datetime.now().strftime('%H:%M:%S')
@@ -1228,6 +1234,7 @@ def api_save_relationships():
                 existing_lock.update(tree_lock)
             binder['treeLock'] = existing_lock
 
+        _rotate_backup(path)
         _atomic_write(path, json.dumps(binder))
 
     return jsonify({'ok': True})
@@ -2490,21 +2497,22 @@ def api_mark_notifications_read():
         return jsonify({'error': 'Invalid payload'}), 400
 
     username = session['username']
-    notifs   = _read_notifications(username)
+    with _player_lock(username):
+        notifs   = _read_notifications(username)
 
-    if data.get('all') is True:
-        for n in notifs:
-            n['read'] = True
-    else:
-        ids = data.get('ids')
-        if not isinstance(ids, list):
-            return jsonify({'error': 'Provide ids list or all:true'}), 400
-        id_set = set(ids)
-        for n in notifs:
-            if n['id'] in id_set:
+        if data.get('all') is True:
+            for n in notifs:
                 n['read'] = True
+        else:
+            ids = data.get('ids')
+            if not isinstance(ids, list):
+                return jsonify({'error': 'Provide ids list or all:true'}), 400
+            id_set = set(ids)
+            for n in notifs:
+                if n['id'] in id_set:
+                    n['read'] = True
 
-    _write_json(_notifications_path(username), notifs)
+        _write_json(_notifications_path(username), notifs)
     return jsonify({'ok': True})
 
 
@@ -2547,19 +2555,20 @@ def api_create_user():
     if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
         return jsonify({'error': 'Invalid email format.'}), 400
 
-    users = load_users()
-    if any(u['username'].lower() == username.lower() for u in users):
-        return jsonify({'error': 'Username already taken.'}), 400
+    with _users_lock:
+        users = load_users()
+        if any(u['username'].lower() == username.lower() for u in users):
+            return jsonify({'error': 'Username already taken.'}), 400
 
-    new_user = {
-        'username':      username,
-        'role':          role,
-        'household':     household,
-        'email':         email or '',
-        'password_hash': generate_password_hash(password),
-    }
-    users.append(new_user)
-    save_users(users)
+        new_user = {
+            'username':      username,
+            'role':          role,
+            'household':     household,
+            'email':         email or '',
+            'password_hash': generate_password_hash(password),
+        }
+        users.append(new_user)
+        save_users(users)
     return jsonify({'ok': True, 'user': {
         'username': username, 'role': role, 'household': household or '', 'email': email or '',
     }})
@@ -2571,59 +2580,60 @@ def api_update_user(target_username):
     err = _csrf_check()
     if err: return err
     data  = request.get_json(force=True, silent=True) or {}
-    users = load_users()
-    target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
-    if not target:
-        return jsonify({'error': 'User not found.'}), 404
+    with _users_lock:
+        users = load_users()
+        target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
+        if not target:
+            return jsonify({'error': 'User not found.'}), 404
 
-    if 'username' in data:
-        new_uname = data['username'].strip()
-        if not re.match(r'^[A-Za-z0-9_-]{3,30}$', new_uname):
-            return jsonify({'error': 'Username must be 3–30 characters (letters, numbers, _ -)'}), 400
-        if any(u['username'].lower() == new_uname.lower() and u is not target for u in users):
-            return jsonify({'error': 'That username is already taken.'}), 409
-        old_uname = target['username']
-        target['username'] = new_uname
-        # Rename player_data directory if it exists
-        old_dir = PLAYER_DATA_DIR / old_uname
-        new_dir = PLAYER_DATA_DIR / new_uname
-        if old_dir.exists() and not new_dir.exists():
-            old_dir.rename(new_dir)
+        if 'username' in data:
+            new_uname = data['username'].strip()
+            if not re.match(r'^[A-Za-z0-9_-]{3,30}$', new_uname):
+                return jsonify({'error': 'Username must be 3–30 characters (letters, numbers, _ -)'}), 400
+            if any(u['username'].lower() == new_uname.lower() and u is not target for u in users):
+                return jsonify({'error': 'That username is already taken.'}), 409
+            old_uname = target['username']
+            target['username'] = new_uname
+            # Rename player_data directory if it exists
+            old_dir = PLAYER_DATA_DIR / old_uname
+            new_dir = PLAYER_DATA_DIR / new_uname
+            if old_dir.exists() and not new_dir.exists():
+                old_dir.rename(new_dir)
 
-    if 'role' in data:
-        new_role = data['role']
-        if new_role not in ('gm', 'player', 'observer'):
-            return jsonify({'error': 'Role must be gm, player, or observer.'}), 400
-        if target['username'].lower() == session['username'].lower():
-            return jsonify({'error': 'Cannot change your own role.'}), 400
-        gm_count = sum(1 for u in users if u['role'] == 'gm')
-        if target['role'] == 'gm' and new_role != 'gm' and gm_count <= 1:
-            return jsonify({'error': 'Cannot remove the last GM.'}), 400
-        target['role'] = new_role
+        if 'role' in data:
+            new_role = data['role']
+            if new_role not in ('gm', 'player', 'observer'):
+                return jsonify({'error': 'Role must be gm, player, or observer.'}), 400
+            if target['username'].lower() == session['username'].lower():
+                return jsonify({'error': 'Cannot change your own role.'}), 400
+            gm_count = sum(1 for u in users if u['role'] == 'gm')
+            if target['role'] == 'gm' and new_role != 'gm' and gm_count <= 1:
+                return jsonify({'error': 'Cannot remove the last GM.'}), 400
+            target['role'] = new_role
 
-    if 'email' in data:
-        email = (data['email'] or '').strip()
-        if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
-            return jsonify({'error': 'Invalid email format.'}), 400
-        target['email'] = email
+        if 'email' in data:
+            email = (data['email'] or '').strip()
+            if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+                return jsonify({'error': 'Invalid email format.'}), 400
+            target['email'] = email
 
-    if 'household' in data:
-        hh = (data['household'] or '').strip() or None
-        if hh:
-            # Validate against actual manor keys in the save file
-            try:
-                save_path = get_save_path()
-                save_data = json.loads(save_path.read_text(encoding='utf-8')) if save_path and save_path.exists() else {}
-                valid_keys = [k.lower() for k in save_data.get('manors', {}).keys()]
-                if hh.lower() not in valid_keys:
-                    return jsonify({'error': f'"{hh}" is not a known manor. Choose from: {", ".join(save_data.get("manors", {}).keys())}'}), 400
-                # Use the canonical casing from the save file
-                hh = next(k for k in save_data.get('manors', {}).keys() if k.lower() == hh.lower())
-            except Exception:
-                pass  # If we can't validate, allow it through
-        target['household'] = hh
+        if 'household' in data:
+            hh = (data['household'] or '').strip() or None
+            if hh:
+                # Validate against actual manor keys in the save file
+                try:
+                    save_path = get_save_path()
+                    save_data = json.loads(save_path.read_text(encoding='utf-8')) if save_path and save_path.exists() else {}
+                    valid_keys = [k.lower() for k in save_data.get('manors', {}).keys()]
+                    if hh.lower() not in valid_keys:
+                        return jsonify({'error': f'"{hh}" is not a known manor. Choose from: {", ".join(save_data.get("manors", {}).keys())}'}), 400
+                    # Use the canonical casing from the save file
+                    hh = next(k for k in save_data.get('manors', {}).keys() if k.lower() == hh.lower())
+                except Exception:
+                    pass  # If we can't validate, allow it through
+            target['household'] = hh
 
-    save_users(users)
+        save_users(users)
     return jsonify({'ok': True})
 
 
@@ -2636,12 +2646,13 @@ def api_admin_reset_password(target_username):
     password = data.get('password', '')
     if len(password) < 10:
         return jsonify({'error': 'Password must be at least 10 characters.'}), 400
-    users = load_users()
-    target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
-    if not target:
-        return jsonify({'error': 'User not found.'}), 404
-    target['password_hash'] = generate_password_hash(password)
-    save_users(users)
+    with _users_lock:
+        users = load_users()
+        target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
+        if not target:
+            return jsonify({'error': 'User not found.'}), 404
+        target['password_hash'] = generate_password_hash(password)
+        save_users(users)
     return jsonify({'ok': True})
 
 
@@ -2652,16 +2663,17 @@ def api_delete_user(target_username):
     if err: return err
     if target_username.lower() == session['username'].lower():
         return jsonify({'error': 'Cannot delete your own account.'}), 400
-    users = load_users()
-    target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
-    if not target:
-        return jsonify({'error': 'User not found.'}), 404
-    if target['role'] == 'gm':
-        gm_count = sum(1 for u in users if u['role'] == 'gm')
-        if gm_count <= 1:
-            return jsonify({'error': 'Cannot delete the last GM.'}), 400
-    users = [u for u in users if u['username'].lower() != target_username.lower()]
-    save_users(users)
+    with _users_lock:
+        users = load_users()
+        target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
+        if not target:
+            return jsonify({'error': 'User not found.'}), 404
+        if target['role'] == 'gm':
+            gm_count = sum(1 for u in users if u['role'] == 'gm')
+            if gm_count <= 1:
+                return jsonify({'error': 'Cannot delete the last GM.'}), 400
+        users = [u for u in users if u['username'].lower() != target_username.lower()]
+        save_users(users)
     return jsonify({'ok': True})
 
 
@@ -2841,8 +2853,13 @@ def api_bot_chronicle():
     if binder is None:
         return jsonify({'error': 'Save file not found'}), 503
     chronicle = binder.get('chronicle', {})
-    # Sort years descending, take 3 most recent
-    recent_years = sorted(chronicle.keys(), key=lambda y: int(y), reverse=True)[:3]
+    numeric_keys = []
+    for y in chronicle.keys():
+        try:
+            numeric_keys.append((int(y), y))
+        except (ValueError, TypeError):
+            continue
+    recent_years = [k for _, k in sorted(numeric_keys, reverse=True)[:3]]
     entries = [{'year': int(y), 'entries': chronicle[y]} for y in recent_years]
     return jsonify({'chronicle': entries})
 

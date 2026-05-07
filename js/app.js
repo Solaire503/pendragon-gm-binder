@@ -491,7 +491,7 @@ const APP = {
     const sel = document.getElementById('fpSelected');
     const fname = document.getElementById('fpFilename');
     if (sel && fname) {
-      sel.value = data.current + '\\' + (fname.value || 'binder-save.json');
+      sel.value = data.current + '/' + (fname.value || 'binder-save.json');
     }
 
     const escP2 = p => p.replace(/\\/g,'\\\\').replace(/'/g,"\\'")
@@ -522,9 +522,9 @@ const APP = {
 
     let finalPath = sel;
     if (mode === 'new' && !sel) {
-      finalPath = this._fpCurrentPath + '\\' + fname;
+      finalPath = this._fpCurrentPath + '/' + fname;
     } else if (mode === 'new' && sel && !sel.endsWith('.json')) {
-      finalPath = sel + '\\' + fname;
+      finalPath = sel + '/' + fname;
     }
 
     if (!finalPath) { Toast.error('Please select a location'); return; }
@@ -972,7 +972,7 @@ const APP = {
         inlineDiv.innerHTML = `
           <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
             <div>
-              <div class="detail-label">New password for <strong>${uname}</strong></div>
+              <div class="detail-label">New password for <strong>${esc(uname)}</strong></div>
               <input class="edit-input" id="umPwField" type="password" placeholder="10+ chars" style="width:200px;">
             </div>
             <button class="btn btn-primary" id="umPwSaveBtn" style="padding:5px 16px;">Set Password</button>

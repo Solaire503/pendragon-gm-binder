@@ -97,7 +97,7 @@ const Comments = {
     const deleteBtn  = (isOwn || isGM()) && !isDeleted
       ? `<button class="btn btn-ghost comment-action-btn" style="color:var(--crimson-mid);" onclick="Comments.del('${esc(c.id)}','${esc(npcId)}')">Delete</button>`
       : '';
-    const replyBtn   = !isDeleted
+    const replyBtn   = !isDeleted && !isObserver()
       ? `<button class="btn btn-ghost comment-action-btn" onclick="Comments._openReplyForm('${esc(c.id)}','${esc(npcId)}')">Reply</button>`
       : '';
     // Restore: GM always, or player if they deleted their own comment (not if GM deleted it)
