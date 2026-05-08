@@ -76,6 +76,13 @@ const TabSolos = {
                 <div class="npc-search-results" id="solosKnightSearch-results" style="display:none;"></div>
               </div>
               ${pillsHtml ? `<div class="solos-knight-pills">${pillsHtml}</div>` : ''}
+              ${typeof EventStaging !== 'undefined' && EventStaging.count() > 0 ? `
+                <div class="solos-staging-actions">
+                  <button class="btn btn-ghost solos-load-staged-btn" onclick="TabSolos._loadStaged()">
+                    🎲 Load Staged (${EventStaging.count()})
+                  </button>
+                  <button class="btn btn-ghost solos-clear-staged-btn" onclick="TabSolos._clearStaged()">Clear</button>
+                </div>` : ''}
             </div>
             <div class="solos-field">
               <label class="solos-label">Status</label>
@@ -206,6 +213,31 @@ const TabSolos = {
 
   _removeKnight(id) {
     this._knightIds = this._knightIds.filter(x => x !== id);
+    this.render();
+  },
+
+  _loadStaged() {
+    if (typeof EventStaging === 'undefined') return;
+    const ids = EventStaging.getIds();
+    let added = 0;
+    ids.forEach(id => {
+      if (!this._knightIds.includes(id)) {
+        this._knightIds.push(id);
+        added++;
+      }
+    });
+    if (added) {
+      Toast.success(`Loaded ${added} staged knight${added > 1 ? 's' : ''}`);
+    } else {
+      Toast.info('All staged knights are already selected');
+    }
+    this.render();
+  },
+
+  _clearStaged() {
+    if (typeof EventStaging === 'undefined') return;
+    EventStaging.clear();
+    Toast.success('Staging list cleared');
     this.render();
   },
 

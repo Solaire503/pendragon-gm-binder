@@ -2976,6 +2976,13 @@ html.is-player .player-readonly-banner {
   opacity: 1;
   font-weight: 600;
 }
+.stage-btn { opacity: 0.55; transition: opacity 0.15s, color 0.15s; }
+.stage-btn:hover { opacity: 1; }
+.stage-btn.stage-active { color: var(--verdigris-mid); opacity: 1; font-weight: 600; }
+.solos-staging-actions { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.solos-load-staged-btn { font-size: 0.72rem; padding: 3px 10px; color: var(--verdigris-mid); }
+.solos-clear-staged-btn { font-size: 0.65rem; padding: 2px 8px; opacity: 0.6; }
+.solos-clear-staged-btn:hover { opacity: 1; color: var(--crimson-mid); }
 
 /* ══════════════════════════════════════════════════════════════
    PHASE 3 — COMMENTS, NOTIFICATIONS, JOURNAL

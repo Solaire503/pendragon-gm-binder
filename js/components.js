@@ -738,6 +738,7 @@ function buildNpcCardHtml(npc, opts = {}) {
           ${!isDead
             ? `<button class="btn btn-danger" onclick="Components.confirmKill('${npc.id}')">Mark Deceased</button>`
             : `<button class="btn btn-ghost" onclick="Components.confirmRestore('${npc.id}')">Restore to Living</button>`}
+          ${typeof EventStaging !== 'undefined' && !isDead ? EventStaging.buildButtonHtml(npc.id) : ''}
         ` : ''}
         <button class="btn btn-ghost pin-btn${typeof PinsManager !== 'undefined' && PinsManager.isPinned(npc.id) ? ' pin-active' : ''}"
                 onclick="PinsManager.toggleAndRefreshCard('${npc.id}')"

@@ -201,8 +201,10 @@ const TabManors = {
   _renderOverview(m, key, col, readOnly = false) {
     const treasury  = STORE.manorTreasury(key);
     const activeImpr = (m.improvements||[]).filter(i=>i.status==='active');
-    const dv         = activeImpr.reduce((s,i) => s+(i.dvMod||0), 0);
+    const dvImpr     = activeImpr.reduce((s,i) => s+(i.dvMod||0), 0);
+    const dv         = (m.dvBase || 0) + dvImpr;
     const damaged    = (m.propertyDamage||[]).filter(d=>d.status==='damaged');
+    const fieldDmg   = damaged.filter(d => d.type === 'Field').reduce((s,d) => s + (d.numFields||1), 0);
     const last       = m.history?.length ? m.history[m.history.length-1] : null;
 
     // ── Personnel ──────────────────────────────────────────
@@ -240,9 +242,9 @@ const TabManors = {
     const barsHtml = `
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
             <span style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--crimson-mid);">Hatred (Landlord)</span>
-            <span style="font-family:var(--font-heading);font-size:0.65rem;color:var(--crimson-mid);">
+            <span style="font-family:var(--font-heading);font-size:0.65rem;color:var(--crimson-mid);display:flex;align-items:center;gap:4px;">
               ${passionLabel(hatred)}
               ${passionCrit(hatred) ? `<span style="font-size:0.55rem;background:var(--crimson-mid);color:#fff;padding:1px 5px;border-radius:8px;margin-left:4px;">CRIT</span>` : ''}
             </span>
@@ -252,9 +254,9 @@ const TabManors = {
           </div>
         </div>
         <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
             <span style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--verdigris-mid);">Care (Commoners)</span>
-            <span style="font-family:var(--font-heading);font-size:0.65rem;color:var(--verdigris-mid);">
+            <span style="font-family:var(--font-heading);font-size:0.65rem;color:var(--verdigris-mid);display:flex;align-items:center;gap:4px;">
               ${passionLabel(care)}
               ${passionCrit(care) ? `<span style="font-size:0.55rem;background:var(--verdigris-mid);color:#fff;padding:1px 5px;border-radius:8px;margin-left:4px;">CRIT</span>` : ''}
             </span>
@@ -356,14 +358,17 @@ const TabManors = {
         </div>
 
         <div class="manor-stat-block">
-          <div class="section-title">Manor Stats</div>
-          <div class="manor-key-val"><span class="key">Base Harvest</span><span class="val">${m.baseHarvest} L</span></div>
-          <div class="manor-key-val"><span class="key">Lifestyle</span><span class="val">${m.lifestyle||'Normal'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="section-title" style="margin-bottom:0;">Manor Stats</div>
+            ${readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 6px;font-size:0.48rem;" onclick="TabManors._editStats('${esc(key)}')">✎</button>`}
+          </div>
+          <div class="manor-key-val"><span class="key">Base Harvest</span><span class="val">${m.baseHarvest} L${fieldDmg ? ` <span style="color:var(--crimson-mid);font-size:0.75rem;">(−${fieldDmg} field dmg = ${(m.baseHarvest||0) - fieldDmg} L effective)</span>` : ''}</span></div>
+          <div class="manor-key-val"><span class="key">Lifestyle</span><span class="val">${esc(m.lifestyle||'Normal')}</span></div>
           <div class="manor-key-val">
             <span class="key">Treasury</span>
             <span class="val" style="color:${treasury>0?'var(--verdigris-mid)':treasury<0?'var(--crimson-mid)':'inherit'};font-weight:600;">${treasury} L</span>
           </div>
-          <div class="manor-key-val"><span class="key">Defense Value</span><span class="val">${dv > 0 ? '+'+dv : dv || '0'}</span></div>
+          <div class="manor-key-val"><span class="key">Defense Value</span><span class="val">${dv > 0 ? '+'+dv : dv || '0'}${dvImpr ? ` <span style="font-size:0.75rem;color:var(--ink-soft);">(${m.dvBase||0} base + ${dvImpr} impr)</span>` : ''}</span></div>
           <div style="margin-top:10px;">${barsHtml}</div>
         </div>
       </div>
@@ -1832,6 +1837,55 @@ const TabManors = {
     if (m && !isNaN(val)) { m.steward_skill = val; STORE.save(); }
     Modal.close();
     Toast.success('Stewardship skill saved');
+    this._renderManor();
+  },
+
+  // ── EDIT MANOR STATS (modal) ──────────────────────────────
+  _editStats(key) {
+    const m = STORE.getManor(key);
+    if (!m) return;
+    const treasury = STORE.manorTreasury(key);
+    const dvImpr = (m.improvements||[]).filter(i=>i.status==='active').reduce((s,i) => s+(i.dvMod||0), 0);
+    Modal.open(`
+      <div style="min-width:340px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Manor Stats — ${esc(key)}</div>
+        <div class="npc-detail-grid">
+          <div class="detail-field"><div class="detail-label">Base Harvest (L)</div><input class="edit-input" id="ms-harvest" type="number" value="${m.baseHarvest||0}"></div>
+          <div class="detail-field"><div class="detail-label">Treasury (L)</div><input class="edit-input" id="ms-treasury" type="number" value="${treasury}" step="0.5"></div>
+          <div class="detail-field"><div class="detail-label">Base DV${dvImpr ? ` <span style="font-size:0.7rem;color:var(--ink-soft);">(+${dvImpr} from improvements)</span>` : ''}</div><input class="edit-input" id="ms-dv" type="number" value="${m.dvBase||0}"></div>
+          <div class="detail-field"><div class="detail-label">Hatred (Landlord)</div><input class="edit-input" id="ms-hatred" type="number" value="${m.hatred??0}" min="0"></div>
+          <div class="detail-field"><div class="detail-label">Care (Commoners)</div><input class="edit-input" id="ms-care" type="number" value="${m.care??0}" min="0"></div>
+        </div>
+        <div class="btn-row" style="margin-top:16px;">
+          <button class="btn btn-primary" onclick="TabManors._saveStats('${esc(key)}')">Save</button>
+          <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+        </div>
+      </div>`);
+  },
+
+  _saveStats(key) {
+    const m = STORE.getManor(key);
+    if (!m) return;
+    const g = id => document.getElementById(id);
+    const harvest  = parseFloat(g('ms-harvest')?.value);
+    const treasury = parseFloat(g('ms-treasury')?.value);
+    const dvBase   = parseFloat(g('ms-dv')?.value);
+    const hatred   = parseInt(g('ms-hatred')?.value, 10);
+    const care     = parseInt(g('ms-care')?.value, 10);
+    if (!isNaN(harvest))  m.baseHarvest = harvest;
+    if (!isNaN(dvBase))   m.dvBase = dvBase;
+    if (!isNaN(hatred))   m.hatred = hatred;
+    if (!isNaN(care))     m.care = care;
+    if (!isNaN(treasury)) {
+      if (!m.history || !m.history.length) {
+        m.history = [{ year: STORE.year, treasury }];
+      } else {
+        m.history[m.history.length - 1].treasury = treasury;
+      }
+    }
+    STORE.save();
+    Modal.close();
+    Toast.success('Manor stats updated');
     this._renderManor();
   },
 
