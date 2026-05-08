@@ -40,6 +40,7 @@ pendragon/
     statblock-templates.js   NPC stat block rendering
     multiplayer.js           Heartbeat, presence, broadcast polling
     pins.js                  Persons of Interest (pinned NPCs)
+    event-staging.js         Event staging list (GM-only, localStorage)
     tasks.js                 Tasks & Reminders widget
     notifications.js         Notification bell + dropdown
     notes.js                 Player notes (general, manor, impressions)
@@ -71,8 +72,9 @@ Scripts load in `index.html` in this exact order — later scripts depend on ear
 ```
 seed-npcs → seed-manors → patch-notes →
 store → at-mention → statblock-templates → components →
-dashboard → roster → manors → families → tree → winter → solos → mausoleum → chronicle →
-pins → tasks → notifications → notes → comments → journal →
+dashboard → roster → manors → families → tree → winter →
+solos → mausoleum → chronicle → npc-manors → battle →
+pins → event-staging → tasks → notifications → notes → comments → journal →
 multiplayer → app
 ```
 
@@ -85,6 +87,8 @@ multiplayer → app
 - `hhColour()` / `roleColour()` — household/role color helpers (components.js)
 - `API.get/post/put/patch/del` — fetch wrapper returning `{ok, data, status, error}` (components.js)
 - `Components` — shared UI factory (Modal, CardPopup, NPC cards, confirm dialogs)
+- `EventStaging` — GM-only event staging list (localStorage, event-staging.js). Guard with `typeof EventStaging !== 'undefined'`
+- `PinsManager` — Persons of Interest pin system (server-side, pins.js). Guard with `typeof PinsManager !== 'undefined'`
 
 ## Server Helpers
 
@@ -105,7 +109,9 @@ multiplayer → app
 - **Main save:** `binder-save.json` — NPCs in `living` (list) and `dead` (list), NOT an `npcs` dict
 - **Chronicle:** `STORE.chronicle` is singular; values are flat arrays, not objects with `.events`
 - **NPC fields:** `pronoun` (singular), `year_born` (not birth_year)
-- **IDs:** Chronicle/solo IDs use `crypto.randomUUID()`, not `Date.now()`
+- **IDs:** Chronicle/solo IDs use `crypto.randomUUID()`, not `Date.now()`. Vassal IDs use `Date.now() + random suffix`
+- **Manor DV:** Total DV = `m.dvBase` (manual) + sum of `improvement.dvMod` — not a single stored field
+- **Manor Treasury:** Comes from latest history entry (`m.history[last].treasury`), NOT a direct field on the manor
 - **Players poll** `/api/player-load`; **GM polls** `/api/load` — never merge these
 - `/setup` is localhost-only
 
