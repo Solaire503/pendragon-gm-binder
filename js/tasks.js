@@ -38,7 +38,7 @@ const TasksManager = {
     if (!text || !text.trim()) return;
     const res = await API.post('/api/tasks', { text: text.trim(), priority: !!priority });
     if (!res.ok) {
-      Components.toast(res.error || 'Failed to save task', 'error');
+      Toast.show(res.error || 'Failed to save task', 'error');
       return;
     }
     await this._refreshAndRender();
@@ -82,11 +82,11 @@ const TasksManager = {
   async _saveEditPersonal(id) {
     const text     = document.getElementById('editTaskText')?.value || '';
     const priority = document.getElementById('editTaskPriority')?.checked || false;
-    if (!text.trim()) { Components.toast('Task text cannot be empty', 'error'); return; }
+    if (!text.trim()) { Toast.show('Task text cannot be empty', 'error'); return; }
     Modal.close();
     const res = await API.put(`/api/tasks/${encodeURIComponent(id)}`, { text: text.trim(), priority });
     if (!res.ok) {
-      Components.toast(res.error || 'Failed to save', 'error');
+      Toast.show(res.error || 'Failed to save', 'error');
       return;
     }
     await this._refreshAndRender();
@@ -123,15 +123,15 @@ const TasksManager = {
   async _saveBroadcast() {
     const text     = document.getElementById('newBcastText')?.value || '';
     const priority = document.getElementById('newBcastPriority')?.checked || false;
-    if (!text.trim()) { Components.toast('Task text cannot be empty', 'error'); return; }
+    if (!text.trim()) { Toast.show('Task text cannot be empty', 'error'); return; }
     Modal.close();
     const res = await API.post('/api/tasks/broadcast', { text: text.trim(), priority });
     if (!res.ok) {
-      Components.toast(res.error || 'Failed to broadcast', 'error');
+      Toast.show(res.error || 'Failed to broadcast', 'error');
       return;
     }
     await this._refreshAndRender();
-    Components.toast('Task broadcast to all players', 'success');
+    Toast.show('Task broadcast to all players', 'success');
   },
 
   openEditBroadcast(id) {
@@ -159,11 +159,11 @@ const TasksManager = {
   async _saveEditBroadcast(id) {
     const text     = document.getElementById('editBcastText')?.value || '';
     const priority = document.getElementById('editBcastPriority')?.checked || false;
-    if (!text.trim()) { Components.toast('Task text cannot be empty', 'error'); return; }
+    if (!text.trim()) { Toast.show('Task text cannot be empty', 'error'); return; }
     Modal.close();
     const res = await API.put(`/api/tasks/broadcast/${encodeURIComponent(id)}`, { text: text.trim(), priority });
     if (!res.ok) {
-      Components.toast(res.error || 'Failed to save', 'error');
+      Toast.show(res.error || 'Failed to save', 'error');
       return;
     }
     await this._refreshAndRender();
@@ -173,11 +173,11 @@ const TasksManager = {
     Modal.close();
     const res = await API.put(`/api/tasks/broadcast/${encodeURIComponent(id)}`, { revoke: true });
     if (!res.ok) {
-      Components.toast(res.error || 'Failed to revoke task', 'error');
+      Toast.show(res.error || 'Failed to revoke task', 'error');
       return;
     }
     await this._refreshAndRender();
-    Components.toast('Broadcast task revoked', 'success');
+    Toast.show('Broadcast task revoked', 'success');
   },
 
   // ── ASSIGN TO GM (players) ────────────────────────────────
@@ -198,14 +198,14 @@ const TasksManager = {
 
   async _saveAssignToGm() {
     const text = document.getElementById('assignGmText')?.value || '';
-    if (!text.trim()) { Components.toast('Task text cannot be empty', 'error'); return; }
+    if (!text.trim()) { Toast.show('Task text cannot be empty', 'error'); return; }
     Modal.close();
     const res = await API.post('/api/tasks/assign-gm', { text: text.trim() });
     if (!res.ok) {
-      Components.toast(res.error || 'Failed to send reminder', 'error');
+      Toast.show(res.error || 'Failed to send reminder', 'error');
       return;
     }
-    Components.toast('Reminder sent to GM', 'success');
+    Toast.show('Reminder sent to GM', 'success');
   },
 
   // ── INLINE ADD FROM WIDGET ────────────────────────────────
@@ -267,10 +267,10 @@ const TasksManager = {
 
       // Badges
       const assignedBadge = (type === 'personal' && task.assignedBy)
-        ? `<span style="font-size:0.55rem;font-family:var(--font-heading);letter-spacing:0.06em;color:var(--gold);margin-left:4px;opacity:0.85;">📨 ${esc(task.assignedBy)}</span>`
+        ? `<span style="font-size:0.55rem;font-family:var(--font-heading);letter-spacing:0.06em;color:var(--gold-text);margin-left:4px;opacity:0.85;">📨 ${esc(task.assignedBy)}</span>`
         : '';
       const broadcastBadge = type === 'broadcast' && !isDone
-        ? `<span style="font-size:0.55rem;font-family:var(--font-heading);letter-spacing:0.06em;color:var(--gold);margin-left:4px;opacity:0.75;">📢</span>`
+        ? `<span style="font-size:0.55rem;font-family:var(--font-heading);letter-spacing:0.06em;color:var(--gold-text);margin-left:4px;opacity:0.75;">📢</span>`
         : '';
 
       // Action buttons (shown on hover via CSS) — hidden for observers
@@ -324,8 +324,8 @@ const TasksManager = {
           <button onclick="TasksManager._addFromWidget()" class="btn btn-ghost" style="padding:4px 10px;font-size:0.7rem;white-space:nowrap;">Add</button>
         </div>
         <div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;">
-          ${gm  ? `<button onclick="TasksManager.openAddBroadcast()" style="background:none;border:none;cursor:pointer;color:var(--gold);font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;padding:0;">📢 Broadcast to all players</button>` : ''}
-          ${!gm ? `<button onclick="TasksManager.openAssignToGm()" style="background:none;border:none;cursor:pointer;color:var(--gold);font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;padding:0;">📨 Assign task to GM</button>` : ''}
+          ${gm  ? `<button onclick="TasksManager.openAddBroadcast()" style="background:none;border:none;cursor:pointer;color:var(--gold-text);font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;padding:0;">📢 Broadcast to all players</button>` : ''}
+          ${!gm ? `<button onclick="TasksManager.openAssignToGm()" style="background:none;border:none;cursor:pointer;color:var(--gold-text);font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;padding:0;">📨 Assign task to GM</button>` : ''}
         </div>
       </div>`;
 

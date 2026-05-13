@@ -201,7 +201,7 @@ const TabChronicle = {
             onclick="TabChronicle.prevYear()" ${hasPrev ? '' : 'disabled'}>‹</button>
 
           <div style="flex:1;text-align:center;min-width:140px;">
-            <div style="font-family:var(--font-heading);font-size:1.6rem;letter-spacing:0.14em;color:var(--gold);line-height:1;">${year} AD</div>
+            <div style="font-family:var(--font-heading);font-size:1.6rem;letter-spacing:0.14em;color:var(--gold-text);line-height:1;">${year} AD</div>
             <div style="font-size:0.65rem;color:var(--ink-soft);margin-top:4px;letter-spacing:0.1em;text-transform:uppercase;">
               ${total === 0 ? 'No recorded events' : `${total} event${total !== 1 ? 's' : ''} recorded`}
             </div>
@@ -278,7 +278,7 @@ const TabChronicle = {
             <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--vellum-mid);border:1px solid rgba(26,138,64,0.25);border-left:3px solid rgba(26,138,64,0.65);border-radius:var(--radius);">
               <div style="flex:1;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
                 <span style="font-size:0.9rem;font-weight:600;color:var(--ink);">${this._npcPill(n)}</span>
-                ${n.blessed ? `<span title="Blessed Birth" style="color:var(--gold);font-size:0.75rem;">✦</span>` : ''}
+                ${n.blessed ? `<span title="Blessed Birth" style="color:var(--gold-text);font-size:0.75rem;">✦</span>` : ''}
                 ${n.fate_touched ? `<span title="Fate-Touched" style="color:#1a8a40;font-size:0.75rem;">◈</span>` : ''}
               </div>
               ${n.household ? `<span style="font-family:var(--font-heading);font-size:0.58rem;color:#5a3a2a;flex-shrink:0;">${esc(n.household)}</span>` : ''}
@@ -419,7 +419,7 @@ const TabChronicle = {
       .map(([k, v]) => `<option value="${k}" ${k === currentCat ? 'selected' : ''}>${v.label}</option>`)
       .join('');
     Modal.open(`
-      <h2 style="font-family:var(--font-heading);font-size:1.1rem;letter-spacing:0.1em;color:var(--gold);margin-bottom:16px;">Edit Submission</h2>
+      <h2 style="font-family:var(--font-heading);font-size:1.1rem;letter-spacing:0.1em;color:var(--gold-text);margin-bottom:16px;">Edit Submission</h2>
       <div style="margin-bottom:10px;">
         <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">CATEGORY</label>
         <select class="edit-input" id="sub-edit-cat" style="width:auto;padding:5px 8px;font-size:0.78rem;">${catOptions}</select>
@@ -486,7 +486,7 @@ const TabChronicle = {
       : `<option value="">No household members found</option>`;
 
     Modal.open(`
-      <h2 style="font-family:var(--font-heading);font-size:1.1rem;letter-spacing:0.1em;color:var(--gold);margin-bottom:18px;">Submit Chronicle Entry</h2>
+      <h2 style="font-family:var(--font-heading);font-size:1.1rem;letter-spacing:0.1em;color:var(--gold-text);margin-bottom:18px;">Submit Chronicle Entry</h2>
       <div class="sub-form-2col" style="gap:12px;margin-bottom:12px;">
         <div>
           <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">SUBJECT</label>

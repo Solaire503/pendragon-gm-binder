@@ -96,7 +96,7 @@ const TabNpcManors = {
     const borderColor = vacant ? 'var(--crimson-mid)' : trustReady ? 'var(--gold)' : 'var(--vellum-deep)';
 
     const ageNote = holder && !holderDead && !holderOfAge
-      ? `<span style="font-size:0.68rem;color:var(--gold);margin-left:4px;font-style:italic;">(Not of age)</span>` : '';
+      ? `<span style="font-size:0.68rem;color:var(--gold-text);margin-left:4px;font-style:italic;">(Not of age)</span>` : '';
 
     const holderHtml = holder
       ? `<span class="npc-inline-link" data-npc-hover="${holder.id}" role="button" tabindex="0" onclick="event.stopPropagation();Components.openNpcCard('${holder.id}')" style="${holderDead ? 'text-decoration:line-through;color:var(--ink-soft);' : ''}">${esc(holder.name)}</span>
@@ -116,7 +116,7 @@ const TabNpcManors = {
     const badgeHtml = vacant
       ? '<div style="position:absolute;top:6px;right:8px;font-size:0.52rem;font-family:var(--font-heading);letter-spacing:0.1em;text-transform:uppercase;color:var(--crimson-mid);background:var(--crimson-mid)11;padding:2px 6px;border-radius:4px;">Vacant</div>'
       : inTrust && !trustReady
-        ? '<div style="position:absolute;top:6px;right:8px;font-size:0.52rem;font-family:var(--font-heading);letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);background:var(--gold-tint-1);padding:2px 6px;border-radius:4px;">In Trust</div>'
+        ? '<div style="position:absolute;top:6px;right:8px;font-size:0.52rem;font-family:var(--font-heading);letter-spacing:0.1em;text-transform:uppercase;color:var(--gold-text);background:var(--gold-tint-1);padding:2px 6px;border-radius:4px;">In Trust</div>'
         : trustReady
           ? '<div style="position:absolute;top:6px;right:8px;font-size:0.52rem;font-family:var(--font-heading);letter-spacing:0.1em;text-transform:uppercase;color:var(--verdigris-mid);background:var(--verdigris-pale);padding:2px 6px;border-radius:4px;">Ready to Assume</div>'
           : '';

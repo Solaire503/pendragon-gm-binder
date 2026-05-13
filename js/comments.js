@@ -105,7 +105,7 @@ const Comments = {
       isGM() || (isOwn && c.deletedBy === username)
     );
     const restoreBtn = canRestore
-      ? `<button class="btn btn-ghost comment-action-btn" style="color:var(--gold);" onclick="Comments.restore('${esc(c.id)}','${esc(npcId)}')">Restore</button>`
+      ? `<button class="btn btn-ghost comment-action-btn" style="color:var(--gold-text);" onclick="Comments.restore('${esc(c.id)}','${esc(npcId)}')">Restore</button>`
       : '';
     // Shred: GM only, permanently removes
     const shredBtn = isGM() && isDeleted

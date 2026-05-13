@@ -4,7 +4,7 @@
    server is unreachable (power off, network loss, etc.).
 ══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME  = 'pendragon-offline-v11';
+const CACHE_NAME  = 'pendragon-offline-v15';
 const OFFLINE_URL = '/offline.html';
 
 // On install: pre-cache the offline page immediately.

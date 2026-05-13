@@ -226,10 +226,10 @@ const TabRoster = {
     })();
 
     const rtStyle = n.round_table
-      ? 'color:var(--gold);text-shadow:0 0 8px rgba(184,134,11,0.5);'
+      ? 'color:var(--gold-text);text-shadow:0 0 8px rgba(184,134,11,0.5);'
       : '';
     const rtBadge = n.round_table
-      ? '<span title="Knight of the Round Table" style="font-size:0.65rem;color:var(--gold);">⊕</span>'
+      ? '<span title="Knight of the Round Table" style="font-size:0.65rem;color:var(--gold-text);">⊕</span>'
       : '';
 
     return `<div class="npc-list-item${this._selectedId===n.id?' selected':''}${n.round_table?' round-table-item':''}" data-npc-id="${n.id}" role="button" tabindex="0" onclick="TabRoster.select('${n.id}')">

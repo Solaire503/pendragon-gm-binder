@@ -95,7 +95,7 @@ const TabFamilies = {
             <span class="family-member-role" style="background:${col};">${n.role||'?'}</span>
             <span class="family-member-name">${esc(n.name)}</span>
             ${age != null ? `<span class="family-member-age">Age ${age}</span>` : ''}
-            ${n.glory ? `<span class="family-member-age" style="color:var(--gold);">${n.glory.toLocaleString()} gl.</span>` : ''}
+            ${n.glory ? `<span class="family-member-age" style="color:var(--gold-text);">${n.glory.toLocaleString()} gl.</span>` : ''}
           </div>`;
         }).join('')}
       </div>`).join('');

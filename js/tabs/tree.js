@@ -63,7 +63,7 @@ const TabTree = {
           <button class="btn btn-ghost" id="treeBtnReset">Reset View</button>
           <button class="btn btn-ghost" id="treeBtnExport" title="Export as PNG image">Export PNG</button>
           <button class="btn btn-ghost" id="treeBtnPocket" title="Toggle unplaced members panel">Unplaced ▸</button>
-          <span id="treeFounderBadge" style="margin-left:4px;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.12em;color:var(--gold);display:none;"></span>
+          <span id="treeFounderBadge" style="margin-left:4px;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.12em;color:var(--gold-text);display:none;"></span>
           <span id="treeHeadBadge" style="margin-left:4px;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.12em;color:var(--crimson);display:none;"></span>
           <span style="margin-left:auto;font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.15em;color:var(--ink-soft);opacity:0.7;" id="treeStatus">
             ${this._canEdit() ? 'Hover a node and click ⊕ to connect · Drag nodes · Scroll to zoom' : 'Click a name to view · Drag nodes · Scroll to zoom'}

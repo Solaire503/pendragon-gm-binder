@@ -301,6 +301,10 @@ const STORE = {
       Notes._dirty = true;
       Notes._scheduleSave?.();
     }
+    // Remove orphaned NPC manor assignments
+    if (Array.isArray(this.npcManors)) {
+      this.npcManors = this.npcManors.filter(m => m.holderId !== id);
+    }
     // Remove the NPC from the Pins list
     if (typeof PinsManager !== 'undefined' && Array.isArray(PinsManager._pins)) {
       const pinIdx = PinsManager._pins.indexOf(id);

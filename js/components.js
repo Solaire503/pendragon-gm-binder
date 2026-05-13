@@ -102,17 +102,37 @@ const Toast = {
 // Secondary overlay that floats above the family tree modal.
 // Opening/closing it does not affect the tree underneath.
 const CardPopup = {
+  _trapFocus: null,
+
   open(contentHtml) {
     const overlay = document.getElementById('cardPopupOverlay');
     const content = document.getElementById('cardPopupContent');
     if (!overlay || !content) return;
     content.innerHTML = contentHtml;
     overlay.hidden = false;
+
+    const focusable = content.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length) focusable[0].focus();
+    else document.getElementById('cardPopupClose')?.focus();
+
+    if (this._trapFocus) document.removeEventListener('focusin', this._trapFocus);
+    this._trapFocus = (e) => {
+      if (!overlay.contains(e.target)) {
+        e.stopPropagation();
+        const items = overlay.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (items.length) items[0].focus();
+      }
+    };
+    document.addEventListener('focusin', this._trapFocus);
   },
 
   close() {
     const overlay = document.getElementById('cardPopupOverlay');
     if (overlay) overlay.hidden = true;
+    if (this._trapFocus) {
+      document.removeEventListener('focusin', this._trapFocus);
+      this._trapFocus = null;
+    }
     const content = document.getElementById('cardPopupContent');
     if (content) content.innerHTML = '';
   },
@@ -143,6 +163,7 @@ const Modal = {
   _formDirty:    false,
   _closeCallback: null,
   _dirtyHandler:  null,
+  _trapFocus:     null,
 
   _attachDirtyListeners() {
     const content = document.getElementById('modalContent');
@@ -173,6 +194,20 @@ const Modal = {
     // Track any user edits inside this modal (attach only one listener at a time)
     this._attachDirtyListeners();
 
+    const focusable = content.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length) focusable[0].focus();
+    else document.getElementById('modalClose')?.focus();
+
+    if (this._trapFocus) document.removeEventListener('focusin', this._trapFocus);
+    this._trapFocus = (e) => {
+      if (!overlay.contains(e.target)) {
+        e.stopPropagation();
+        const items = overlay.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (items.length) items[0].focus();
+      }
+    };
+    document.addEventListener('focusin', this._trapFocus);
+
     this._closeCallback = options.onClose || null;
     if (options.onOpen) options.onOpen(content);
   },
@@ -181,6 +216,10 @@ const Modal = {
   close() {
     const overlay = document.getElementById('modalOverlay');
     if (overlay) overlay.hidden = true;
+    if (this._trapFocus) {
+      document.removeEventListener('focusin', this._trapFocus);
+      this._trapFocus = null;
+    }
     const content = document.getElementById('modalContent');
     if (content) {
       // Remove dirty-tracking listener before clearing content
@@ -218,8 +257,10 @@ const Modal = {
     box.className = 'modal-box' +
       (options.wide ? ' modal-wide' : '') +
       (options.tree ? ' modal-tree' : '');
-    // Track edits in the new layer (replace any existing dirty listener)
     this._attachDirtyListeners();
+    const focusable = content.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length) focusable[0].focus();
+    else document.getElementById('modalClose')?.focus();
   },
 
   // Restore the previous modal content from the stack.
@@ -556,7 +597,7 @@ function buildNpcCardHtml(npc, opts = {}) {
 
   const blessedHtml = npc.blessed
     ? `<div class="detail-block" style="border-left:3px solid var(--gold);">
-        <div class="detail-label" style="color:var(--gold);">✦ Blessed Birth</div>
+        <div class="detail-label" style="color:var(--gold-text);">✦ Blessed Birth</div>
         <div class="detail-value">${esc(npc.blessed_note) || '—'}</div>
        </div>`
     : '';
@@ -681,11 +722,11 @@ function buildNpcCardHtml(npc, opts = {}) {
       <div class="npc-detail-header">
         <div class="npc-avatar" style="background:${col}22;border-color:${col};">${icon}</div>
         <div class="npc-header-text">
-          <div class="npc-name" ${npc.round_table ? 'style="color:var(--gold);text-shadow:0 0 12px rgba(184,134,11,0.4);"' : ''}>
+          <div class="npc-name" ${npc.round_table ? 'style="color:var(--gold-text);text-shadow:0 0 12px rgba(184,134,11,0.4);"' : ''}>
             ${esc(npc.name)}
             ${npc.blessed      ? '<span class="blessed-pip-lg" title="Blessed Birth">✦</span>' : ''}
             ${npc.fate_touched ? '<span class="fate-pip-lg"    title="Fate-Touched">◈</span>'  : ''}
-            ${npc.round_table  ? '<span title="Knight of the Round Table" style="font-size:0.75rem;color:var(--gold);margin-left:2px;">⊕</span>' : ''}
+            ${npc.round_table  ? '<span title="Knight of the Round Table" style="font-size:0.75rem;color:var(--gold-text);margin-left:2px;">⊕</span>' : ''}
           </div>
           ${npc.out_of_story ? `<div style="margin-top:3px;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.08em;color:#8a7a5a;background:rgba(138,122,90,0.12);border:1px solid rgba(138,122,90,0.3);padding:2px 8px;border-radius:4px;display:inline-block;">🌫 Out of Story${npc.out_of_story_note ? ' — ' + esc(npc.out_of_story_note) : ''}</div>` : ''}
           <div class="npc-role-line">${esc(npc.role) || '—'}${npc.pronoun ? ' · ' + esc(npc.pronoun) : ''}</div>
@@ -954,7 +995,7 @@ function buildNpcEditHtml(npc, isNew = false) {
           <div style="border-top:1px solid var(--vellum-deep);margin-top:4px;padding-top:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
               <input type="checkbox" id="ef-round-table" ${npc.round_table?'checked':''}>
-              <span style="font-family:var(--font-heading);font-size:0.62rem;letter-spacing:0.1em;color:var(--gold);">⊕ Knight of the Round Table</span>
+              <span style="font-family:var(--font-heading);font-size:0.62rem;letter-spacing:0.1em;color:var(--gold-text);">⊕ Knight of the Round Table</span>
             </label>
           </div>` : ''}
         </div>
@@ -1025,6 +1066,7 @@ function initNpcSearch(textId, hiddenId, allNpcs) {
     hidden.value  = npc.id;
     input.value   = npc.name + (npc.role ? ' (' + npc.role + ')' : '');
     results.style.display = 'none';
+    hidden.dispatchEvent(new Event('change'));
   });
 
   input.addEventListener('blur', () => {
@@ -1803,7 +1845,7 @@ const Components = {
           <div style="font-family:var(--font-display);font-size:0.85rem;color:var(--ink);margin-bottom:3px;">${esc(t.name)}</div>
           <div style="font-size:0.72rem;color:var(--ink-soft);font-style:italic;margin-bottom:6px;">${esc(t.description)}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            ${t.glory !== '—' ? `<span style="font-family:var(--font-heading);font-size:0.55rem;color:var(--gold);background:rgba(184,134,11,0.1);border:1px solid rgba(184,134,11,0.3);padding:1px 6px;border-radius:8px;">Glory ${t.glory}</span>` : ''}
+            ${t.glory !== '—' ? `<span style="font-family:var(--font-heading);font-size:0.55rem;color:var(--gold-text);background:rgba(184,134,11,0.1);border:1px solid rgba(184,134,11,0.3);padding:1px 6px;border-radius:8px;">Glory ${t.glory}</span>` : ''}
             <span style="font-family:var(--font-heading);font-size:0.55rem;color:var(--ink-soft);background:var(--vellum-deep);padding:1px 6px;border-radius:8px;">${esc(t.naturalAge)}</span>
             ${t.magicalTalents ? `<span style="font-family:var(--font-heading);font-size:0.55rem;color:#4a8a5a;background:rgba(74,138,90,0.12);border:1px solid rgba(74,138,90,0.3);padding:1px 6px;border-radius:8px;">✦ Magical</span>` : ''}
           </div>

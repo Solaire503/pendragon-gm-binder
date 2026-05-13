@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '2.11.0';
+const APP_VERSION = '3.2.0';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────
@@ -334,7 +334,7 @@ const APP = {
       <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--ink);background-image:radial-gradient(ellipse at 20% 50%,#2a1a08 0%,#0f0a04 100%);">
         <div style="background:var(--vellum);border:2px solid var(--gold);border-radius:12px;padding:48px 52px;max-width:520px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,0.6);text-align:center;">
           <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--ink);margin-bottom:6px;">Pendragon</div>
-          <div style="font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.35em;text-transform:uppercase;color:var(--gold);margin-bottom:32px;">GM's Binder</div>
+          <div style="font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.35em;text-transform:uppercase;color:var(--gold-text);margin-bottom:32px;">GM's Binder</div>
 
           ${reasonMsg}
 
@@ -624,7 +624,7 @@ const APP = {
   showPatchNotes() {
     const sectionsHtml = (sections) => sections.map(s => `
       <div style="margin-bottom:16px;">
-        <div style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;">${s.heading}</div>
+        <div style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold-text);margin-bottom:8px;">${s.heading}</div>
         <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px;">
           ${s.items.map(i => `<li style="font-size:0.88rem;color:var(--ink-soft);">${i}</li>`).join('')}
         </ul>
@@ -643,7 +643,7 @@ const APP = {
       <div style="min-width:min(580px,90vw);max-height:75vh;overflow-y:auto;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
           <div class="page-title" style="font-size:1rem;margin:0;">Pendragon GM's Binder</div>
-          <span style="font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--gold);background:rgba(184,134,11,0.1);border:1px solid rgba(184,134,11,0.3);padding:2px 8px;border-radius:20px;">v${APP_VERSION}</span>
+          <span style="font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--gold-text);background:rgba(184,134,11,0.1);border:1px solid rgba(184,134,11,0.3);padding:2px 8px;border-radius:20px;">v${APP_VERSION}</span>
         </div>
         ${notesHtml}
         <div class="btn-row" style="margin-top:8px;">
@@ -664,7 +664,7 @@ const APP = {
       if (f.divider) return `
         <div style="display:flex;align-items:center;gap:12px;margin:28px 0 18px;">
           <div style="flex:1;height:1px;background:var(--gold);opacity:0.3;"></div>
-          <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--gold);white-space:nowrap;">${f.label}</div>
+          <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--gold-text);white-space:nowrap;">${f.label}</div>
           <div style="flex:1;height:1px;background:var(--gold);opacity:0.3;"></div>
         </div>`;
       return `
@@ -683,7 +683,7 @@ const APP = {
       <div style="min-width:min(620px,90vw);max-height:78vh;overflow-y:auto;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
           <div class="page-title" style="font-size:1rem;margin:0;">📖 Features Guide</div>
-          <span style="font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--gold);background:rgba(184,134,11,0.1);border:1px solid rgba(184,134,11,0.3);padding:2px 8px;border-radius:20px;">v${APP_VERSION}</span>
+          <span style="font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--gold-text);background:rgba(184,134,11,0.1);border:1px solid rgba(184,134,11,0.3);padding:2px 8px;border-radius:20px;">v${APP_VERSION}</span>
         </div>
         <p style="font-size:0.82rem;color:var(--ink-soft);margin-bottom:4px;line-height:1.6;">Your Player Knight section is at the top. Scroll down to see the full GM feature set.</p>
         ${featuresHtml}
@@ -843,7 +843,7 @@ const APP = {
       } catch(e) { return ts; }
     };
     const roleBadge = role => role === 'gm'
-      ? `<span style="background:rgba(184,134,11,0.15);border:1px solid rgba(184,134,11,0.4);color:var(--gold);border-radius:20px;padding:1px 8px;font-size:0.62rem;letter-spacing:0.1em;font-family:var(--font-heading);">GM</span>`
+      ? `<span style="background:rgba(184,134,11,0.15);border:1px solid rgba(184,134,11,0.4);color:var(--gold-text);border-radius:20px;padding:1px 8px;font-size:0.62rem;letter-spacing:0.1em;font-family:var(--font-heading);">GM</span>`
       : `<span style="background:rgba(60,100,180,0.12);border:1px solid rgba(60,100,180,0.3);color:#7090d0;border-radius:20px;padding:1px 8px;font-size:0.62rem;letter-spacing:0.1em;font-family:var(--font-heading);">Player</span>`;
 
     const inputSty = 'font-size:0.82rem;padding:3px 6px;';

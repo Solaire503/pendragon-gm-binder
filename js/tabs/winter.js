@@ -615,7 +615,7 @@ const TabWinter = {
           </label>
           <button class="btn btn-ghost" style="font-size:0.52rem;padding:2px 8px;"
             onclick="TabWinter.rollOneBirth('${n.id}')">Roll</button>
-          <button class="btn btn-ghost" style="font-size:0.52rem;padding:2px 8px;color:var(--gold);border-color:var(--gold);"
+          <button class="btn btn-ghost" style="font-size:0.52rem;padding:2px 8px;color:var(--gold-text);border-color:var(--gold-text);"
             onclick="TabWinter.prestigeBirth('${n.id}')" title="Prestige bonus — guaranteed healthy birth">⚜</button>
         </div>`;
     }
@@ -1622,7 +1622,7 @@ const TabWinter = {
             '<span>&#x1F4B0; Dowry: <strong style="color:var(--ink);">' + re.dowry + '</strong></span>' +
             '<span>&#x2605; Glory: <strong style="color:var(--ink);">' + re.glory + '</strong></span>' +
           '</div>' +
-          (re.notes ? '<div style="margin-top:4px;font-size:0.75rem;color:var(--gold);font-style:italic;">&#x2692; ' + re.notes + '</div>' : '') +
+          (re.notes ? '<div style="margin-top:4px;font-size:0.75rem;color:var(--gold-text);font-style:italic;">&#x2692; ' + re.notes + '</div>' : '') +
         '</div>'
       : '';
 

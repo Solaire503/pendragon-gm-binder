@@ -15,6 +15,7 @@
   --vellum-deep:    #d8c898;
   --parchment:      #c8b878;
   --gold:           #b8860b;
+  --gold-text:      #8a6500;
   --gold-bright:    #d4a017;
   --gold-pale:      #e8c96a;
   --gold-faint:     #f5e8b0;
@@ -23,7 +24,7 @@
   --crimson-pale:   #c04040;
   --crimson-faint:  #f5dada;
   --verdigris:      #2d5a4a;
-  --verdigris-mid:  #3d7a62;
+  --verdigris-mid:  #336e56;
   --verdigris-pale: #60a882;
   --verdigris-faint:#daf0e8;
   --cobalt:         #1e3a5f;
@@ -157,7 +158,7 @@ body {
   font-family: var(--font-heading);
   font-size: 0.52rem;
   letter-spacing: 0.3em;
-  color: var(--gold);
+  color: var(--gold-text);
   text-transform: uppercase;
   margin-top: 2px;
 }
@@ -328,7 +329,7 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
 .year-btn {
   background: none;
   border: none;
-  color: var(--gold);
+  color: var(--gold-text);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 0 3px;
@@ -397,8 +398,8 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
 .hdr-btn-version {
   background: transparent;
   border-color: var(--gold-tint-2);
-  color: var(--gold);
-  opacity: 0.55;
+  color: var(--gold-text);
+  opacity: 0.65;
   font-size: 0.55rem;
   letter-spacing: 0.12em;
   padding: 4px 8px;
@@ -469,7 +470,7 @@ html.is-player .player-readonly-banner {
 .hdr-btn-outline {
   background: transparent;
   border-color: var(--gold-tint-2);
-  color: var(--gold);
+  color: var(--gold-text);
   opacity: 0.6;
   font-size: 0.55rem;
   letter-spacing: 0.08em;
@@ -491,7 +492,7 @@ html.is-player .player-readonly-banner {
   font-family: var(--font-heading);
   font-size: 0.6rem;
   letter-spacing: 0.1em;
-  color: var(--gold);
+  color: var(--gold-text);
   opacity: 0.7;
   text-transform: uppercase;
 }
@@ -517,6 +518,334 @@ html.is-player .player-readonly-banner {
 .battle-empty-title { font-family:var(--font-display); font-size:1.3rem; color:var(--ink); margin:0 0 8px; }
 .battle-empty-text { font-size:0.85rem; color:var(--ink-soft); max-width:400px; margin:0 0 24px; }
 .battle-start-btn { font-size:0.9rem; padding:10px 28px; }
+
+/* ── BATTLE SETUP ──────────────────────────────────────────────── */
+.battle-setup { padding: 20px 24px 40px; max-width: 1100px; margin: 0 auto; }
+.battle-setup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; padding-bottom: 12px;
+  border-bottom: 2px solid var(--vellum-deep);
+}
+.battle-setup-title {
+  font-family: var(--font-display); font-size: 1.3rem;
+  color: var(--crimson); margin: 0;
+}
+.battle-setup-actions { display: flex; gap: 8px; }
+.battle-setup-grid {
+  display: grid; grid-template-columns: 1fr 340px; gap: 24px;
+}
+.battle-setup-main { min-width: 0; }
+.battle-setup-sidebar { min-width: 0; }
+
+.bs-section {
+  background: var(--vellum-mid); border: 1px solid var(--vellum-deep);
+  border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px;
+}
+.bs-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.bs-section-title {
+  font-family: var(--font-display); font-size: 0.95rem;
+  color: var(--ink); margin: 0 0 10px;
+}
+.bs-section-header .bs-section-title { margin-bottom: 0; }
+.bs-label {
+  display: block; font-size: 0.75rem; font-weight: 600;
+  color: var(--ink-mid); margin-bottom: 3px; text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bs-row { margin-bottom: 10px; }
+.bs-row:last-child { margin-bottom: 0; }
+.bs-row-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.bs-row-pair:last-child { margin-bottom: 0; }
+
+/* Commanders */
+.bs-commander-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.bs-commander { }
+.bs-commander-fields { display: flex; flex-direction: column; gap: 4px; }
+.bs-battle-score { max-width: 80px; text-align: center; }
+
+/* Participants */
+.bs-participant {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px; border-bottom: 1px solid var(--vellum-deep);
+}
+.bs-participant:last-child { border-bottom: none; }
+.bs-participant-info { display: flex; align-items: center; gap: 6px; }
+.bs-participant-name { font-size: 0.85rem; color: var(--ink); }
+.bs-pk-badge, .bs-npc-badge, .bs-cmd-badge {
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 3px; letter-spacing: 0.05em;
+}
+.bs-pk-badge { background: var(--verdigris-faint); color: var(--verdigris); }
+.bs-npc-badge { background: var(--gold-tint-1); color: var(--gold-text); }
+.bs-cmd-badge { background: var(--crimson-faint); color: var(--crimson); }
+.bs-conroi-commander { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--vellum-deep); }
+
+/* Foes */
+.bs-foe {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px; border-bottom: 1px solid var(--vellum-deep);
+}
+.bs-foe:last-child { border-bottom: none; }
+.bs-foe-info { min-width: 0; }
+.bs-foe-type { display: block; font-size: 0.85rem; color: var(--ink); font-weight: 600; }
+.bs-foe-stats { display: block; font-size: 0.7rem; color: var(--ink-mid); }
+.bs-foe-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.bs-foe-form .bs-row-pair { margin-bottom: 8px; }
+
+/* Tooltip hint */
+.bs-tip {
+  display: inline-block; cursor: help; font-size: 0.7rem; font-weight: 400;
+  color: var(--ink-soft); opacity: 0.7; margin-left: 3px;
+  border-bottom: 1px dotted var(--ink-soft);
+}
+
+/* Responsive */
+@media (max-width: 800px) {
+  .battle-setup-grid { grid-template-columns: 1fr; }
+  .bs-commander-grid { grid-template-columns: 1fr; }
+}
+
+/* ── BATTLE CONSOLE ──────────────────────────────────────────── */
+.battle-console { padding: 16px 20px 40px; max-width: 1200px; margin: 0 auto; }
+.battle-console-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+.battle-console-main { min-width: 0; }
+.battle-console-sidebar { min-width: 0; }
+
+/* Header bar */
+.battle-header-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 10px 14px; margin-bottom: 16px; border-radius: var(--radius);
+  background: var(--crimson-faint); border: 1px solid rgba(139,30,30,0.2);
+}
+.battle-header-name {
+  font-family: var(--font-display); font-size: 1.15rem; color: var(--crimson); margin: 0;
+}
+.battle-header-round {
+  font-family: var(--font-heading); font-size: 0.75rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-mid);
+}
+.battle-header-cmdr { font-size: 0.75rem; color: var(--ink-mid); }
+
+/* Morale bar */
+.bc-morale-wrap {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; margin-bottom: 14px; border-radius: var(--radius);
+  background: var(--vellum-mid); border: 1px solid var(--vellum-deep);
+}
+.bc-morale-label { font-size: 0.75rem; font-weight: 600; color: var(--ink-mid); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.bc-morale-track {
+  flex: 1; height: 14px; background: var(--vellum-deep); border-radius: 7px; overflow: hidden; position: relative;
+}
+.bc-morale-fill {
+  height: 100%; border-radius: 7px; transition: width 0.3s;
+  background: linear-gradient(90deg, var(--crimson-mid) 0%, var(--verdigris) 100%);
+}
+.bc-morale-input {
+  width: 48px; text-align: center; font-size: 0.85rem; font-weight: 700;
+  border: 1px solid var(--vellum-deep); border-radius: 4px;
+  background: var(--vellum); color: var(--ink); padding: 2px 4px;
+}
+.bc-morale-input:focus { border-color: var(--gold-text); outline: none; }
+.bc-morale-sep { font-size: 0.85rem; color: var(--ink-mid); }
+.bc-morale-btns { display: flex; gap: 4px; }
+.bc-morale-btns button {
+  min-width: 28px; height: 26px; border-radius: 12px; border: 1px solid var(--vellum-deep);
+  background: var(--vellum); color: var(--ink); font-size: 0.75rem; cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center; padding: 0 6px;
+}
+.bc-morale-btns button:hover { border-color: var(--gold-text); color: var(--gold-text); }
+
+/* Encounter card */
+.bc-encounter {
+  padding: 12px 14px; margin-bottom: 14px; border-radius: var(--radius);
+  background: var(--vellum-mid); border: 1px solid var(--vellum-deep);
+}
+.bc-encounter-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.bc-encounter-row:last-child { margin-bottom: 0; }
+.bc-retired-label { font-size: 0.8rem; color: var(--ink-mid); display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+/* PK cards */
+.bc-pk-card {
+  border: 1px solid var(--vellum-deep); border-radius: var(--radius);
+  margin-bottom: 10px; background: var(--vellum);
+  overflow: hidden;
+}
+.bc-pk-card.expanded { border-color: var(--gold-text); }
+.bc-pk-header {
+  display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+  cursor: pointer; user-select: none; flex-wrap: wrap;
+  background: var(--vellum-mid);
+}
+.bc-pk-header:hover { background: var(--vellum-deep); }
+.bc-pk-name { font-size: 0.85rem; font-weight: 600; color: var(--ink); margin-right: auto; }
+.bc-pk-totals { font-size: 0.7rem; color: var(--ink-mid); white-space: nowrap; }
+.bc-pk-arrow { font-size: 0.7rem; color: var(--ink-soft); transition: transform 0.15s; }
+.bc-pk-card.expanded .bc-pk-arrow { transform: rotate(90deg); }
+.bc-status-flag { font-size: 0.55rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+.bc-status-major_wound { color: var(--gold-text); background: rgba(184,134,11,0.15); }
+.bc-status-unconscious { color: var(--ink-mid); background: rgba(0,0,0,0.1); }
+.bc-status-dead { color: var(--crimson-mid); background: rgba(178,34,34,0.12); }
+.bc-status-rear { color: var(--verdigris); background: rgba(0,128,128,0.1); }
+.bc-status-alone { color: #8b6914; background: rgba(139,105,20,0.12); }
+.bc-pk-body {
+  padding: 10px 12px; border-top: 1px solid var(--vellum-deep);
+}
+.bc-pk-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.bc-pk-select {
+  font-size: 0.72rem; padding: 2px 4px; border: 1px solid var(--vellum-deep);
+  border-radius: 3px; background: var(--vellum); color: var(--ink);
+}
+.bc-passion-badge {
+  font-size: 0.6rem; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+  background: rgba(184,134,11,0.15); color: var(--gold-text); letter-spacing: 0.03em;
+}
+
+/* Enemies within PK cards */
+.bc-enemies-title { font-size: 0.72rem; font-weight: 600; color: var(--ink-mid); text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 0 4px; }
+.bc-enemy-row {
+  display: flex; align-items: center; gap: 6px; padding: 4px 0;
+  border-bottom: 1px solid var(--vellum-deep); font-size: 0.8rem;
+}
+.bc-enemy-row:last-child { border-bottom: none; }
+.bc-enemy-label { font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.bc-enemy-weapon { font-size: 0.7rem; color: var(--ink-mid); }
+.bc-enemy-hp { display: flex; align-items: center; gap: 3px; margin-left: auto; flex-shrink: 0; }
+.bc-hp-track {
+  width: 60px; height: 8px; background: var(--vellum-deep); border-radius: 4px; overflow: hidden;
+}
+.bc-hp-fill { height: 100%; border-radius: 4px; transition: width 0.2s; }
+.bc-hp-input {
+  width: 38px; text-align: center; font-size: 0.7rem; font-weight: 700;
+  border: 1px solid var(--vellum-deep); border-radius: 3px;
+  background: var(--vellum); color: var(--ink); padding: 1px 2px;
+}
+.bc-hp-input:focus { border-color: var(--gold-text); outline: none; }
+.bc-hp-sep { font-size: 0.65rem; color: var(--ink-mid); }
+.bc-hp-adj {
+  width: 38px; text-align: center; font-size: 0.7rem;
+  border: 1px solid var(--vellum-deep); border-radius: 3px;
+  background: var(--vellum); color: var(--crimson-mid); padding: 1px 2px;
+}
+.bc-hp-adj:focus { border-color: var(--crimson-mid); outline: none; }
+.bc-hp-adj::placeholder { color: var(--ink-faint); font-size: 0.65rem; }
+.bc-enemy-actions { display: flex; gap: 3px; flex-shrink: 0; }
+.bc-action-btn {
+  font-size: 0.55rem; padding: 2px 5px; border: 1px solid var(--vellum-deep);
+  border-radius: 3px; background: var(--vellum); color: var(--ink-mid); cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;
+}
+.bc-action-btn:hover { border-color: var(--crimson-mid); color: var(--crimson-mid); }
+.bc-action-btn.mw { color: var(--gold-text); }
+.bc-action-btn.mw:hover { border-color: var(--gold-text); }
+.bc-action-btn.reassign { color: var(--verdigris); font-size: 0.8rem; }
+.bc-action-btn.reassign:hover { border-color: var(--verdigris); }
+.bc-enemy-row[draggable="true"] { cursor: grab; }
+.bc-enemy-row[draggable="true"]:active { cursor: grabbing; }
+.bc-pk-card.bc-drop-target { outline: 2px dashed var(--verdigris); outline-offset: -2px; background: rgba(0,128,128,0.06); }
+.bc-mw-flag { font-size: 0.55rem; font-weight: 700; color: var(--gold-text); background: rgba(184,134,11,0.12); padding: 1px 4px; border-radius: 2px; }
+
+/* Downed enemies */
+.bc-downed { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--vellum-deep); }
+.bc-downed-item {
+  display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 0.75rem; opacity: 0.65;
+}
+.bc-downed-status {
+  font-size: 0.55rem; font-weight: 700; text-transform: uppercase; padding: 1px 4px; border-radius: 2px;
+}
+.bc-downed-status.dead { background: rgba(139,30,30,0.12); color: var(--crimson-mid); }
+.bc-downed-status.captured { background: rgba(45,90,74,0.12); color: var(--verdigris-mid); }
+.bc-downed-status.fled { background: rgba(184,134,11,0.12); color: var(--gold-text); }
+
+/* Bulk assign */
+.bc-bulk-row {
+  display: flex; align-items: center; gap: 8px; padding: 4px 6px;
+  font-size: 0.85rem; cursor: pointer; border-radius: 4px;
+}
+.bc-bulk-row:hover { background: var(--vellum-mid); }
+.bc-bulk-row.disabled { opacity: 0.5; }
+.bc-bulk-row.disabled span { font-style: italic; }
+
+/* Kill ledger */
+.bc-kill-section { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--vellum-deep); }
+.bc-kill-entry { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; padding: 2px 0; color: var(--ink-mid); }
+.bc-kill-type { color: var(--ink); font-weight: 500; }
+.bc-kill-glory { color: var(--gold-text); font-weight: 600; }
+.bc-kill-round { font-size: 0.6rem; opacity: 0.6; }
+
+/* Sidebar panels */
+.bc-sidebar-panel {
+  border: 1px solid var(--vellum-deep); border-radius: var(--radius);
+  margin-bottom: 12px; background: var(--vellum-mid); overflow: hidden;
+}
+.bc-sidebar-title {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; cursor: pointer; user-select: none;
+  font-family: var(--font-display); font-size: 0.85rem; color: var(--ink);
+}
+.bc-sidebar-title:hover { background: var(--vellum-deep); }
+.bc-sidebar-arrow { font-size: 0.65rem; color: var(--ink-soft); transition: transform 0.15s; }
+.bc-sidebar-panel.open .bc-sidebar-arrow { transform: rotate(90deg); }
+.bc-sidebar-body { padding: 8px 12px; border-top: 1px solid var(--vellum-deep); }
+
+/* 10-step procedure */
+.bc-step-list { list-style: none; padding: 0; margin: 0; }
+.bc-step-item {
+  display: flex; align-items: flex-start; gap: 6px; padding: 4px 0;
+  font-size: 0.75rem; color: var(--ink); border-bottom: 1px solid var(--vellum-deep);
+}
+.bc-step-item:last-child { border-bottom: none; }
+.bc-step-num { font-weight: 700; color: var(--crimson); min-width: 18px; }
+.bc-step-desc { font-size: 0.65rem; color: var(--ink-mid); margin-top: 1px; }
+
+/* Foes reference */
+.bc-foe-ref {
+  padding: 6px 0; border-bottom: 1px solid var(--vellum-deep); font-size: 0.72rem;
+}
+.bc-foe-ref:last-child { border-bottom: none; }
+.bc-foe-ref-type { font-weight: 600; color: var(--ink); }
+.bc-foe-ref-stats { color: var(--ink-mid); font-size: 0.65rem; }
+
+/* Round log */
+.bc-round-entry {
+  display: flex; align-items: center; gap: 6px; padding: 4px 0;
+  font-size: 0.75rem; border-bottom: 1px solid var(--vellum-deep); flex-wrap: wrap;
+}
+.bc-round-entry:last-child { border-bottom: none; }
+.bc-round-num { font-weight: 700; color: var(--crimson); min-width: 32px; }
+.bc-round-enc { color: var(--ink); }
+.bc-round-morale { font-size: 0.65rem; color: var(--ink-mid); margin-left: auto; }
+.bc-round-casualties { width: 100%; font-size: 0.7rem; color: var(--crimson-mid); padding-left: 38px; font-style: italic; }
+.bc-round-current { background: rgba(184,134,11,0.08); border-radius: 3px; padding: 2px 4px; }
+
+/* Round controls */
+.bc-round-controls {
+  display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px;
+  border-top: 1px solid var(--vellum-deep);
+}
+
+/* Status colors for participant status badges */
+.bc-status-active { color: var(--verdigris); }
+.bc-status-major_wound { color: var(--gold-text); }
+.bc-status-unconscious { color: var(--crimson-mid); }
+.bc-status-dead { color: var(--crimson); opacity: 0.7; }
+.bc-status-alone { color: var(--crimson-mid); }
+.bc-status-rear { color: var(--ink-mid); }
+
+/* Posture colors */
+.bc-posture-valorous { color: var(--verdigris); }
+.bc-posture-reckless { color: var(--crimson); }
+.bc-posture-prudent { color: var(--gold-text); }
+.bc-posture-cowardly { color: var(--ink-soft); }
+
+/* Battle console responsive */
+@media (max-width: 800px) {
+  .battle-console-grid { grid-template-columns: 1fr; }
+  .bc-enemy-row { flex-wrap: wrap; }
+  .bc-enemy-hp { margin-left: 0; }
+}
 
 /* ── PARCHMENT SURFACE ───────────────────────────────────────── */
 .parchment {
@@ -594,7 +923,7 @@ html.is-player .player-readonly-banner {
   background-repeat: no-repeat;
   background-position: 9px center;
 }
-.search-input:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(184,134,11,0.15); }
+.search-input:focus { border-color: var(--gold-text); box-shadow: 0 0 0 2px rgba(184,134,11,0.15); }
 
 .filter-row {
   display: flex;
@@ -619,8 +948,8 @@ html.is-player .player-readonly-banner {
   color: var(--ink-soft);
   border-color: var(--vellum-deep);
 }
-.filter-chip:hover { border-color: var(--gold); color: var(--gold); }
-.filter-chip.active { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.filter-chip:hover { border-color: var(--gold-text); color: var(--gold-text); }
+.filter-chip.active { background: var(--gold); color: var(--ink); border-color: var(--gold-text); }
 .filter-chip[data-hh="Blackwood"].active { background: var(--hh-blackwood); color: var(--vellum); border-color: var(--hh-blackwood); }
 .filter-chip[data-hh="Cador"].active    { background: var(--hh-cador);     color: var(--vellum); border-color: var(--hh-cador); }
 .filter-chip[data-hh="Dawnwell"].active { background: var(--hh-dawnwell);  color: var(--vellum); border-color: var(--hh-dawnwell); }
@@ -648,7 +977,7 @@ html.is-player .player-readonly-banner {
   position: relative;
 }
 .npc-list-item:hover { background: var(--vellum); border-color: var(--vellum-deep); }
-.npc-list-item.selected { background: var(--vellum); border-color: var(--gold); }
+.npc-list-item.selected { background: var(--vellum); border-color: var(--gold-text); }
 .npc-list-item.round-table-item { border-left: 2px solid var(--gold); background: rgba(184,134,11,0.04); }
 .npc-list-item.round-table-item:hover { background: rgba(184,134,11,0.08); }
 .npc-list-item .hh-pip {
@@ -689,7 +1018,7 @@ html.is-player .player-readonly-banner {
 .npc-list-item .npc-item-glory {
   font-family: var(--font-heading);
   font-size: 0.6rem;
-  color: var(--gold);
+  color: var(--gold-text);
   flex-shrink: 0;
 }
 .npc-group-header {
@@ -699,7 +1028,7 @@ html.is-player .player-readonly-banner {
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  opacity: 0.5;
+  opacity: 0.65;
   border-bottom: 1px solid var(--vellum-deep);
   margin-top: 4px;
 }
@@ -746,7 +1075,7 @@ html.is-player .player-readonly-banner {
 .npc-glory-badge {
   font-family: var(--font-heading);
   font-size: 0.75rem;
-  color: var(--gold);
+  color: var(--gold-text);
   background: var(--gold-tint-1);
   border: 1px solid var(--gold-tint-3);
   border-radius: var(--radius);
@@ -768,7 +1097,7 @@ html.is-player .player-readonly-banner {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  opacity: 0.55;
+  opacity: 0.65;
 }
 .detail-value {
   font-family: var(--font-body);
@@ -837,7 +1166,7 @@ html.is-player .player-readonly-banner {
   color: var(--ink);
   outline: none;
 }
-.edit-input:focus { border-color: var(--gold); }
+.edit-input:focus { border-color: var(--gold-text); }
 .edit-textarea {
   resize: vertical;
   min-height: 60px;
@@ -874,7 +1203,7 @@ html.is-player .player-readonly-banner {
   border-color: var(--vellum-deep);
   color: var(--ink-soft);
 }
-.btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+.btn-ghost:hover { border-color: var(--gold-text); color: var(--gold-text); }
 /* Back button injected by Modal.pop() / AtMention.peekCard() */
 .modal-back-btn {
   display: block;
@@ -904,6 +1233,25 @@ html.is-player .player-readonly-banner {
   color: var(--verdigris-mid);
 }
 .btn-verdigris:hover { background: rgba(45,90,74,0.3); }
+.btn-crimson {
+  background: rgba(122,28,28,0.12);
+  border-color: rgba(122,28,28,0.4);
+  color: var(--crimson-mid);
+}
+.btn-crimson:hover { background: rgba(122,28,28,0.22); }
+.btn-muted {
+  background: transparent;
+  border-color: var(--vellum-deep);
+  color: var(--ink-mid);
+}
+.btn-muted:hover { background: var(--vellum-dark); }
+.btn-sm { padding: 4px 10px; font-size: 0.55rem; }
+.btn-icon {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.9rem; color: var(--ink-mid); padding: 2px 4px;
+  line-height: 1; transition: color 0.13s;
+}
+.btn-icon:hover { color: var(--crimson); }
 
 .btn-row {
   display: flex;
@@ -937,7 +1285,7 @@ html.is-player .player-readonly-banner {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  opacity: 0.5;
+  opacity: 0.65;
   margin-bottom: 20px;
 }
 
@@ -995,7 +1343,7 @@ html.is-player .player-readonly-banner {
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  opacity: 0.5;
+  opacity: 0.65;
   margin-bottom: 10px;
 }
 .pk-stat {
@@ -1040,7 +1388,7 @@ html.is-player .player-readonly-banner {
 .manor-tab.active {
   opacity: 1;
   color: var(--ink);
-  border-bottom-color: var(--gold);
+  border-bottom-color: var(--gold-text);
   background: var(--vellum);
 }
 .manor-tab .hh-dot {
@@ -1235,7 +1583,7 @@ html.is-player .player-readonly-banner {
   width: 100%;
 }
 .family-nav-btn:hover { background: var(--vellum); border-color: var(--vellum-deep); }
-.family-nav-btn.active { background: var(--vellum); border-color: var(--gold); }
+.family-nav-btn.active { background: var(--vellum); border-color: var(--gold-text); }
 .family-nav-btn .fam-icon { font-size: 1.1rem; width: 24px; text-align: center; }
 .family-nav-btn .fam-name {
   font-family: var(--font-heading);
@@ -1407,7 +1755,7 @@ html.is-player .player-readonly-banner {
 .tree-pocket-hint {
   font-size: 0.72rem;
   color: var(--ink-soft);
-  opacity: 0.55;
+  opacity: 0.65;
   padding: 0 12px 8px;
   font-style: italic;
   flex-shrink: 0;
@@ -1429,7 +1777,7 @@ html.is-player .player-readonly-banner {
   cursor: grab;
   font-size: 0.82rem;
 }
-.tree-pocket-item:hover { border-color: var(--gold); }
+.tree-pocket-item:hover { border-color: var(--gold-text); }
 .tree-pocket-pip {
   width: 8px;
   height: 8px;
@@ -1644,7 +1992,7 @@ html.is-player .player-readonly-banner {
 }
 .form-input:focus {
   outline: none;
-  border-color: var(--gold);
+  border-color: var(--gold-text);
 }
 
 /* ── TOAST ───────────────────────────────────────────────────── */
@@ -1672,6 +2020,7 @@ html.is-player .player-readonly-banner {
 .toast-success { background: var(--verdigris); border: 1px solid var(--verdigris-pale); }
 .toast-error   { background: var(--crimson);   border: 1px solid var(--crimson-pale); }
 .toast-info    { background: var(--cobalt);     border: 1px solid var(--cobalt-pale); }
+.toast-warning { background: var(--amber-mid);  border: 1px solid var(--amber-pale); }
 .toast-broadcast {
   background: linear-gradient(180deg, #3a2a10 0%, #2a1c08 100%);
   border: 2px solid var(--gold);
@@ -1746,8 +2095,8 @@ html.is-player .player-readonly-banner {
   font-family: var(--font-heading);
   font-size: 0.6rem;
   letter-spacing: 0.08em;
-  color: var(--gold);
-  opacity: 0.5;
+  color: var(--gold-text);
+  opacity: 0.65;
   flex-shrink: 0;
   text-transform: uppercase;
 }
@@ -1755,7 +2104,7 @@ html.is-player .player-readonly-banner {
   background: none;
   border: 1px solid var(--gold-tint-2);
   border-radius: var(--radius);
-  color: var(--gold);
+  color: var(--gold-text);
   opacity: 0.4;
   font-size: 0.8rem;
   cursor: pointer;
@@ -1791,7 +2140,7 @@ html.is-player .player-readonly-banner {
   transition: border-color 0.2s;
 }
 .broadcast-field:focus {
-  border-color: var(--gold);
+  border-color: var(--gold-text);
 }
 .broadcast-field::placeholder {
   color: rgba(200,185,154,0.3);
@@ -1832,7 +2181,7 @@ html.is-player .player-readonly-banner {
   font-size: 0.55rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--gold-text);
   opacity: 0.7;
   white-space: nowrap;
 }
@@ -1859,8 +2208,8 @@ html.is-player .player-readonly-banner {
   font-size: 0.5rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--gold);
-  opacity: 0.5;
+  color: var(--gold-text);
+  opacity: 0.65;
   padding: 4px 12px 6px;
   border-bottom: 1px solid rgba(184,134,11,0.15);
   margin-bottom: 4px;
@@ -1889,8 +2238,8 @@ html.is-player .player-readonly-banner {
   font-size: 0.5rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--gold);
-  opacity: 0.5;
+  color: var(--gold-text);
+  opacity: 0.65;
   margin-left: auto;
 }
 
@@ -1927,7 +2276,7 @@ html.is-player .player-readonly-banner {
 .mb-12 { margin-bottom: 12px; }
 .bold { font-weight: 600; }
 .italic { font-style: italic; }
-.text-gold { color: var(--gold); }
+.text-gold { color: var(--gold-text); }
 .text-crimson { color: var(--crimson-mid); }
 .text-verdigris { color: var(--verdigris-mid); }
 .text-muted { color: var(--ink-soft); opacity: 0.6; }
@@ -2069,7 +2418,7 @@ html.is-player .player-readonly-banner {
   color: var(--ink-soft);
   font-style: italic;
 }
-.training-line:hover { color: var(--gold); text-decoration: underline; }
+.training-line:hover { color: var(--gold-text); text-decoration: underline; }
 
 /* ── NPC CARD — AGE FLAG BLOCKS ─────────────────────────────── */
 .npc-age-flag {
@@ -2088,7 +2437,7 @@ html.is-player .player-readonly-banner {
 .npc-age-flag-amber    { color: var(--amber-mid);     background: var(--amber-faint);     border-color: rgba(122,96,48,0.3); }
 .npc-age-flag-cobalt   { color: var(--cobalt-mid);    background: var(--cobalt-faint);    border-color: rgba(42,80,128,0.3); }
 .npc-age-flag-verdigris{ color: var(--verdigris-mid); background: var(--verdigris-faint); border-color: rgba(61,122,98,0.35); }
-.npc-age-flag-done     { color: var(--ink-soft); opacity: 0.5; background: transparent; border-color: var(--vellum-deep); }
+.npc-age-flag-done     { color: var(--ink-soft); opacity: 0.65; background: transparent; border-color: var(--vellum-deep); }
 
 /* ── MANOR INLINE RECORD — TEST RESULT BUTTONS ──────────────── */
 .result-btn-group {
@@ -2110,12 +2459,12 @@ html.is-player .player-readonly-banner {
   transition: all 0.12s;
 }
 .result-btn:hover {
-  border-color: var(--gold);
+  border-color: var(--gold-text);
   color: var(--ink);
 }
 .result-btn.active {
   background: var(--gold);
-  border-color: var(--gold);
+  border-color: var(--gold-text);
   color: var(--vellum);
   font-weight: 600;
 }
@@ -2281,7 +2630,7 @@ html.is-player .player-readonly-banner {
 
 .winter-subtab.active {
   color: var(--ink);
-  border-bottom-color: var(--gold);
+  border-bottom-color: var(--gold-text);
   background: rgba(184,134,11,0.06);
 }
 
@@ -2657,7 +3006,7 @@ html.is-player .player-readonly-banner {
 
 .birth-stat-input:focus {
   outline: none;
-  border-color: var(--gold);
+  border-color: var(--gold-text);
 }
 
 .birth-eff-con {
@@ -2972,7 +3321,7 @@ html.is-player .player-readonly-banner {
 }
 .pin-btn:hover { opacity: 1; }
 .pin-btn.pin-active {
-  color: var(--gold);
+  color: var(--gold-text);
   opacity: 1;
   font-weight: 600;
 }
@@ -3126,7 +3475,7 @@ html.is-player .player-readonly-banner {
 
 .hdr-btn-notif:hover {
   background: rgba(184,134,11,0.08);
-  border-color: var(--gold);
+  border-color: var(--gold-text);
 }
 
 .notif-item {
@@ -3297,7 +3646,7 @@ html.is-player .player-readonly-banner {
 
 .journal-textarea:focus {
   outline: none;
-  border-color: var(--gold);
+  border-color: var(--gold-text);
   background: var(--vellum);
 }
 

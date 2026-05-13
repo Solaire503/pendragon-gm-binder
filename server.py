@@ -3,6 +3,7 @@ Pendragon GM's Binder — Flask Server
 Handles auth, sessions, role-based access, and all API endpoints.
 """
 
+import copy
 import hmac
 import json
 import logging
@@ -41,7 +42,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '2.11.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.2.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -50,7 +51,7 @@ BACKUP_DIR   = BASE_DIR / 'backups'
 PLAYER_DATA_DIR  = BASE_DIR / 'player_data'
 SUBMISSIONS_FILE     = BASE_DIR / 'submissions.json'
 BROADCAST_TASKS_FILE = BASE_DIR / 'broadcast_tasks.json'
-BATTLES_FILE         = BASE_DIR / 'battles.json'
+BATTLE_FILE          = BASE_DIR / 'battle-state.json'
 CERT_FILE    = BASE_DIR / 'cert.pem'
 KEY_FILE     = BASE_DIR / 'key.pem'
 PORT         = 8765
@@ -62,7 +63,7 @@ BLOCKED_FILES = {
     'config.json', '.env', 'server.py',
 }
 # Any file whose name ends with one of these suffixes is also blocked
-BLOCKED_SUFFIXES = ('.pem', '.pem.bak', '.key', '.py')
+BLOCKED_SUFFIXES = ('.pem', '.pem.bak', '.key', '.py', '.json')
 
 # ── SECRETS ──────────────────────────────────────────────────────────────────
 
@@ -752,7 +753,7 @@ def login():
     return render_template_string(LOGIN_HTML, error=error, username=prefill, year=year)
 
 
-@app.route('/logout', methods=['GET', 'POST'])
+@app.route('/logout', methods=['POST'])
 def logout():
     session.clear()
     return redirect(url_for('login'))
@@ -1039,7 +1040,7 @@ def api_load():
     if not path:
         return jsonify({'status': 'no_config'})
     if not path.exists():
-        return jsonify({'status': 'file_missing', 'path': str(path)})
+        return jsonify({'status': 'file_missing', 'path': path.name})
     try:
         data = path.read_text(encoding='utf-8')
         json.loads(data)  # validate
@@ -1507,7 +1508,7 @@ def api_broadcast():
         return jsonify({'error': 'Message too long (500 char max)'}), 400
 
     entry = {
-        'id':        f'bc_{int(time.time() * 1000)}',
+        'id':        'bc_' + _secrets_mod.token_hex(8),
         'message':   msg,
         'timestamp': time.time(),
         'sender':    session['username'],
@@ -1546,7 +1547,7 @@ def api_post_submission():
     except (ValueError, TypeError):
         return jsonify({'error': 'year must be an integer'}), 400
     sub = {
-        'id':             'sub-' + str(int(time.time() * 1000)),
+        'id':             'sub_' + _secrets_mod.token_hex(8),
         'playerUsername': session['username'],
         'subjectId':      str(data.get('subjectId', '')),
         'subjectName':    str(data.get('subjectName', ''))[:120],
@@ -2366,20 +2367,864 @@ def api_restore_comment(comment_id):
     return jsonify({'ok': True, 'comment': _serialize_comment(target, is_gm)})
 
 
-# ── BATTLES ───────────────────────────────────────────────────────────────────
+# ── BATTLE TRACKER ────────────────────────────────────────────────────────────
 
-_battles_lock = threading.Lock()
+BATTLE_SIZES = ('fight', 'skirmish', 'clash', 'small', 'medium', 'large', 'huge')
+BATTLE_SIZE_LABELS = {
+    'fight': 'Fight', 'skirmish': 'Skirmish', 'clash': 'Clash',
+    'small': 'Small Battle', 'medium': 'Medium Battle',
+    'large': 'Large Battle', 'huge': 'Huge Battle',
+}
+BATTLE_STATES = ('setup', 'active', 'finalizing', 'finalized')
+PARTICIPANT_STATUSES = ('active', 'major_wound', 'unconscious', 'dead', 'alone', 'rear')
+POSTURES = ('valorous', 'reckless', 'prudent', 'cowardly')
+ENEMY_STATUSES = ('active', 'major_wound', 'dead', 'captured', 'fled')
+BATTLE_OUTCOMES = ('decisive_victory', 'victory', 'indecisive', 'defeat', 'decisive_defeat', 'scripted')
 
-def _read_battles() -> dict:
-    with _battles_lock:
-        data = _read_json(BATTLES_FILE, default={'battles': {}})
-        if not isinstance(data, dict) or 'battles' not in data:
-            return {'battles': {}}
-        return data
+_battle_lock = threading.RLock()
 
-def _write_battles(data: dict) -> None:
-    with _battles_lock:
-        _write_json(BATTLES_FILE, data)
+
+def _with_battle_lock(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        with _battle_lock:
+            return f(*args, **kwargs)
+    return wrapper
+
+
+def _read_battle_file() -> dict:
+    with _battle_lock:
+        return _read_json(BATTLE_FILE, default={'active': None, 'archived': {}})
+
+
+def _get_active_battle() -> dict | None:
+    with _battle_lock:
+        return _read_json(BATTLE_FILE, default={'active': None, 'archived': {}}).get('active')
+
+
+def _save_active_battle(battle: dict) -> None:
+    with _battle_lock:
+        data = _read_json(BATTLE_FILE, default={'active': None, 'archived': {}})
+        data['active'] = battle
+        _write_json(BATTLE_FILE, data)
+
+
+def _clear_active_battle() -> None:
+    with _battle_lock:
+        data = _read_json(BATTLE_FILE, default={'active': None, 'archived': {}})
+        data['active'] = None
+        _write_json(BATTLE_FILE, data)
+
+
+def _archive_battle(battle: dict) -> None:
+    with _battle_lock:
+        data = _read_json(BATTLE_FILE, default={'active': None, 'archived': {}})
+        data['active'] = None
+        data.setdefault('archived', {})[battle['id']] = battle
+        _write_json(BATTLE_FILE, data)
+
+
+def _filter_battle_for_player(battle: dict, username: str) -> dict | None:
+    """Strip GM-only fields from battle state for player/observer view."""
+    if not battle:
+        return None
+    b = {k: v for k, v in battle.items()
+         if k not in ('gmNotes', 'intensity', 'roundNotes')}
+    b['foes'] = [{'foeId': f['foeId'], 'type': f['type']} for f in battle.get('foes', [])]
+    filtered = []
+    for p in battle.get('participants', []):
+        is_own = (p.get('controlledBy') == username)
+        if is_own:
+            fp = dict(p)
+            fp['enemies'] = [
+                {k: v for k, v in e.items()
+                 if k not in ('hp', 'maxHp', 'armor', 'skill', 'damage')}
+                for e in p.get('enemies', [])
+            ]
+        else:
+            fp = {
+                'participantId': p.get('participantId'),
+                'name': p.get('name'),
+                'npcId': p.get('npcId'),
+                'isPK': p.get('isPK'),
+                'isCommander': p.get('isCommander'),
+                'status': p.get('status'),
+                'posture': p.get('posture'),
+                'passion': p.get('passion'),
+            }
+        filtered.append(fp)
+    b['participants'] = filtered
+    b['rounds'] = [
+        {k: v for k, v in r.items() if k not in ('notes', 'snapshot')}
+        for r in battle.get('rounds', [])
+    ]
+    return b
+
+
+def _battle_stub():
+    return jsonify({'error': 'Not implemented yet'}), 501
+
+
+def _find_participant(battle, pid):
+    for p in battle.get('participants', []):
+        if p.get('participantId') == pid:
+            return p
+    return None
+
+
+def _find_enemy(battle, eid):
+    for p in battle.get('participants', []):
+        for e in p.get('enemies', []):
+            if e.get('enemyId') == eid:
+                return p, e
+    return None, None
+
+
+def _build_encounter_label(battle, enc):
+    if enc.get('retired'):
+        return 'Retired to Rear'
+    foe_id = enc.get('foeId')
+    if foe_id:
+        foe = next((f for f in battle.get('foes', []) if f['foeId'] == foe_id), None)
+        if foe:
+            weapon = foe.get('weapon', '')
+            return f"{foe['type']} ({weapon})" if weapon else foe['type']
+    return enc.get('text', '') or 'Encounter'
+
+
+# ── Battle API — Read ─────────────────────────────────────────────────────────
+
+@app.route('/api/battle/active')
+@login_required
+def api_battle_active():
+    """Lightweight poll endpoint for the IN BATTLE banner. 3s cadence."""
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'active': False})
+    return jsonify({
+        'active': True,
+        'id': battle.get('id'),
+        'name': battle.get('name', ''),
+        'state': battle.get('state', 'setup'),
+        'currentRound': battle.get('currentRound', 0),
+        'maxRounds': battle.get('maxRounds', 0),
+    })
+
+
+@app.route('/api/battle/state')
+@login_required
+def api_battle_state():
+    """Full battle state, filtered by role."""
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'battle': None})
+    if session.get('role') == 'gm':
+        return jsonify({'battle': battle})
+    return jsonify({'battle': _filter_battle_for_player(battle, session.get('username', ''))})
+
+
+# ── Battle API — GM Setup ────────────────────────────────────────────────────
+
+BATTLE_DEFAULT_ROUNDS = {
+    'fight': 1, 'skirmish': 3, 'clash': 5, 'small': 6,
+    'medium': 7, 'large': 8, 'huge': 8,
+}
+
+
+@app.route('/api/battle/create', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_create():
+    err = _csrf_check()
+    if err: return err
+    if _get_active_battle():
+        return jsonify({'error': 'A battle is already active'}), 409
+    now = datetime.now(timezone.utc).isoformat()
+    battle_id = 'battle_' + str(int(time.time()))
+    battle = {
+        'id': battle_id,
+        'state': 'setup',
+        'name': '',
+        'year': 0,
+        'location': '',
+        'size': 'skirmish',
+        'maxRounds': BATTLE_DEFAULT_ROUNDS['skirmish'],
+        'intensity': 10,
+        'friendlyCommander': {'name': '', 'npcId': None, 'battle': ''},
+        'enemyCommander': {'name': '', 'npcId': None, 'battle': ''},
+        'conroiCommanderId': None,
+        'gmNotes': '',
+        'foes': [],
+        'participants': [],
+        'morale': {'current': 0, 'starting': 0},
+        'currentRound': 0,
+        'rounds': [],
+        'createdAt': now,
+        'createdBy': session['username'],
+    }
+    _save_active_battle(battle)
+    log.info('Battle created: %s by %s', battle_id, session['username'])
+    return jsonify({'battle': battle}), 201
+
+
+@app.route('/api/battle/setup', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_setup():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    if battle['state'] != 'setup':
+        return jsonify({'error': 'Battle is not in setup state'}), 409
+    body = request.get_json(silent=True) or {}
+    allowed = ('name', 'year', 'location', 'size', 'intensity',
+               'friendlyCommander', 'enemyCommander',
+               'conroiCommanderId', 'gmNotes', 'maxRounds')
+    for key in allowed:
+        if key in body:
+            battle[key] = body[key]
+    if 'size' in body and body['size'] in BATTLE_DEFAULT_ROUNDS:
+        if 'maxRounds' not in body:
+            battle['maxRounds'] = BATTLE_DEFAULT_ROUNDS[body['size']]
+    if 'morale' in body:
+        m = body['morale']
+        if isinstance(m, dict):
+            battle['morale'] = {
+                'current': int(m.get('current', 0)),
+                'starting': int(m.get('starting', 0)),
+            }
+    _save_active_battle(battle)
+    return jsonify({'battle': battle})
+
+
+@app.route('/api/battle/start', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_start():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    if battle['state'] != 'setup':
+        return jsonify({'error': 'Battle is not in setup state'}), 409
+    if not battle.get('name', '').strip():
+        return jsonify({'error': 'Battle needs a name'}), 422
+    if not battle.get('participants'):
+        return jsonify({'error': 'Add at least one participant'}), 422
+    battle['state'] = 'active'
+    battle['currentRound'] = 1
+    battle['rounds'] = []
+    battle['encounter'] = {'text': '', 'foeId': None, 'retired': False}
+    battle['roundNotes'] = ''
+    battle['moraleAtRoundStart'] = battle.get('morale', {}).get('current', 0)
+    _rotate_battle_backup()
+    _save_active_battle(battle)
+    log.info('Battle started: %s (%s)', battle['name'], battle['id'])
+    return jsonify({'battle': battle})
+
+
+@app.route('/api/battle/foe', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_add_foe():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    if battle['state'] not in ('setup', 'active'):
+        return jsonify({'error': 'Cannot modify foes in this state'}), 409
+    body = request.get_json(silent=True) or {}
+    foe_id = 'foe_' + _secrets_mod.token_hex(8)
+    foe = {
+        'foeId': foe_id,
+        'type': body.get('type', 'Unknown'),
+        'weapon': body.get('weapon', ''),
+        'hp': int(body.get('hp', 0)),
+        'armor': body.get('armor', ''),
+        'skill': int(body.get('skill', 0)),
+        'damage': body.get('damage', ''),
+        'kv': float(body.get('kv', 0)),
+        'glory': int(body.get('glory', 0)),
+        'moraleLoss': body.get('moraleLoss', ''),
+        'moraleMin': int(body.get('moraleMin', 0)),
+        'perPK': body.get('perPK', 1),
+        'skills': body.get('skills', ''),
+        'behavior': body.get('behavior', ''),
+    }
+    battle['foes'].append(foe)
+    _save_active_battle(battle)
+    return jsonify({'foe': foe}), 201
+
+
+@app.route('/api/battle/foe/<foe_id>', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_update_foe(foe_id):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    if battle['state'] not in ('setup', 'active'):
+        return jsonify({'error': 'Cannot modify foes in this state'}), 409
+    foe = next((f for f in battle['foes'] if f['foeId'] == foe_id), None)
+    if not foe:
+        return jsonify({'error': 'Foe not found'}), 404
+    body = request.get_json(silent=True) or {}
+    updatable = ('type', 'weapon', 'hp', 'armor', 'skill', 'damage',
+                 'kv', 'glory', 'moraleLoss', 'moraleMin', 'perPK', 'skills', 'behavior')
+    try:
+        for key in updatable:
+            if key in body:
+                if key in ('hp', 'skill', 'glory', 'moraleMin'):
+                    foe[key] = int(body[key])
+                elif key == 'kv':
+                    foe[key] = float(body[key])
+                else:
+                    foe[key] = body[key]
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid numeric value'}), 422
+    _save_active_battle(battle)
+    return jsonify({'foe': foe})
+
+
+@app.route('/api/battle/foe/<foe_id>', methods=['DELETE'])
+@gm_required
+@_with_battle_lock
+def api_battle_delete_foe(foe_id):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    before = len(battle['foes'])
+    battle['foes'] = [f for f in battle['foes'] if f['foeId'] != foe_id]
+    if len(battle['foes']) == before:
+        return jsonify({'error': 'Foe not found'}), 404
+    _save_active_battle(battle)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/battle/participant', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_add_participant():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    if battle['state'] not in ('setup', 'active'):
+        return jsonify({'error': 'Cannot add participants in this state'}), 409
+    body = request.get_json(silent=True) or {}
+    pid = 'p_' + _secrets_mod.token_hex(8)
+    participant = {
+        'participantId': pid,
+        'name': body.get('name', ''),
+        'npcId': body.get('npcId'),
+        'controlledBy': body.get('controlledBy'),
+        'isPK': bool(body.get('isPK', False)),
+        'isCommander': False,
+        'status': 'active',
+        'posture': None,
+        'passion': None,
+        'enemies': [],
+        'killLedger': [],
+    }
+    battle['participants'].append(participant)
+    _save_active_battle(battle)
+    return jsonify({'participant': participant}), 201
+
+
+@app.route('/api/battle/participant/<pid>', methods=['DELETE'])
+@gm_required
+@_with_battle_lock
+def api_battle_remove_participant(pid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    before = len(battle['participants'])
+    battle['participants'] = [p for p in battle['participants'] if p['participantId'] != pid]
+    if len(battle['participants']) == before:
+        return jsonify({'error': 'Participant not found'}), 404
+    if battle.get('conroiCommanderId') == pid:
+        battle['conroiCommanderId'] = None
+    _save_active_battle(battle)
+    return jsonify({'ok': True})
+
+
+# ── Battle API — GM Battle Ops ───────────────────────────────────────────────
+
+@app.route('/api/battle/encounter', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_set_encounter():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    enc = battle.get('encounter', {'text': '', 'foeId': None, 'retired': False})
+    if 'text' in body:
+        enc['text'] = str(body['text'])
+    if 'foeId' in body:
+        foe_id = body['foeId']
+        if foe_id and not any(f['foeId'] == foe_id for f in battle.get('foes', [])):
+            return jsonify({'error': 'Foe not found'}), 404
+        enc['foeId'] = foe_id
+    if 'retired' in body:
+        enc['retired'] = bool(body['retired'])
+    battle['encounter'] = enc
+    _save_active_battle(battle)
+    return jsonify({'encounter': enc})
+
+
+@app.route('/api/battle/morale', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_morale():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    m = battle['morale']
+    try:
+        if 'current' in body:
+            m['current'] = min(m['starting'], max(0, int(body['current'])))
+        elif 'delta' in body:
+            m['current'] = min(m['starting'], max(0, m['current'] + int(body['delta'])))
+        if 'starting' in body:
+            m['starting'] = max(0, int(body['starting']))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Morale values must be integers'}), 422
+    _save_active_battle(battle)
+    return jsonify({'morale': m})
+
+
+@app.route('/api/battle/participant/<pid>/status', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_participant_status(pid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    status = body.get('status')
+    if status not in PARTICIPANT_STATUSES:
+        return jsonify({'error': f'Invalid status: {status}'}), 422
+    p = _find_participant(battle, pid)
+    if not p:
+        return jsonify({'error': 'Participant not found'}), 404
+    p['status'] = status
+    _save_active_battle(battle)
+    return jsonify({'participant': p})
+
+
+@app.route('/api/battle/participant/<pid>/posture', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_participant_posture(pid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    posture = body.get('posture')
+    if posture is not None and posture not in POSTURES:
+        return jsonify({'error': f'Invalid posture: {posture}'}), 422
+    p = _find_participant(battle, pid)
+    if not p:
+        return jsonify({'error': 'Participant not found'}), 404
+    p['posture'] = posture
+    _save_active_battle(battle)
+    return jsonify({'participant': p})
+
+
+@app.route('/api/battle/participant/<pid>/passion', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_participant_passion(pid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    p = _find_participant(battle, pid)
+    if not p:
+        return jsonify({'error': 'Participant not found'}), 404
+    if p.get('passion'):
+        return jsonify({'error': 'Passion already invoked this battle'}), 409
+    name = str(body.get('name', '')).strip()
+    result = body.get('result', '')
+    if not name or result not in ('inspired', 'impassioned', 'failed', 'fumbled'):
+        return jsonify({'error': 'Provide passion name and result (inspired/impassioned/failed/fumbled)'}), 422
+    p['passion'] = {'name': name, 'result': result, 'round': battle['currentRound']}
+    _save_active_battle(battle)
+    return jsonify({'participant': p})
+
+
+@app.route('/api/battle/participant/<pid>/enemy', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_assign_enemy(pid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    p = _find_participant(battle, pid)
+    if not p:
+        return jsonify({'error': 'Participant not found'}), 404
+    body = request.get_json(silent=True) or {}
+    foe_id = body.get('foeId')
+    foe = None
+    if foe_id:
+        foe = next((f for f in battle.get('foes', []) if f['foeId'] == foe_id), None)
+    eid = 'e_' + _secrets_mod.token_hex(8)
+    enemy = {
+        'enemyId': eid,
+        'foeId': foe_id,
+        'label': body.get('label', ''),
+        'type': body.get('type', foe['type'] if foe else 'Unknown'),
+        'weapon': body.get('weapon', foe.get('weapon', '') if foe else ''),
+        'hp': int(body.get('hp', foe['hp'] if foe else 0)),
+        'maxHp': int(body.get('maxHp', body.get('hp', foe['hp'] if foe else 0))),
+        'armor': body.get('armor', foe.get('armor', '') if foe else ''),
+        'skill': int(body.get('skill', foe['skill'] if foe else 0)),
+        'damage': body.get('damage', foe.get('damage', '') if foe else ''),
+        'kv': float(body.get('kv', foe['kv'] if foe else 0)),
+        'glory': int(body.get('glory', foe['glory'] if foe else 0)),
+        'status': 'active',
+    }
+    p['enemies'].append(enemy)
+    _save_active_battle(battle)
+    return jsonify({'enemy': enemy}), 201
+
+
+@app.route('/api/battle/enemy/<eid>/hp', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_enemy_hp(eid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    p, enemy = _find_enemy(battle, eid)
+    if not enemy:
+        return jsonify({'error': 'Enemy not found'}), 404
+    body = request.get_json(silent=True) or {}
+    try:
+        if 'hp' in body:
+            enemy['hp'] = max(0, min(enemy['maxHp'], int(body['hp'])))
+        else:
+            delta = int(body.get('delta', 0))
+            enemy['hp'] = max(0, min(enemy['maxHp'], enemy['hp'] + delta))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid HP value'}), 422
+    _save_active_battle(battle)
+    return jsonify({'enemy': enemy})
+
+
+@app.route('/api/battle/enemy/<eid>/status', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_enemy_status(eid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    p, enemy = _find_enemy(battle, eid)
+    if not enemy:
+        return jsonify({'error': 'Enemy not found'}), 404
+    body = request.get_json(silent=True) or {}
+    status = body.get('status')
+    if status not in ENEMY_STATUSES:
+        return jsonify({'error': f'Invalid status: {status}'}), 422
+    enemy['status'] = status
+    kill = None
+    already_killed = any(k.get('enemyId') == eid for k in p.get('killLedger', []))
+    if status in ('dead', 'captured', 'major_wound') and not already_killed:
+        kill = {
+            'killId': 'k_' + _secrets_mod.token_hex(8),
+            'enemyId': eid,
+            'type': enemy.get('type', ''),
+            'weapon': enemy.get('weapon', ''),
+            'glory': enemy.get('glory', 0),
+            'kv': enemy.get('kv', 0),
+            'round': battle['currentRound'],
+        }
+        p['killLedger'].append(kill)
+    _save_active_battle(battle)
+    return jsonify({'enemy': enemy, 'kill': kill})
+
+
+@app.route('/api/battle/enemy/<eid>/undo', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_enemy_undo(eid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    p, enemy = _find_enemy(battle, eid)
+    if not enemy:
+        return jsonify({'error': 'Enemy not found'}), 404
+    if enemy['status'] == 'active':
+        return jsonify({'error': 'Enemy is already active'}), 409
+    prev_status = enemy['status']
+    enemy['status'] = 'active'
+    if prev_status in ('dead', 'captured', 'major_wound'):
+        ledger = p.get('killLedger', [])
+        for i in range(len(ledger) - 1, -1, -1):
+            k = ledger[i]
+            if k.get('enemyId') == eid:
+                ledger.pop(i)
+                break
+    _save_active_battle(battle)
+    return jsonify({'enemy': enemy})
+
+
+@app.route('/api/battle/enemy/<eid>/reassign', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_enemy_reassign(eid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    target_pid = body.get('targetPid')
+    if not target_pid:
+        return jsonify({'error': 'targetPid required'}), 422
+    src_p, enemy = _find_enemy(battle, eid)
+    if not enemy:
+        return jsonify({'error': 'Enemy not found'}), 404
+    tgt_p = _find_participant(battle, target_pid)
+    if not tgt_p:
+        return jsonify({'error': 'Target participant not found'}), 404
+    if src_p['participantId'] == target_pid:
+        return jsonify({'error': 'Enemy already assigned to this participant'}), 409
+    src_p['enemies'] = [e for e in src_p.get('enemies', []) if e['enemyId'] != eid]
+    tgt_p.setdefault('enemies', []).append(enemy)
+    kills_to_move = [k for k in src_p.get('killLedger', []) if k.get('enemyId') == eid]
+    if kills_to_move:
+        src_p['killLedger'] = [k for k in src_p['killLedger'] if k.get('enemyId') != eid]
+        tgt_p.setdefault('killLedger', []).extend(kills_to_move)
+    _save_active_battle(battle)
+    log.info('Enemy %s reassigned from %s to %s', eid, src_p['name'], tgt_p['name'])
+    return jsonify({'battle': battle})
+
+
+@app.route('/api/battle/participant/<pid>/control', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_participant_control(pid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    p = _find_participant(battle, pid)
+    if not p:
+        return jsonify({'error': 'Participant not found'}), 404
+    body = request.get_json(silent=True) or {}
+    p['controlledBy'] = body.get('controlledBy') or None
+    _save_active_battle(battle)
+    return jsonify({'participant': p})
+
+
+@app.route('/api/battle/round-notes', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_round_notes():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    battle['roundNotes'] = str(body.get('notes', ''))
+    _save_active_battle(battle)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/battle/max-rounds', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_max_rounds():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    try:
+        if 'delta' in body:
+            battle['maxRounds'] = max(battle['currentRound'], battle['maxRounds'] + int(body['delta']))
+        elif 'maxRounds' in body:
+            battle['maxRounds'] = max(battle['currentRound'], int(body['maxRounds']))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid value'}), 422
+    _save_active_battle(battle)
+    return jsonify({'maxRounds': battle['maxRounds']})
+
+
+@app.route('/api/battle/round/end', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_round_end():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    snapshot = {
+        'participants': copy.deepcopy(battle['participants']),
+        'morale': copy.deepcopy(battle['morale']),
+        'encounter': copy.deepcopy(battle.get('encounter', {})),
+        'roundNotes': battle.get('roundNotes', ''),
+    }
+    enc = battle.get('encounter', {})
+    morale_start = battle.get('moraleAtRoundStart', snapshot['morale']['current'])
+    round_entry = {
+        'round': battle['currentRound'],
+        'encounter': _build_encounter_label(battle, enc),
+        'foeId': enc.get('foeId'),
+        'retired': enc.get('retired', False),
+        'morale': {'start': morale_start, 'end': battle['morale']['current']},
+        'notes': battle.get('roundNotes', ''),
+        'snapshot': snapshot,
+    }
+    battle['rounds'].append(round_entry)
+    battle['currentRound'] += 1
+    battle['moraleAtRoundStart'] = battle['morale']['current']
+    for p in battle['participants']:
+        p['posture'] = None
+        p['enemies'] = []
+    battle['encounter'] = {'text': '', 'foeId': None, 'retired': False}
+    battle['roundNotes'] = ''
+    _rotate_battle_backup()
+    _save_active_battle(battle)
+    log.info('Battle round %d ended: %s', round_entry['round'], battle['id'])
+    return jsonify({'battle': battle})
+
+
+@app.route('/api/battle/round/back', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_round_back():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    if not battle.get('rounds'):
+        return jsonify({'error': 'No previous round to revert to'}), 409
+    prev = battle['rounds'].pop()
+    snap = prev.get('snapshot', {})
+    battle['participants'] = copy.deepcopy(snap.get('participants', battle['participants']))
+    battle['morale'] = copy.deepcopy(snap.get('morale', battle['morale']))
+    battle['encounter'] = copy.deepcopy(snap.get('encounter', {'text': '', 'foeId': None, 'retired': False}))
+    battle['roundNotes'] = snap.get('roundNotes', '')
+    battle['moraleAtRoundStart'] = prev.get('morale', {}).get('start', battle['morale']['current'])
+    battle['currentRound'] -= 1
+    _save_active_battle(battle)
+    log.info('Battle reverted to round %d: %s', battle['currentRound'], battle['id'])
+    return jsonify({'battle': battle})
+
+
+# ── Battle API — GM Finalize ─────────────────────────────────────────────────
+
+@app.route('/api/battle/finalize', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_finalize():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    battle['state'] = 'finalizing'
+    _rotate_battle_backup()
+    _save_active_battle(battle)
+    log.info('Battle ended: %s (round %d/%d)', battle['name'], battle['currentRound'], battle['maxRounds'])
+    return jsonify({'battle': battle})
+
+
+@app.route('/api/battle/resume', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_resume():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'finalizing':
+        return jsonify({'error': 'No finalizing battle to resume'}), 404
+    battle['state'] = 'active'
+    _save_active_battle(battle)
+    log.info('Battle resumed: %s', battle['name'])
+    return jsonify({'battle': battle})
+
+
+@app.route('/api/battle/commit', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_commit():
+    err = _csrf_check()
+    if err: return err
+    return _battle_stub()
+
+
+@app.route('/api/battle/abandon', methods=['DELETE'])
+@gm_required
+@_with_battle_lock
+def api_battle_abandon():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle:
+        return jsonify({'error': 'No active battle'}), 404
+    log.info('Battle abandoned: %s (%s)', battle.get('name', ''), battle['id'])
+    _clear_active_battle()
+    return jsonify({'ok': True})
+
+
+# ── Battle API — Player Actions ──────────────────────────────────────────────
+
+@app.route('/api/battle/my-kill', methods=['POST'])
+@login_required
+@_with_battle_lock
+def api_battle_my_kill():
+    err = _csrf_check()
+    if err: return err
+    return _battle_stub()
+
+
+@app.route('/api/battle/my-morale', methods=['POST'])
+@login_required
+@_with_battle_lock
+def api_battle_my_morale():
+    """Conroi commander only — adjust morale by delta."""
+    err = _csrf_check()
+    if err: return err
+    return _battle_stub()
 
 
 # ── NPC PURGE (LO-18) ─────────────────────────────────────────────────────────
@@ -2686,6 +3531,21 @@ def _rotate_backup(save_path: Path) -> None:
         target = BACKUP_DIR / f'binder-save_{stamp}.json'
         shutil.copy2(save_path, target)
         backups = sorted(BACKUP_DIR.glob('binder-save_*.json'))
+        for old in backups[:-5]:
+            old.unlink()
+    except Exception as e:
+        log.warning('[Backup] %s', e)
+
+
+def _rotate_battle_backup() -> None:
+    try:
+        if not BATTLE_FILE.exists():
+            return
+        BACKUP_DIR.mkdir(exist_ok=True)
+        stamp  = datetime.now().strftime('%Y%m%d_%H%M%S')
+        target = BACKUP_DIR / f'battle-state_{stamp}.json'
+        shutil.copy2(BATTLE_FILE, target)
+        backups = sorted(BACKUP_DIR.glob('battle-state_*.json'))
         for old in backups[:-5]:
             old.unlink()
     except Exception as e:

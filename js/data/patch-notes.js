@@ -374,11 +374,129 @@ const FEATURES = [
       'Heartbeat polling keeps presence accurate — users disappear from the list within 60 seconds of closing the app.',
     ],
   },
+  {
+    heading: 'Battle Records',
+    icon: '⚔',
+    items: [
+      'A full GM battle console for running KAP 6th Edition battles — from setup through finalization.',
+      'Setup Phase: name the battle, set year & location, choose battle size (Fight through Huge — auto-sets max rounds), assign friendly and enemy commanders, add participants from the NPC roster with auto-detect for PKs and player control.',
+      'Foes Table: 29 built-in foe templates across four categories (Battle Encounters, Knights, Saxons, Picts) with all stats pre-filled. Add custom foes with HP, armor, skill, damage, KV, glory, morale thresholds, and a free-text skills/behavior field. Add or edit foes during setup or mid-battle.',
+      'Battle Console: two-column layout with participant cards, morale tracker, encounter card, and round notes on the left; 10-step battle procedure, foes reference, round log, kills summary, and round controls on the right.',
+      'Morale Tracker: editable current and starting morale with ±1 and ±5 quick-adjust buttons.',
+      'Participant Cards: expandable PK/NPC cards showing status dropdown, posture dropdown, passion invocation (once per battle), glory/KV totals, and a kill ledger. Status flags (MW, KO, DEAD, REAR, ALONE) appear as colored badges on the card header.',
+      'Enemy Management: assign foes individually or in bulk (select foe type, choose count 1–5 or custom, check which participants to assign). Each enemy row shows HP bar with direct input and ±adjustment field, plus action buttons for MW, Dead, Captured, and Fled.',
+      'Kill Tracking: kills are automatically recorded when enemies are marked as MW, dead, or captured. Duplicate kills are prevented. Undo reverts both status and kill credit. Kills summary panel groups all kills by knight with glory and KV totals.',
+      'Foe Reassignment: drag an enemy row from one PK card and drop it onto another, or use the ⇄ button to pick a target from a dropdown. Kill credit transfers with the foe.',
+      'Add participants mid-battle for late arrivals — they appear immediately and the round log records "X has joined the fray!"',
+      'Round Log: shows each completed round\'s encounter and morale delta. Status changes are tracked per round — "X sustained a major wound", "X was separated from the conroi", "X rejoined the conroi", "X, while still wounded, has rejoined the fray!" Only new changes appear, never repeats.',
+      'Round Management: End Round snapshots all state (participants, morale, encounter, notes) for undo. Back restores the previous round\'s snapshot completely — kills, participants, everything. Adjust max rounds on the fly with ± Rd buttons.',
+      'End Battle moves to a finalization screen. Resume Battle returns to the console if needed. Abandon Battle discards everything with double-confirm.',
+      'Blocked status gating: MW, unconscious, dead, and rear participants cannot have foes assigned without an explicit GM override. Warning modal shows natural-language status ("has a major wound", "is in the rear", "is separated from the conroi").',
+    ],
+  },
 ];
 
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '3.2.0',
+    date:    '2026-05-13',
+    sections: [
+      {
+        heading: 'Security & Data Integrity',
+        items: [
+          'Battle state file I/O now holds a single lock across the full read-modify-write cycle, preventing concurrent request races.',
+          'Battle state backed up automatically at battle start, each round end, and finalize (last 5 snapshots kept).',
+          'All server-side IDs switched from millisecond timestamps to cryptographic random tokens — eliminates collision risk.',
+          'Manor name escaping fixed in ~48 onclick attributes (self-XSS hardening).',
+          'Improvement income/DV notes now HTML-escaped.',
+          '/logout restricted to POST only. /api/load no longer exposes full server file path.',
+          'Round revert now deep-copies snapshot data to prevent shared-reference mutations.',
+        ],
+      },
+      {
+        heading: 'Battle Console Fixes',
+        items: [
+          'Round log morale deltas now display correctly — morale tracked at the start and end of each round.',
+          'Finalizing screen no longer shows Resume/Abandon buttons to players.',
+          'Setup field saves, round notes, and morale edits now show error toasts on failure instead of silently dropping changes.',
+          'Bulk foe assignment button disabled during API calls to prevent double-click duplicates.',
+          'Morale capped at starting value server-side — can no longer accidentally exceed the maximum.',
+          'Passion invocations now support Failed and Fumbled results in addition to Inspired and Impassioned.',
+          'Long enemy labels (e.g. "Mounted Heorthgeneat #12") now truncate with ellipsis instead of overflowing.',
+        ],
+      },
+      {
+        heading: 'Accessibility & Contrast',
+        items: [
+          'New --gold-text token (#8a6500) replaces --gold for all text, passing WCAG AA contrast on parchment backgrounds.',
+          'Bumped opacity floor on muted labels from 0.5 to 0.65 across ~10 styles.',
+          'Darkened --verdigris-mid for normal-text contrast compliance.',
+          'Added role="button" and tabindex="0" to 5 clickable battle console elements (PK card headers, sidebar accordions).',
+          'Toast container now has aria-live="polite" for screen reader announcements.',
+          'Modal and card popup now trap focus — Tab no longer escapes into the page behind.',
+        ],
+      },
+      {
+        heading: 'Other Fixes',
+        items: [
+          'Toast.warn() call in solos.js fixed (method did not exist). Added .toast-warning CSS style.',
+          'NPC delete now cleans up orphaned NPC manor assignments.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '3.1.0',
+    date:    '2026-05-13',
+    sections: [
+      {
+        heading: 'Battle Records — GM Battle Console',
+        items: [
+          'Full GM battle console for running KAP 6e battles live. Two-column layout: participant cards, morale tracker, encounter card, and round notes on the left; 10-step procedure, foes reference, round log, kills summary, and round controls on the right.',
+          'Setup Phase: name your battle, set year, location, and size (Fight through Huge with auto-set max rounds). Assign commanders, add participants from the NPC roster with auto-detect for PKs and player control.',
+          '29 built-in foe templates across four categories (Battle Encounters, Knights, Saxons, Picts). Custom foes supported with HP, armor, skill, damage, KV, glory, morale thresholds, and a free-text skills/behavior field. Foes can be added or edited during setup or mid-battle.',
+          'Expandable PK/NPC cards with status & posture dropdowns, passion invocation (once per battle), glory/KV running totals, and per-knight kill ledger.',
+          'Enemy HP tracking with direct input and ±adjustment field. Action buttons for Major Wound, Dead, Captured, and Fled. MW can be undone back to active.',
+          'Bulk foe assignment: select a foe type, choose count (1–5 or custom), and check which participants to assign. Status-gated — MW, unconscious, dead, and rear participants blocked with an override option.',
+          'Kill tracking: kills auto-recorded on MW, dead, or captured with duplicate prevention. Undo reverts both status and kill credit. Kills summary panel groups all kills by knight.',
+        ],
+      },
+      {
+        heading: 'Foe Reassignment',
+        items: [
+          'Drag an enemy row from one PK card and drop it onto another to reassign mid-battle — or use the ⇄ button for a dropdown picker.',
+          'Kill credit transfers with the foe, so whoever finishes the fight gets the glory.',
+        ],
+      },
+      {
+        heading: 'Round Management & Log',
+        items: [
+          'End Round snapshots all state for full undo. Going back restores everything — kills, participants, enemies, morale.',
+          'Round log tracks encounters, morale deltas, and narrative status events per round: "X sustained a major wound", "X was separated from the conroi", "X rejoined the conroi", "X, while still wounded, has rejoined the fray!", "X has joined the fray!" for late arrivals.',
+          'Adjust max rounds on the fly with ± Rd buttons.',
+          'Add participants mid-battle — they appear immediately in the console.',
+        ],
+      },
+      {
+        heading: 'Status & Morale',
+        items: [
+          'Status flags (MW, KO, DEAD, REAR, ALONE) appear as colored badges on PK card headers — visible at a glance without expanding.',
+          'Status changes update live — no need to collapse and expand cards.',
+          'Editable morale fields (current and starting) with ±1 and ±5 quick-adjust buttons.',
+          'Natural-language status warnings: "has a major wound", "is in the rear", "is separated from the conroi".',
+        ],
+      },
+      {
+        heading: 'Battle Lifecycle',
+        items: [
+          'End Battle moves to a finalization screen with Resume Battle to return to the console.',
+          'Abandon Battle discards everything with double-confirm and returns to the start screen.',
+        ],
+      },
+    ],
+  },
   {
     version: '2.11.0',
     date:    '2026-05-07',

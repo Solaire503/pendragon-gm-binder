@@ -112,7 +112,7 @@ const TabMausoleum = {
         </div>
         <div class="dead-dates">${esc(n.role||'—')} · ${born} – ${died}${lived}</div>
         ${notePrev ? `<div class="dead-notes">${esc(notePrev)}</div>` : ''}
-        ${n.glory ? `<div style="margin-top:6px;font-family:var(--font-heading);font-size:0.6rem;color:var(--gold);">${n.glory.toLocaleString()} glory</div>` : ''}
+        ${n.glory ? `<div style="margin-top:6px;font-family:var(--font-heading);font-size:0.6rem;color:var(--gold-text);">${n.glory.toLocaleString()} glory</div>` : ''}
       </div>`;
     }).join('');
   },

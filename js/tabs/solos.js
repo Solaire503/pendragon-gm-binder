@@ -1719,7 +1719,7 @@ const TabSolos = {
       }
     }
     if (!mother) {
-      Toast.warn('No wife found in STORE for childbirth roll. Roll manually.');
+      Toast.show('No wife found in STORE for childbirth roll. Roll manually.', 'warning');
       return;
     }
     // Delegate to TabWinter flow
