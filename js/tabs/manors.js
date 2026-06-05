@@ -1950,7 +1950,11 @@ const TabManors = {
   _markRepaired(key, damageId) {
     const m = STORE.getManor(key);
     const d = m?.propertyDamage?.find(x => x.id == damageId);
-    if (d) { d.status = 'repaired'; STORE.save(); Toast.success('Marked repaired'); this._renderManor(); }
+    if (d) {
+      d.status = 'repaired'; STORE.save(); Toast.success('Marked repaired');
+      if (this._recordOpen) this._refreshRecordDamage(key);
+      else this._renderManor();
+    }
   },
 
   // Navigate to Overview and open the inline record panel

@@ -18,6 +18,10 @@ window.esc = esc;
 // Any element with role="button" (used on non-<button> clickable divs/spans)
 // should trigger its onclick on Enter/Space for keyboard users. One delegated
 // listener handles every such element across the app (MD-5).
+document.addEventListener('focusin', (ev) => {
+  if (ev.target?.type === 'number') ev.target.select();
+});
+
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Enter' && ev.key !== ' ') return;
   const t = ev.target;
@@ -200,7 +204,8 @@ const Modal = {
 
     if (this._trapFocus) document.removeEventListener('focusin', this._trapFocus);
     this._trapFocus = (e) => {
-      if (!overlay.contains(e.target)) {
+      if (!overlay.contains(e.target) &&
+          !document.getElementById('cardPopupOverlay')?.contains(e.target)) {
         e.stopPropagation();
         const items = overlay.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
         if (items.length) items[0].focus();
@@ -658,7 +663,7 @@ function buildNpcCardHtml(npc, opts = {}) {
     const other     = STORE.getNpc(otherId);
     const isDead    = other?.status === 'Dead';
     const label     = isJunior
-      ? (r.type === 'Squire' || r.type === 'Former Squire' ? 'Squire under' : 'Page at')
+      ? (r.type === 'Squire' || r.type === 'Former Squire' ? 'Squired under' : 'Paged at')
       : (r.type === 'Squire' || r.type === 'Former Squire' ? 'Squire' : 'Page');
     const name      = other ? other.name : (r.notes || '—');
     const sub       = other ? other.role : '';
@@ -689,15 +694,16 @@ function buildNpcCardHtml(npc, opts = {}) {
         const hasSquireRel = STORE.getRelationships(npc.id)
           .some(r => r.type === 'Squire' && r.targetId === npc.id);
         const path = tp || (hasSquireRel ? 'squire' : role);
+        const pastTraining = npc.came_of_age || !['squire','page','baby','infant','child',''].includes(role);
         let trainLabel, trainColour;
         if (path.includes('priest') || path.includes('druid') || path.includes('nun') || path.includes('monk') || path.includes('clergy')) {
-          trainLabel = npc.came_of_age ? 'Studied with the Clergy at' : 'Studying with the Clergy at'; trainColour = 'var(--cobalt-mid)';
+          trainLabel = pastTraining ? 'Studied with the Clergy at' : 'Studying with the Clergy at'; trainColour = 'var(--cobalt-mid)';
         } else if (path.includes('steward') || path.includes('seneschal')) {
-          trainLabel = npc.came_of_age ? 'Learned Stewardship under' : 'Learning Stewardship under'; trainColour = 'var(--amber-mid)';
+          trainLabel = pastTraining ? 'Learned Stewardship under' : 'Learning Stewardship under'; trainColour = 'var(--amber-mid)';
         } else if (path.includes('squire')) {
-          trainLabel = npc.came_of_age ? 'Squired under' : 'Squire under'; trainColour = 'var(--violet-mid)';
+          trainLabel = pastTraining ? 'Squired under' : 'Squire under'; trainColour = 'var(--violet-mid)';
         } else if (path.includes('page')) {
-          trainLabel = npc.came_of_age ? 'Paged at' : 'Paging at'; trainColour = 'var(--cobalt-mid)';
+          trainLabel = pastTraining ? 'Paged at' : 'Paging at'; trainColour = 'var(--cobalt-mid)';
         } else {
           trainLabel = 'Trained under'; trainColour = 'var(--cobalt-mid)';
         }

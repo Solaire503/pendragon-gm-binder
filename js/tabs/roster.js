@@ -263,8 +263,8 @@ const TabRoster = {
   // Convention: Squire/Page relationship — source = senior (knight/court),
   //             target = junior (squire/page)
   _trainingLine(npc) {
-    // Once knighted/came of age, training is complete — don't show in roster subline
-    if (npc.came_of_age) return '';
+    const roleLower = (npc.role || '').toLowerCase();
+    if (npc.came_of_age || !['squire','page',''].includes(roleLower)) return '';
     const rels = STORE.getRelationships(npc.id)
       .filter(r => r.type === 'Squire' || r.type === 'Page');
     if (!rels.length) {
