@@ -2439,6 +2439,17 @@ html.is-player .player-readonly-banner {
 .npc-age-flag-verdigris{ color: var(--verdigris-mid); background: var(--verdigris-faint); border-color: rgba(61,122,98,0.35); }
 .npc-age-flag-done     { color: var(--ink-soft); opacity: 0.65; background: transparent; border-color: var(--vellum-deep); }
 
+.training-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+.training-radio-label input[type="radio"] { accent-color: var(--oak); }
+
 /* ── MANOR INLINE RECORD — TEST RESULT BUTTONS ──────────────── */
 .result-btn-group {
   display: flex;

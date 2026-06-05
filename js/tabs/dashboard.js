@@ -55,11 +55,17 @@ const TabDashboard = {
       // Age transitions
       if (age !== null) {
         if ((n.role === 'Baby' || n.role === 'Child') && age >= 7 && !n.page_placed)
-          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready for page training` });
-        if (n.role === 'Page' && age >= 15)
-          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready to become a Squire` });
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready for page placement` });
+        if (n.role === 'Page' && age >= 14)
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready for training` });
+        if (n.role === 'Oblate' && age >= 14)
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready for clergy training` });
+        if (n.role === 'Druidic Initiate' && age >= 14)
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready for druidic training` });
         if (n.role === 'Squire' && age >= 21)
-          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready to be Knighted` });
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready to be knighted` });
+        if (['Steward','Priest','Druid'].includes(n.role) && age >= 18 && !n.came_of_age)
+          ageFlags.push({ n, label: `${esc(n.name)}${hh} — age ${age}, ready to come of age` });
       }
 
       // Marriage eligibility: Steward role, 18+, sibling or child of household PK, no spouse yet

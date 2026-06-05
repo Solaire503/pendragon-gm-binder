@@ -359,6 +359,8 @@ const ROLE_ICONS = {
   'Vassal Knight':    '🛡',
   'Squire':           '🏹',
   'Page':             '📖',
+  'Oblate':           '✝',
+  'Druidic Initiate': '🌿',
   'King':             '♔',
   'Warlord':          '⚔',
   'Baron':            '👑',
@@ -390,6 +392,8 @@ const ROLE_COLOURS = {
   'Mercenary Knight': '#7a5020',
   'Squire':           '#6030a0',
   'Page':             '#4060a0',
+  'Oblate':           '#1e3a5f',
+  'Druidic Initiate': '#2d5a4a',
   'King':             '#c09000',
   'Warlord':          '#8a4010',
   'Baron':            '#b8860b',
@@ -618,7 +622,7 @@ function buildNpcCardHtml(npc, opts = {}) {
     if (!calcAgeNow || npc.came_of_age) return null;
     const role = (npc.role || '').toLowerCase();
     if (calcAgeNow >= 7  && calcAgeNow < 14 && ['baby','infant',''].includes(role) && !npc.page_placed) return 'page';
-    if (calcAgeNow >= 14 && role === 'page')    return 'training';
+    if (calcAgeNow >= 14 && ['page','oblate','druidic initiate'].includes(role)) return 'training';
     if (calcAgeNow >= 21 && role === 'squire')  return 'adult';
     if (calcAgeNow >= 18 && ['steward','priest','druid'].includes(role)) return 'adult';
     return null;
@@ -627,19 +631,25 @@ function buildNpcCardHtml(npc, opts = {}) {
   const pageWarning = (() => {
     if (!calcAgeNow || npc.came_of_age || npc.page_placed) return null;
     const role = (npc.role || '').toLowerCase();
-    if (role === 'page' && !npc.page_court) return 'no-court';
+    if (['page','oblate','druidic initiate'].includes(role) && !npc.page_court) return 'no-court';
     if (['baby','child','infant',''].includes(role) && npc.page_court && calcAgeNow >= 7) return 'no-role';
     return null;
   })();
 
   const ageFlagHtml = ageFlag === 'page'
-    ? `<div class="npc-age-flag npc-age-flag-amber">⚑ Needs Page Placement — age ${calcAgeNow}</div>`
+    ? `<div class="npc-age-flag npc-age-flag-amber">
+         ⚑ Needs Page Placement — age ${calcAgeNow}
+         ${isGM() ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openPlacementModal('${npc.id}')">⚙ Place</button>` : ''}
+       </div>`
     : ageFlag === 'training'
-    ? `<div class="npc-age-flag npc-age-flag-cobalt">⚑ Needs Training Path — age ${calcAgeNow}</div>`
+    ? `<div class="npc-age-flag npc-age-flag-cobalt">
+         ⚑ Needs Training Path — age ${calcAgeNow}
+         ${isGM() ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openTrainingPathModal('${npc.id}')">⚙ Assign</button>` : ''}
+       </div>`
     : ageFlag === 'adult'
     ? `<div class="npc-age-flag npc-age-flag-verdigris">
          ⚑ Came of Age — age ${calcAgeNow}
-         ${isGM() ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._confirmCameOfAge('${npc.id}')">✓ Confirm</button>` : ''}
+         ${isGM() ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openComingOfAgeModal('${npc.id}')">⚙ Confirm</button>` : ''}
        </div>`
     : npc.came_of_age
     ? `<div class="npc-age-flag npc-age-flag-done">✓ Came of Age${calcAgeNow ? ' (age ' + calcAgeNow + ')' : ''}</div>`
@@ -682,10 +692,18 @@ function buildNpcCardHtml(npc, opts = {}) {
   const trainingHistoryHtml = hasTrainingHistory ? `
     <div class="section-title mt-12">Training History</div>
     <div class="family-member-list">
-      ${npc.page_court ? `<div class="family-member-item">
-        <span class="family-member-role" style="background:var(--cobalt-mid);color:#fff;">${(npc.role||'').toLowerCase().includes('page') ? 'Paging at' : 'Paged at'}</span>
-        <span class="family-member-name">${esc(npc.page_court)}</span>
-      </div>` : ''}
+      ${npc.page_court ? (() => {
+        const _rl = (npc.role || '').toLowerCase();
+        const _pt = npc.page_type || '';
+        const _active = ['page','oblate','druidic initiate'].includes(_rl);
+        const _label = _pt === 'Oblate'            ? (_active ? 'Oblate at'            : 'Served as Oblate at')
+                     : _pt === 'Druidic Initiate'  ? (_active ? 'Druidic Initiate at'  : 'Druidic Initiation at')
+                     : (_active ? 'Paging at' : 'Paged at');
+        return `<div class="family-member-item">
+          <span class="family-member-role" style="background:var(--cobalt-mid);color:#fff;">${_label}</span>
+          <span class="family-member-name">${esc(npc.page_court)}</span>
+        </div>`;
+      })() : ''}
       ${npc.training_where && !npc.training_npc_id ? (() => {
         // Determine training type: training_path field is authoritative; if absent,
         // check whether a Squire relationship exists (target = this NPC); finally fall back to role.
@@ -694,9 +712,11 @@ function buildNpcCardHtml(npc, opts = {}) {
         const hasSquireRel = STORE.getRelationships(npc.id)
           .some(r => r.type === 'Squire' && r.targetId === npc.id);
         const path = tp || (hasSquireRel ? 'squire' : role);
-        const pastTraining = npc.came_of_age || !['squire','page','baby','infant','child',''].includes(role);
+        const pastTraining = npc.came_of_age || !['squire','page','oblate','druidic initiate','baby','infant','child',''].includes(role);
         let trainLabel, trainColour;
-        if (path.includes('priest') || path.includes('druid') || path.includes('nun') || path.includes('monk') || path.includes('clergy')) {
+        if (path.includes('druid')) {
+          trainLabel = pastTraining ? 'Druidic Training at' : 'Druidic Training at'; trainColour = 'var(--verdigris-mid)';
+        } else if (path.includes('priest') || path.includes('nun') || path.includes('monk') || path.includes('clergy')) {
           trainLabel = pastTraining ? 'Studied with the Clergy at' : 'Studying with the Clergy at'; trainColour = 'var(--cobalt-mid)';
         } else if (path.includes('steward') || path.includes('seneschal')) {
           trainLabel = pastTraining ? 'Learned Stewardship under' : 'Learning Stewardship under'; trainColour = 'var(--amber-mid)';
@@ -837,7 +857,7 @@ function buildNpcCardHtml(npc, opts = {}) {
 
 // ── NPC EDIT FORM HTML ────────────────────────────────────────
 function buildNpcEditHtml(npc, isNew = false) {
-  const roles = ['King','Warlord','Player Knight','Knight Banneret','Vassal Knight','Bachelor Knight','Mercenary Knight','Knight','Lady','Esquire','Squire','Page','Baron','Estate Holder','Steward','Priest','Druid','Baby','Merchant','Other'];
+  const roles = ['King','Warlord','Player Knight','Knight Banneret','Vassal Knight','Bachelor Knight','Mercenary Knight','Knight','Lady','Esquire','Squire','Page','Oblate','Druidic Initiate','Baron','Estate Holder','Steward','Priest','Druid','Baby','Merchant','Other'];
   const eligOpts = ['No','Yes','Kinda?','Widowed','Betrothed'];
   const pronouns = ['He/him','She/her','They/them',''];
 
@@ -1396,6 +1416,7 @@ const Components = {
       fate_touched:   !!(data.fate_touched || data.fateTouched),
       page_placed:    false,
       page_court:     String(data.page_court || '').trim(),
+      page_type:      String(data.page_type || '').trim(),
       training_path:  String(data.training_path || '').trim(),
       training_where: String(data.training_where || '').trim(),
       came_of_age:    !!data.came_of_age,
@@ -1487,9 +1508,9 @@ const Components = {
     }
 
     const roleLower = (changes.role || '').toLowerCase();
-    if (roleLower === 'page' && changes.page_court) {
+    if (['page','oblate','druidic initiate'].includes(roleLower) && changes.page_court) {
       changes.page_placed = true;
-    } else if (!['page','squire'].includes(roleLower) && !changes.page_court) {
+    } else if (!['page','oblate','druidic initiate','squire'].includes(roleLower) && !changes.page_court) {
       changes.page_placed = false;
     }
 
@@ -1664,6 +1685,201 @@ const Components = {
     APP.refreshCurrentTab();
   },
 
+  // ── TRAINING LIFECYCLE MODALS ─────────────────────────────────
+
+  _openPlacementModal(id) {
+    const npc = STORE.getNpc(id);
+    if (!npc) return;
+    const html = `
+      <div style="min-width:340px;max-width:440px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:12px;">Page Placement — ${esc(npc.name)}</div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Path</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+            <label class="training-radio-label"><input type="radio" name="placement-type" value="Page" checked> Page</label>
+            <label class="training-radio-label"><input type="radio" name="placement-type" value="Oblate"> Oblate</label>
+            <label class="training-radio-label"><input type="radio" name="placement-type" value="Druidic Initiate"> Druidic Initiate</label>
+          </div>
+        </div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Where</div>
+          <input class="edit-input" id="placement-where" placeholder="e.g. Court of Sarum, Monastery of Amesbury…">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="Components.openNpcCard('${id}')">Cancel</button>
+          <button class="btn btn-primary" onclick="Components._confirmPlacement('${id}')">Confirm Placement</button>
+        </div>
+      </div>`;
+    if (CardPopup.isOpen()) { CardPopup.open(html); } else { Modal.open(html); }
+  },
+
+  _confirmPlacement(id) {
+    const type  = document.querySelector('input[name="placement-type"]:checked')?.value;
+    const where = document.getElementById('placement-where')?.value?.trim();
+    if (!type)  { Toast.error('Select a placement type'); return; }
+    if (!where) { Toast.error('Enter a placement location'); return; }
+    STORE.updateNpc(id, { role: type, page_court: where, page_placed: true, page_type: type });
+    const npc = STORE.getNpc(id);
+    Toast.success(`${npc.name} placed as ${type} at ${where}`);
+    APP.refreshCurrentTab();
+    this.openNpcCard(id);
+  },
+
+  _openTrainingPathModal(id) {
+    const npc = STORE.getNpc(id);
+    if (!npc) return;
+    const roleLower = (npc.role || '').toLowerCase();
+    const isOblate    = roleLower === 'oblate';
+    const isDruidInit = roleLower === 'druidic initiate';
+    const locked = isOblate ? 'clergy' : isDruidInit ? 'druid' : null;
+
+    const pathOptions = locked
+      ? `<div style="font-family:var(--font-heading);font-size:0.7rem;letter-spacing:0.08em;color:var(--ink-mid);margin-top:4px;">${isOblate ? 'Clergy' : 'Druid'}</div>
+         <input type="hidden" id="tp-path" value="${locked}">`
+      : `<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+           <label class="training-radio-label"><input type="radio" name="tp-path" value="squire" checked onchange="Components._toggleTrainingFields()"> Squire</label>
+           <label class="training-radio-label"><input type="radio" name="tp-path" value="steward" onchange="Components._toggleTrainingFields()"> Steward</label>
+           <label class="training-radio-label"><input type="radio" name="tp-path" value="clergy" onchange="Components._toggleTrainingFields()"> Clergy</label>
+         </div>`;
+
+    const html = `
+      <div style="min-width:340px;max-width:480px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:12px;">Training Path — ${esc(npc.name)}</div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">Path</div>
+          ${pathOptions}
+        </div>
+        <div id="tp-squire-fields" ${locked ? 'style="display:none;"' : ''}>
+          <div class="detail-field mb-8">
+            <div class="detail-label">Squired Under</div>
+            <div style="font-family:var(--font-heading);font-size:0.5rem;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.7;margin-bottom:4px;">Search for a knight in the binder:</div>
+            ${buildNpcSearchHtml('tp-npc-search', 'tp-npc-id', 'Search for knight…')}
+            <div style="font-family:var(--font-heading);font-size:0.5rem;letter-spacing:0.1em;color:var(--ink-soft);opacity:0.7;margin:6px 0 4px;">Not in the binder? Type a name:</div>
+            <input class="edit-input" id="tp-where-squire" placeholder="e.g. Sir Elad of Woodford…">
+          </div>
+        </div>
+        <div id="tp-location-fields" ${locked ? '' : 'style="display:none;"'}>
+          <div class="detail-field mb-8">
+            <div class="detail-label">Where</div>
+            <input class="edit-input" id="tp-where-location" placeholder="e.g. Amesbury Abbey, Sarum Castle…">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="Components.openNpcCard('${id}')">Cancel</button>
+          <button class="btn btn-primary" onclick="Components._confirmTrainingPath('${id}')">Confirm Training</button>
+        </div>
+      </div>`;
+
+    const allNpcs = STORE.allNpcs().filter(n => n.id !== id).sort((a, b) => a.name.localeCompare(b.name));
+    if (CardPopup.isOpen()) {
+      CardPopup.open(html);
+      initNpcSearch('tp-npc-search', 'tp-npc-id', allNpcs);
+    } else {
+      Modal.open(html, { onOpen: () => initNpcSearch('tp-npc-search', 'tp-npc-id', allNpcs) });
+    }
+  },
+
+  _toggleTrainingFields() {
+    const path = document.querySelector('input[name="tp-path"]:checked')?.value;
+    const squireFields   = document.getElementById('tp-squire-fields');
+    const locationFields = document.getElementById('tp-location-fields');
+    if (squireFields)   squireFields.style.display   = path === 'squire' ? '' : 'none';
+    if (locationFields) locationFields.style.display  = path !== 'squire' ? '' : 'none';
+  },
+
+  _confirmTrainingPath(id) {
+    const npc = STORE.getNpc(id);
+    if (!npc) return;
+    const lockedEl = document.getElementById('tp-path');
+    const path = lockedEl ? lockedEl.value : document.querySelector('input[name="tp-path"]:checked')?.value;
+    if (!path) { Toast.error('Select a training path'); return; }
+
+    const roleMap = { squire: 'Squire', steward: 'Steward', clergy: 'Priest', druid: 'Druid' };
+    const newRole = roleMap[path];
+    const changes = { role: newRole, training_path: path };
+
+    if (path === 'squire') {
+      const npcId = document.getElementById('tp-npc-id')?.value?.trim();
+      const freeText = document.getElementById('tp-where-squire')?.value?.trim();
+      if (!npcId && !freeText) { Toast.error('Enter a knight to squire under'); return; }
+      if (npcId) {
+        changes.training_npc_id = npcId;
+        changes.training_where  = '';
+        const alreadyLinked = STORE.relationships.some(r =>
+          r.type === 'Squire' && ((r.sourceId === npcId && r.targetId === id) || (r.sourceId === id && r.targetId === npcId))
+        );
+        if (!alreadyLinked) STORE.addRelationship(npcId, id, 'Squire', '');
+      } else {
+        changes.training_npc_id = '';
+        changes.training_where  = freeText;
+      }
+    } else {
+      const where = document.getElementById('tp-where-location')?.value?.trim();
+      if (!where) { Toast.error('Enter a training location'); return; }
+      changes.training_where  = where;
+      changes.training_npc_id = '';
+    }
+
+    STORE.updateNpc(id, changes);
+    Toast.success(`${npc.name} assigned to ${newRole} training`);
+    APP.refreshCurrentTab();
+    this.openNpcCard(id);
+  },
+
+  _openComingOfAgeModal(id) {
+    const npc = STORE.getNpc(id);
+    if (!npc) return;
+    const roleLower = (npc.role || '').toLowerCase();
+    const isSquire = roleLower === 'squire';
+
+    const roleOptions = isSquire
+      ? `<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+           <label class="training-radio-label"><input type="radio" name="coa-role" value="Esquire"> Esquire</label>
+           <label class="training-radio-label"><input type="radio" name="coa-role" value="Bachelor Knight" checked> Bachelor Knight</label>
+           <label class="training-radio-label"><input type="radio" name="coa-role" value="Vassal Knight"> Vassal Knight</label>
+           <label class="training-radio-label"><input type="radio" name="coa-role" value="Knight Banneret"> Knight Banneret</label>
+         </div>`
+      : `<div style="font-family:var(--font-heading);font-size:0.7rem;letter-spacing:0.08em;color:var(--ink-mid);margin-top:4px;">
+           ${esc(npc.name)} has completed training as a ${esc(npc.role)}.
+         </div>`;
+
+    const html = `
+      <div style="min-width:340px;max-width:440px;">
+        <div class="page-title" style="font-size:1rem;margin-bottom:12px;">Coming of Age — ${esc(npc.name)}</div>
+        <div class="detail-field mb-8">
+          <div class="detail-label">${isSquire ? 'New Rank' : 'Confirmation'}</div>
+          ${roleOptions}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="Components.openNpcCard('${id}')">Cancel</button>
+          <button class="btn btn-primary" onclick="Components._confirmComingOfAge('${id}')">Confirm</button>
+        </div>
+      </div>`;
+    if (CardPopup.isOpen()) { CardPopup.open(html); } else { Modal.open(html); }
+  },
+
+  _confirmComingOfAge(id) {
+    const npc = STORE.getNpc(id);
+    if (!npc) return;
+    const roleLower = (npc.role || '').toLowerCase();
+    const isSquire = roleLower === 'squire';
+
+    const changes = { came_of_age: true };
+    if (isSquire) {
+      const newRole = document.querySelector('input[name="coa-role"]:checked')?.value;
+      if (!newRole) { Toast.error('Select a rank'); return; }
+      changes.role = newRole;
+      STORE.relationships.forEach(r => {
+        if (r.type === 'Squire' && (r.sourceId === id || r.targetId === id)) r.type = 'Former Squire';
+      });
+    }
+
+    STORE.updateNpc(id, changes);
+    Toast.success(`${npc.name} has come of age`);
+    APP.refreshCurrentTab();
+    this.openNpcCard(id);
+  },
+
   openEditRelationship(relId, npcId) {
     const rel = STORE.relationships.find(r => r.id === relId);
     if (!rel) return;
@@ -1807,7 +2023,7 @@ const Components = {
       passions: '', skills: '', stats: '',
       statblock_template: '',
       blessed: false, blessed_note: '', fate_touched: false,
-      page_placed: false, page_court: '',
+      page_placed: false, page_court: '', page_type: '',
       training_path: '', training_where: '',
       came_of_age: false, retired: false,
       treeX: null, treeY: null,

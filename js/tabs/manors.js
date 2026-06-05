@@ -33,9 +33,11 @@ const TabManors = {
   _summaryExpanded: new Set(),    // manors with full history summary visible
   _summaryRowExpanded: new Set(), // individual year rows expanded in overview summary
   _recordOpen:   false,    // inline record-year panel open
+  _recordingKey: null,     // which manor is being recorded
   _workingEntry: null,     // in-progress year data for inline form
 
   render() {
+    this._captureRecordForm();
     const panel = document.getElementById('tab-manors');
     if (!panel) return;
 
@@ -51,6 +53,7 @@ const TabManors = {
       return;
     }
     if (!this._current || !keys.includes(this._current)) this._current = keys[0];
+    this._restoreRecord();
 
     const tabsHtml = keys.map(k => {
       const hh  = STORE.getHousehold(k);
@@ -144,7 +147,7 @@ const TabManors = {
   },
 
   selectManor(key) {
-    this._workingEntry = null;
+    this._captureRecordForm();
     this._current = key;
     this._section = 'overview';
     document.querySelectorAll('.manor-tab').forEach(el => el.classList.remove('active'));
@@ -154,6 +157,7 @@ const TabManors = {
 
   // ── MAIN RENDER ────────────────────────────────────────────
   _renderManor() {
+    this._captureRecordForm();
     const body = document.getElementById('manorBody');
     if (!body) return;
     const key = this._current;
@@ -189,7 +193,7 @@ const TabManors = {
       </div>`;
 
     // Wire up inline record form listeners after render
-    if (this._section === 'overview' && this._recordOpen) {
+    if (this._section === 'overview' && this._recordOpen && this._recordingKey === this._current) {
       setTimeout(() => {
         const m2 = STORE.getManor(this._current);
         if (m2) this._initRecordListeners(this._current, m2);
@@ -377,13 +381,24 @@ const TabManors = {
       ${last ? `<div class="manor-stat-block" style="margin-bottom:8px;">${latestHtml}</div>` : ''}
 
       <!-- INLINE RECORD PANEL (GM only) -->
-      ${readOnly ? '' : `
-      <div style="margin-bottom:16px;">
-        <button class="btn ${this._recordOpen ? 'btn-primary' : 'btn-verdigris'}" style="width:100%;" onclick="TabManors.toggleRecord('${esc(key)}')">
-          ${this._recordOpen ? '▲ Cancel Recording' : `▼ Record New Year (${STORE.year} AD)`}
-        </button>
-        ${this._recordOpen ? this._renderInlineRecord(m, key) : ''}
-      </div>`}
+      ${readOnly ? '' : (() => {
+        if (this._recordOpen && !this._workingEntry) {
+          this._recordOpen = false; this._recordingKey = null; this._clearRecordStorage();
+        }
+        const isRecording = this._recordOpen && this._recordingKey === key;
+        const recordingOther = this._recordOpen && this._recordingKey && this._recordingKey !== key;
+        return `<div style="margin-bottom:16px;">
+          ${recordingOther
+            ? `<div class="npc-age-flag npc-age-flag-amber" style="justify-content:space-between;">
+                 <span>⚑ Recording in progress for ${esc(this._recordingKey)}</span>
+                 <button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;" onclick="TabManors.selectManor('${esc(this._recordingKey)}')">Go Back</button>
+               </div>`
+            : `<button class="btn ${isRecording ? 'btn-primary' : 'btn-verdigris'}" style="width:100%;" onclick="TabManors.toggleRecord('${esc(key)}')">
+                ${isRecording ? '▲ Cancel Recording' : `▼ Record New Year (${STORE.year} AD)`}
+              </button>
+              ${isRecording ? this._renderInlineRecord(m, key) : ''}`}
+        </div>`;
+      })()}
 
       ${damageHtml}
       ${imprHtml}
@@ -667,44 +682,55 @@ const TabManors = {
   },
 
   toggleRecord(key) {
+    // Cancel — if already recording this manor
+    if (this._recordOpen && this._recordingKey === key) {
+      this._recordOpen   = false;
+      this._recordingKey = null;
+      this._workingEntry = null;
+      this._clearRecordStorage();
+      this._renderManor();
+      return;
+    }
     // Opening — check if this year is already recorded
-    if (!this._recordOpen) {
-      const m = STORE.getManor(key);
-      const year = STORE.year;
-      if (m && (m.history||[]).some(h => h.year === year)) {
-        Modal.open(`
-          <div class="modal-header"><h2 style="margin:0;">Year Already Recorded</h2></div>
-          <div style="padding:16px 20px;">
-            <p style="margin:0 0 16px;">${year} AD is already recorded for ${key}.</p>
-            <div class="btn-row">
-              <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
-              <button class="btn btn-verdigris" onclick="Modal.close(); TabManors.openEditHistory('${esc(key)}', ${year})">Edit</button>
-              <button class="btn btn-danger"   onclick="Modal.close(); TabManors._overwriteRecord('${esc(key)}', ${year})">Overwrite</button>
-            </div>
-          </div>`);
-        return;
-      }
+    const m = STORE.getManor(key);
+    const year = STORE.year;
+    if (m && (m.history||[]).some(h => h.year === year)) {
+      Modal.open(`
+        <div class="modal-header"><h2 style="margin:0;">Year Already Recorded</h2></div>
+        <div style="padding:16px 20px;">
+          <p style="margin:0 0 16px;">${year} AD is already recorded for ${key}.</p>
+          <div class="btn-row">
+            <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+            <button class="btn btn-verdigris" onclick="Modal.close(); TabManors.openEditHistory('${esc(key)}', ${year})">Edit</button>
+            <button class="btn btn-danger"   onclick="Modal.close(); TabManors._overwriteRecord('${esc(key)}', ${year})">Overwrite</button>
+          </div>
+        </div>`);
+      return;
     }
-    this._recordOpen = !this._recordOpen;
-    if (this._recordOpen && !this._workingEntry) {
-      const m = STORE.getManor(key);
-      const lastTreas  = STORE.manorTreasury(key);
-      const activeI    = (m.improvements||[]).filter(i=>i.status==='active');
-      const autoMaint  = activeI.reduce((s,i)=>s+(i.maintenance||0),0);
-      const autoIncome = activeI.reduce((s,i)=>s+(i.income||0),0);
-      this._workingEntry = {
-        year: STORE.year,
-        stewardResult: null, fateResult: null, tiebreaker: null,
-        luck: 'No Result', luckSeason: '—',
-        conflict: 'No Result', conflictSeason: '—',
-        harvestOutcome: null, harvestIncome: 0,
-        lifestyle: m.lifestyle || 'Normal',
-        improvMaint: autoMaint,
-        improvIncome: autoIncome,
-        prevTreasury: lastTreas,
-      };
-    }
-    if (!this._recordOpen) this._workingEntry = null;
+    // Start recording
+    this._recordOpen   = true;
+    this._recordingKey = key;
+    const lastTreas  = STORE.manorTreasury(key);
+    const activeI    = (m.improvements||[]).filter(i=>i.status==='active');
+    const autoMaint  = activeI.reduce((s,i)=>s+(i.maintenance||0),0);
+    const autoIncome = activeI.reduce((s,i)=>s+(i.income||0),0);
+    this._workingEntry = {
+      year: STORE.year,
+      stewardResult: null, fateResult: null, tiebreaker: null,
+      luck: 'No Result', luckSeason: '—',
+      conflict: 'No Result', conflictSeason: '—',
+      harvestOutcome: null, harvestIncome: 0,
+      lifestyle: m.lifestyle || 'Normal',
+      improvMaint: autoMaint, improvIncome: autoIncome,
+      prevTreasury: lastTreas,
+      stewardIndustry: 0, discretionary: 0, extraManorial: 0,
+      family: 0, improvBuild: 0,
+      fateWeather: 0, fateConflict: 0, fateCommoners: 0, fatePresence: 0, fateMisc: 0,
+      hatred: m.hatred ?? 0, care: m.care ?? 0,
+      notes: '', notes2: '',
+      miscIncomeItems: [], miscExpItems: [],
+    };
+    this._persistRecord();
     this._renderManor();
   },
 
@@ -713,8 +739,10 @@ const TabManors = {
     if (!m) return;
     m.history = (m.history || []).filter(h => h.year !== year);
     STORE.save();
-    this._recordOpen = false;
+    this._recordOpen   = false;
+    this._recordingKey = null;
     this._workingEntry = null;
+    this._clearRecordStorage();
     this.toggleRecord(key);
   },
 
@@ -729,6 +757,65 @@ const TabManors = {
       wp.tiebreaker = null;
     }
     this._updateRecordCalcs(key, STORE.getManor(key));
+    this._persistRecord();
+  },
+
+  _captureRecordForm() {
+    if (!this._recordOpen || !this._workingEntry) return;
+    const g = id => document.getElementById(id);
+    if (!g('ry-year')) return;
+    const wp = this._workingEntry;
+    wp.year           = parseInt(g('ry-year')?.value, 10) || wp.year;
+    wp.luck           = g('ry-luck')?.value || wp.luck;
+    wp.luckSeason     = g('ry-luck-season')?.value || wp.luckSeason;
+    wp.conflict       = g('ry-conflict')?.value || wp.conflict;
+    wp.conflictSeason = g('ry-conflict-season')?.value || wp.conflictSeason;
+    wp.lifestyle      = g('ry-lifestyle')?.value || wp.lifestyle;
+    wp.stewardIndustry = parseFloat(g('ry-steward-industry')?.value) || 0;
+    wp.improvIncome   = parseFloat(g('ry-impr-income')?.value) || 0;
+    wp.discretionary  = parseFloat(g('ry-discretionary')?.value) || 0;
+    wp.extraManorial  = parseFloat(g('ry-extra-manorial')?.value) || 0;
+    wp.improvMaint    = parseFloat(g('ry-impr-maint')?.value) || 0;
+    wp.family         = parseFloat(g('ry-family')?.value) || 0;
+    wp.improvBuild    = parseFloat(g('ry-impr-build')?.value) || 0;
+    wp.prevTreasury   = parseFloat(g('ry-prev-treasury')?.value) || 0;
+    wp.fateWeather    = parseFloat(g('ry-fate-weather')?.value) || 0;
+    wp.fateConflict   = parseFloat(g('ry-fate-conflict')?.value) || 0;
+    wp.fateCommoners  = parseFloat(g('ry-fate-commoners')?.value) || 0;
+    wp.fatePresence   = parseFloat(g('ry-fate-presence')?.value) || 0;
+    wp.fateMisc       = parseFloat(g('ry-fate-misc')?.value) || 0;
+    wp.hatred         = parseInt(g('ry-hatred')?.value, 10) || 0;
+    wp.care           = parseInt(g('ry-care')?.value, 10) || 0;
+    wp.notes          = g('ry-notes')?.value?.trim() || '';
+    wp.notes2         = g('ry-notes2')?.value?.trim() || '';
+    wp.miscIncomeItems = this._readMiscItems('ry-misc-income-list');
+    wp.miscExpItems    = this._readMiscItems('ry-misc-exp-list');
+  },
+
+  _persistRecord() {
+    if (!this._recordOpen || !this._workingEntry || !this._recordingKey) return;
+    try {
+      localStorage.setItem('pendragon_record_year', JSON.stringify({
+        key: this._recordingKey, wp: this._workingEntry,
+      }));
+    } catch (_) { /* storage full — non-critical */ }
+  },
+
+  _restoreRecord() {
+    if (this._recordOpen) return;
+    try {
+      const raw = localStorage.getItem('pendragon_record_year');
+      if (!raw) return;
+      const { key, wp } = JSON.parse(raw);
+      if (!key || !wp || !STORE.getManor(key)) { this._clearRecordStorage(); return; }
+      this._recordOpen   = true;
+      this._recordingKey = key;
+      this._workingEntry = wp;
+    } catch (_) { this._clearRecordStorage(); }
+  },
+
+  _clearRecordStorage() {
+    try { localStorage.removeItem('pendragon_record_year'); } catch (_) { /* noop */ }
   },
 
   _updateRecordCalcs(key, m) {
@@ -822,18 +909,23 @@ const TabManors = {
 
   _initRecordListeners(key, m) {
     const g   = id => document.getElementById(id);
-    const upd = () => this._updateRecordCalcs(key, m);
+    const upd = () => { this._updateRecordCalcs(key, m); this._captureRecordForm(); this._persistRecord(); };
     ['ry-steward-industry','ry-impr-income','ry-discretionary','ry-extra-manorial',
      'ry-impr-maint','ry-family','ry-impr-build','ry-prev-treasury',
-     'ry-fate-weather','ry-fate-conflict','ry-fate-commoners','ry-fate-presence','ry-fate-misc'].forEach(id => {
+     'ry-fate-weather','ry-fate-conflict','ry-fate-commoners','ry-fate-presence','ry-fate-misc',
+     'ry-hatred','ry-care','ry-year'].forEach(id => {
       g(id)?.addEventListener('input', upd);
     });
-    g('ry-lifestyle')?.addEventListener('change', upd);
-    // Event delegation for dynamically added misc item rows
+    ['ry-lifestyle','ry-luck','ry-luck-season','ry-conflict','ry-conflict-season'].forEach(id => {
+      g(id)?.addEventListener('change', upd);
+    });
+    ['ry-notes','ry-notes2'].forEach(id => {
+      g(id)?.addEventListener('input', upd);
+    });
     ['ry-misc-income-list','ry-misc-exp-list'].forEach(id => {
       g(id)?.addEventListener('input', upd);
     });
-    upd(); // run once to set initial state
+    this._updateRecordCalcs(key, m);
   },
 
   _renderInlineRecord(m, key) {
@@ -845,9 +937,10 @@ const TabManors = {
       `<button class="result-btn" data-val="${r}" onclick="TabManors._setTestResult('${esc(key)}','${which}','${r}')">${r}</button>`
     ).join('');
 
-    const luckOpts     = ['No Result','Boon','Calamity'].map(v=>`<option${wp.luck===v?' selected':''}>${v}</option>`).join('');
-    const sznOpts      = ['—','Spring','Summer','Fall','Winter'].map(v=>`<option>${v}</option>`).join('');
-    const conflictOpts = ['No Result','Bandits','Raided','Pillaged','Plundered'].map(v=>`<option${wp.conflict===v?' selected':''}>${v}</option>`).join('');
+    const luckOpts        = ['No Result','Boon','Calamity'].map(v=>`<option${wp.luck===v?' selected':''}>${v}</option>`).join('');
+    const luckSznOpts     = ['—','Spring','Summer','Fall','Winter'].map(v=>`<option${(wp.luckSeason||'—')===v?' selected':''}>${v}</option>`).join('');
+    const conflictOpts    = ['No Result','Bandits','Raided','Pillaged','Plundered'].map(v=>`<option${wp.conflict===v?' selected':''}>${v}</option>`).join('');
+    const conflictSznOpts = ['—','Spring','Summer','Fall','Winter'].map(v=>`<option${(wp.conflictSeason||'—')===v?' selected':''}>${v}</option>`).join('');
     const lifestyleOpts= ['Impoverished','Poor','Normal','Rich','Extravagant'].map(v=>
       `<option${(wp.lifestyle||'Normal')===v?' selected':''}>${v}</option>`).join('');
     const lc0 = LIFESTYLE_COST[wp.lifestyle||'Normal'] ?? 4;
@@ -871,7 +964,7 @@ const TabManors = {
         </div>
         <div class="detail-field">
           <div class="detail-label">Season</div>
-          <select class="edit-input edit-select" id="ry-luck-season">${sznOpts}</select>
+          <select class="edit-input edit-select" id="ry-luck-season">${luckSznOpts}</select>
         </div>
         <div class="detail-field">
           <div class="detail-label">Conflict</div>
@@ -879,7 +972,7 @@ const TabManors = {
         </div>
         <div class="detail-field">
           <div class="detail-label">Season</div>
-          <select class="edit-input edit-select" id="ry-conflict-season">${sznOpts}</select>
+          <select class="edit-input edit-select" id="ry-conflict-season">${conflictSznOpts}</select>
         </div>
       </div>
 
@@ -913,7 +1006,7 @@ const TabManors = {
           <div class="section-title mb-8">Income</div>
           <div class="detail-field mb-6">
             <div class="detail-label">Steward Industry (L)</div>
-            <input class="edit-input" id="ry-steward-industry" type="number" value="0" min="0" step="0.5">
+            <input class="edit-input" id="ry-steward-industry" type="number" value="${wp.stewardIndustry||0}" min="0" step="0.5">
           </div>
           <div class="detail-field mb-6">
             <div class="detail-label">Improvement Income (L) <span title="Don't forget to calculate improvements and roll improvement incomes!" style="cursor:help;color:var(--gold-text);font-weight:bold;">!</span></div>
@@ -921,11 +1014,11 @@ const TabManors = {
           </div>
           <div class="detail-field mb-6">
             <div class="detail-label">Discretionary (L)</div>
-            <input class="edit-input" id="ry-discretionary" type="number" value="0" min="0" step="0.5">
+            <input class="edit-input" id="ry-discretionary" type="number" value="${wp.discretionary||0}" min="0" step="0.5">
           </div>
           <div class="detail-field mb-6">
             <div class="detail-label">Extra-Manorial (L)</div>
-            <input class="edit-input" id="ry-extra-manorial" type="number" value="0" min="0" step="0.5">
+            <input class="edit-input" id="ry-extra-manorial" type="number" value="${wp.extraManorial||0}" min="0" step="0.5">
           </div>
           ${(() => { const pvi = (m.vassals||[]).reduce((s,v)=>s+(v.passiveIncome??1),0); return pvi > 0 ? `<div class="detail-field mb-6">
             <div class="detail-label" style="display:flex;justify-content:space-between;">
@@ -939,7 +1032,12 @@ const TabManors = {
               Misc Income
               <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="event.preventDefault();TabManors._addMiscItem('ry-misc-income-list');TabManors._updateRecordCalcs('${esc(key)}',STORE.getManor('${esc(key)}'))">＋ Add</button>
             </div>
-            <div id="ry-misc-income-list"></div>
+            <div id="ry-misc-income-list">${(wp.miscIncomeItems||[]).map(item => `
+              <div class="misc-item-row" style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+                <input type="number" class="edit-input" data-misc-amount="true" placeholder="L" style="width:64px;flex-shrink:0;" min="0" step="0.5" value="${item.amount||''}">
+                <input type="text" class="edit-input" data-misc-note="true" placeholder="Note…" style="flex:1;" value="${esc(item.note||'')}">
+                <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.68rem;flex-shrink:0;" onclick="event.preventDefault();const p=this.closest('.misc-item-row').parentElement;this.closest('.misc-item-row').remove();p?.dispatchEvent(new Event('input',{bubbles:true}))">✕</button>
+              </div>`).join('')}</div>
           </div>
           <div style="border-top:1px solid var(--vellum-deep);padding-top:6px;display:flex;justify-content:space-between;font-family:var(--font-heading);font-size:0.78rem;">
             <span style="color:var(--ink-soft);">Total In</span>
@@ -962,18 +1060,23 @@ const TabManors = {
           </div>
           <div class="detail-field mb-6">
             <div class="detail-label">Family Expenses (L)</div>
-            <input class="edit-input" id="ry-family" type="number" value="0" min="0" step="0.5">
+            <input class="edit-input" id="ry-family" type="number" value="${wp.family||0}" min="0" step="0.5">
           </div>
           <div class="detail-field mb-6">
             <div class="detail-label">Build Cost (L)</div>
-            <input class="edit-input" id="ry-impr-build" type="number" value="0" min="0" step="0.5">
+            <input class="edit-input" id="ry-impr-build" type="number" value="${wp.improvBuild||0}" min="0" step="0.5">
           </div>
           <div class="detail-field mb-6">
             <div class="detail-label" style="display:flex;justify-content:space-between;align-items:center;">
               Misc Expenses
               <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="event.preventDefault();TabManors._addMiscItem('ry-misc-exp-list');TabManors._updateRecordCalcs('${esc(key)}',STORE.getManor('${esc(key)}'))">＋ Add</button>
             </div>
-            <div id="ry-misc-exp-list"></div>
+            <div id="ry-misc-exp-list">${(wp.miscExpItems||[]).map(item => `
+              <div class="misc-item-row" style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+                <input type="number" class="edit-input" data-misc-amount="true" placeholder="L" style="width:64px;flex-shrink:0;" min="0" step="0.5" value="${item.amount||''}">
+                <input type="text" class="edit-input" data-misc-note="true" placeholder="Note…" style="flex:1;" value="${esc(item.note||'')}">
+                <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.68rem;flex-shrink:0;" onclick="event.preventDefault();const p=this.closest('.misc-item-row').parentElement;this.closest('.misc-item-row').remove();p?.dispatchEvent(new Event('input',{bubbles:true}))">✕</button>
+              </div>`).join('')}</div>
           </div>
           <div style="border-top:1px solid var(--vellum-deep);padding-top:6px;display:flex;justify-content:space-between;font-family:var(--font-heading);font-size:0.78rem;">
             <span style="color:var(--ink-soft);">Total Out</span>
@@ -989,22 +1092,24 @@ const TabManors = {
         <span style="font-size:0.68rem;color:var(--ink-soft);opacity:0.7;">Roll Misfortune die against this score</span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-        ${['weather','conflict','commoners','presence','misc'].map(f=>`
-          <div class="detail-field" style="flex:1;min-width:70px;">
+        ${['weather','conflict','commoners','presence','misc'].map(f=>{
+          const wpKey = 'fate' + f.charAt(0).toUpperCase() + f.slice(1);
+          return `<div class="detail-field" style="flex:1;min-width:70px;">
             <div class="detail-label">${f.charAt(0).toUpperCase()+f.slice(1)}</div>
-            <input class="edit-input" id="ry-fate-${f}" type="number" value="0" step="1">
-          </div>`).join('')}
+            <input class="edit-input" id="ry-fate-${f}" type="number" value="${wp[wpKey]||0}" step="1">
+          </div>`;
+        }).join('')}
       </div>
 
       <!-- Hatred / Care -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
         <div class="detail-field">
           <div class="detail-label">Hatred After</div>
-          <input class="edit-input" id="ry-hatred" type="number" value="${m.hatred??0}">
+          <input class="edit-input" id="ry-hatred" type="number" value="${wp.hatred ?? m.hatred ?? 0}">
         </div>
         <div class="detail-field">
           <div class="detail-label">Care After</div>
-          <input class="edit-input" id="ry-care" type="number" value="${m.care??0}">
+          <input class="edit-input" id="ry-care" type="number" value="${wp.care ?? m.care ?? 0}">
         </div>
       </div>
 
@@ -1027,8 +1132,8 @@ const TabManors = {
       <!-- Notes -->
       <div class="section-title mb-6">Notes</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
-        <textarea class="edit-input edit-textarea" id="ry-notes" placeholder="Events of the year…"></textarea>
-        <textarea class="edit-input edit-textarea" id="ry-notes2" placeholder="Notes 2…"></textarea>
+        <textarea class="edit-input edit-textarea" id="ry-notes" placeholder="Events of the year…">${esc(wp.notes||'')}</textarea>
+        <textarea class="edit-input edit-textarea" id="ry-notes2" placeholder="Notes 2…">${esc(wp.notes2||'')}</textarea>
       </div>
 
       <!-- Treasury summary -->
@@ -1121,6 +1226,8 @@ const TabManors = {
 
     this._workingEntry = null;
     this._recordOpen   = false;
+    this._recordingKey = null;
+    this._clearRecordStorage();
     Toast.success(`${year} AD recorded — Treasury: ${treasury} L`);
     this._section = 'history';
     this._expanded.add(`${key}-${year}`);
@@ -1961,7 +2068,7 @@ const TabManors = {
   _goToRecord(key) {
     this._section    = 'overview';
     this._recordOpen = true;
-    this._workingEntry = null; // will be initialized by toggleRecord logic
+    this._recordingKey = key;
     const m = STORE.getManor(key);
     if (m) {
       const lastTreas = STORE.manorTreasury(key);
@@ -1975,10 +2082,16 @@ const TabManors = {
         conflict: 'No Result', conflictSeason: '—',
         harvestOutcome: null, harvestIncome: 0,
         lifestyle: m.lifestyle || 'Normal',
-        improvMaint: autoMaint,
-        improvIncome: autoIncome,
+        improvMaint: autoMaint, improvIncome: autoIncome,
         prevTreasury: lastTreas,
+        stewardIndustry: 0, discretionary: 0, extraManorial: 0,
+        family: 0, improvBuild: 0,
+        fateWeather: 0, fateConflict: 0, fateCommoners: 0, fatePresence: 0, fateMisc: 0,
+        hatred: m.hatred ?? 0, care: m.care ?? 0,
+        notes: '', notes2: '',
+        miscIncomeItems: [], miscExpItems: [],
       };
+      this._persistRecord();
     }
     this._renderManor();
     document.getElementById('manorContent')?.scrollTo({ top: 0, behavior: 'smooth' });

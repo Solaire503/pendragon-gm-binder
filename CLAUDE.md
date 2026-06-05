@@ -4,7 +4,7 @@ A web-based campaign management tool for a Pendragon 6th Edition tabletop RPG. S
 
 ## Tech Stack
 
-- **Backend:** Python 3.12, Flask 3.1.0, single-file `server.py` (2,881 lines)
+- **Backend:** Python 3.12, Flask 3.1.0, single-file `server.py` (3,780 lines)
 - **Frontend:** Vanilla JS (no frameworks, no build step), single `index.html` entry point
 - **Storage:** JSON files on disk — no database
 - **CSS:** Single `css/style.css` (91 KB)
@@ -28,7 +28,7 @@ Production runs as `pendragon.service` (systemd). Restart: `sudo systemctl resta
 pendragon/
   server.py                  Flask backend (all routes, auth, file I/O)
   index.html                 SPA entry point
-  sw.js                      Service worker (offline fallback, cache v6)
+  sw.js                      Service worker (offline fallback, cache v17)
   config.json                Save file path config
   requirements.txt           Python deps
   css/style.css              All styles
@@ -52,7 +52,7 @@ pendragon/
     tabs/
       dashboard.js           Player/GM dashboard
       roster.js              NPC roster grid
-      manors.js              Manor management (2,912 lines, largest)
+      manors.js              Manor management (3,122 lines, largest)
       families.js            Family/household view
       tree.js                Canvas-based family tree
       winter.js              Winter phase mechanics
@@ -112,6 +112,9 @@ multiplayer → app
 - **IDs:** Chronicle/solo IDs use `crypto.randomUUID()`, not `Date.now()`. Vassal IDs use `Date.now() + random suffix`
 - **Manor DV:** Total DV = `m.dvBase` (manual) + sum of `improvement.dvMod` — not a single stored field
 - **Manor Treasury:** Comes from latest history entry (`m.history[last].treasury`), NOT a direct field on the manor
+- **NPC Training fields:** `page_type` (Page/Oblate/Druidic Initiate), `page_placed` (year), `page_court` (location), `training_path` (Squire/Steward/Clergy/Druid), `training_where`/`training_npc_id`, `came_of_age` (year)
+- **Training path locks:** Oblate → Clergy only, Druidic Initiate → Druid only, Page → Squire/Steward/Clergy
+- **Record Year persistence:** In-progress recording saved to `localStorage('pendragon_record_year')` with `_recordingKey` tracking which manor is recording
 - **Players poll** `/api/player-load`; **GM polls** `/api/load` — never merge these
 - `/setup` is localhost-only
 

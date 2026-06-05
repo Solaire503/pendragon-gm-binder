@@ -400,6 +400,39 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.3.0',
+    date:    '2026-06-05',
+    sections: [
+      {
+        heading: 'Training Lifecycle Modals',
+        items: [
+          'Age flag badges on NPC cards are now interactive — click to open inline training modals instead of manually editing NPC fields.',
+          'Phase 1 — Placement (age 7+): Choose Page, Oblate, or Druidic Initiate and assign a court or location.',
+          'Phase 2 — Training Path (age 14+): Advance to Squire, Steward, Clergy, or Druid. Squire path includes NPC search to assign a training knight, with automatic Squire relationship creation.',
+          'Phase 3 — Coming of Age (age 18–21+): Squires choose a knight rank (Esquire, Bachelor Knight, Vassal Knight, Knight Banneret). Others confirm directly. Squire relationships auto-convert to Former Squire.',
+          'Path locking enforced: Oblate → Clergy only, Druidic Initiate → Druid only, Page → Squire / Steward / Clergy.',
+        ],
+      },
+      {
+        heading: 'New Roles: Oblate & Druidic Initiate',
+        items: [
+          'Two new youth training roles added to the NPC role dropdown: Oblate (clergy youth path) and Druidic Initiate (druid youth path).',
+          'Each role has a distinct icon and colour — Oblate (✝ navy) and Druidic Initiate (🌿 forest green).',
+          'Roster training lines, dashboard age alerts, and training history labels all updated to handle the new roles.',
+        ],
+      },
+      {
+        heading: 'Record Year Persistence (Bug Fix)',
+        items: [
+          'Record Year form state now persists across all navigation — tab switches, manor switches, page refreshes, and browser closes.',
+          'In-progress recording saved to localStorage on every input. Restored automatically on page load.',
+          'When recording one manor and viewing another, a banner shows "Recording in progress for [manor]" with a Go Back button.',
+          'Fixes GitHub Issue #14.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.2.0',
     date:    '2026-05-13',
     sections: [

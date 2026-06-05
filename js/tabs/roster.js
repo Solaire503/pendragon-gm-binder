@@ -253,7 +253,7 @@ const TabRoster = {
     const role = (npc.role || '').toLowerCase();
     const unplacedRoles = ['baby', 'infant', ''];
     if (age >= 7  && age < 14 && unplacedRoles.includes(role) && !npc.page_placed) return 'page';
-    if (age >= 14 && role === 'page')                                        return 'training';
+    if (age >= 14 && ['page','oblate','druidic initiate'].includes(role))    return 'training';
     if (age >= 21 && role === 'squire')                                      return 'adult';
     if (age >= 18 && ['steward','priest','druid'].includes(role))            return 'adult';
     return null;
@@ -264,19 +264,34 @@ const TabRoster = {
   //             target = junior (squire/page)
   _trainingLine(npc) {
     const roleLower = (npc.role || '').toLowerCase();
-    if (npc.came_of_age || !['squire','page',''].includes(roleLower)) return '';
+    if (npc.came_of_age) return '';
+    const trainingRoles = ['squire','page','oblate','druidic initiate','steward','priest','druid'];
+    if (!trainingRoles.includes(roleLower) && roleLower !== '') return '';
+
+    // Oblate/Druidic Initiate — show placement location
+    if (roleLower === 'oblate' && npc.page_court)
+      return `<span class="training-line">Oblate at: <strong>${esc(npc.page_court)}</strong></span>`;
+    if (roleLower === 'druidic initiate' && npc.page_court)
+      return `<span class="training-line">Initiate at: <strong>${esc(npc.page_court)}</strong></span>`;
+
+    // Steward/Priest/Druid in training — show training location
+    if (['steward','priest','druid'].includes(roleLower) && npc.training_where) {
+      const label = roleLower === 'steward' ? 'Stewardship at'
+                  : roleLower === 'druid'   ? 'Druidic training at'
+                  : 'Clergy training at';
+      return `<span class="training-line">${label}: <strong>${esc(npc.training_where)}</strong></span>`;
+    }
+
+    // Squire/Page — check relationships first
     const rels = STORE.getRelationships(npc.id)
       .filter(r => r.type === 'Squire' || r.type === 'Page');
     if (!rels.length) {
-      // Fall back to free-text training_where field
       if (npc.training_where) {
-        const role  = (npc.role || '').toLowerCase();
-        const label = role === 'squire' ? 'Squire under' : role === 'page' ? 'Page at' : 'Training';
+        const label = roleLower === 'squire' ? 'Squire under' : roleLower === 'page' ? 'Page at' : 'Training';
         return `<span class="training-line">${label}: <strong>${esc(npc.training_where)}</strong></span>`;
       }
       return '';
     }
-    // Show first match (most cases there's only one)
     const r       = rels[0];
     const isJunior = r.targetId === npc.id;
     const otherId  = isJunior ? r.sourceId : r.targetId;
