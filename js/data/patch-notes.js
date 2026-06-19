@@ -289,7 +289,7 @@ const FEATURES = [
     heading: 'Winter Phase — Childbirth Rolls',
     icon: '🍼',
     items: [
-      'Eligible women (she/her · age 18–40 · not barren) grouped by household. Each row shows CON, auto-modifiers, and calculated effective CON.',
+      'Eligible women (she/her · age 18+ · not barren) grouped by household. Each row shows CON, auto-modifiers, and calculated effective CON.',
       'Conception: 1d20 vs effective CON. Critical = multiple birth or Blessed child. Fumble = tragedy table (child dies, mother dies, both die, permanent −1 CON, or barren).',
       'Record Birth creates the child NPC pre-linked to mother and father with the correct relationship type.',
     ],
@@ -399,6 +399,33 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '3.3.1',
+    date:    '2026-06-19',
+    sections: [
+      {
+        heading: 'Improvements — Quick Edit',
+        items: [
+          'Edit button added to each improvement on the manor Overview tab — no need to switch to the Improvements tab to fix a value.',
+        ],
+      },
+      {
+        heading: 'Childbirth — Age Cap Removed',
+        items: [
+          'Removed the hard age-40 cutoff for childbirth eligibility. Women age 18+ are now eligible per Pendragon 6e rules.',
+          'The cumulative −1 penalty per year over 35 still applies naturally.',
+        ],
+      },
+      {
+        heading: 'Bug Fix — Duplicate Relationships on Come of Age',
+        items: [
+          'Fixed a server-side merge bug that created duplicate Squire + Former Squire relationships when a squire came of age.',
+          'The relationship merge now keys on relationship ID instead of type, so type changes (Squire → Former Squire) are correctly treated as updates rather than new entries.',
+          'Cleaned up existing duplicate relationships in the save file.',
+        ],
+      },
+    ],
+  },
   {
     version: '3.3.0',
     date:    '2026-06-05',

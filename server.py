@@ -42,7 +42,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.3.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.3.1'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -228,10 +228,22 @@ def _csrf_check():
 
 # ── AUTH DECORATORS ───────────────────────────────────────────────────────────
 
+def _session_valid():
+    """Check that the session nonce matches the user's current nonce."""
+    if 'username' not in session:
+        return False
+    user = get_user(session['username'])
+    if not user:
+        return False
+    if session.get('nonce') != user.get('session_nonce', ''):
+        session.clear()
+        return False
+    return True
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'username' not in session:
+        if not _session_valid():
             if request.path.startswith('/api/'):
                 return jsonify({'error': 'Not authenticated'}), 401
             return redirect(url_for('login', next=request.path))
@@ -241,12 +253,10 @@ def login_required(f):
 def gm_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'username' not in session:
+        if not _session_valid():
             return jsonify({'error': 'Not authenticated'}), 401
         if session.get('role') != 'gm':
             return jsonify({'error': 'Forbidden'}), 403
-        # Re-verify the user still exists and still holds the gm role in
-        # users.json — catches role changes that happened after login.
         live_user = get_user(session['username'])
         if not live_user or live_user.get('role') != 'gm':
             return jsonify({'error': 'Forbidden'}), 403
@@ -481,6 +491,9 @@ LOGIN_HTML = """<!DOCTYPE html><html lang="en"><head>""" + _BASE_STYLE + """
     </div>
     <button class="btn" type="submit">Enter the Hall</button>
   </form>
+  <div style="margin-top:16px;text-align:center;font-size:0.82rem;">
+    <a href="/forgot-password" style="color:var(--ink-soft);text-decoration:underline;">Forgot your passphrase?</a>
+  </div>
 </div>
 </body></html>
 """
@@ -720,17 +733,19 @@ def login():
             user = get_user(username)
             if user and user.get('password_hash') and check_password_hash(user['password_hash'], password):
                 _clear_attempts(ip)
+                nonce = _secrets_mod.token_urlsafe(16)
                 session.clear()
                 session.permanent    = True   # enables PERMANENT_SESSION_LIFETIME
                 session['username']  = user['username']
                 session['role']      = user['role']
                 session['household'] = user.get('household')
-                # Record last login timestamp
+                session['nonce']     = nonce
                 with _users_lock:
                     users = load_users()
                     for u in users:
                         if u['username'].lower() == username.lower():
                             u['lastLogin'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+                            u['session_nonce'] = nonce
                             break
                     save_users(users)
                 next_url = request.args.get('next') or url_for('index')
@@ -816,6 +831,7 @@ def api_reset_password(token):
         for u in users:
             if u['username'].lower() == entry['username'].lower():
                 u['password_hash'] = generate_password_hash(password)
+                u['session_nonce'] = _secrets_mod.token_urlsafe(16)
                 break
         save_users(users)
     with _reset_tokens_lock:
@@ -846,13 +862,16 @@ def account():
         else:
             error = _check_password_policy(new_pw, user.get('password_hash'))
         if not error:
+            new_nonce = _secrets_mod.token_urlsafe(16)
             with _users_lock:
                 users = load_users()
                 for u in users:
                     if u['username'].lower() == session['username'].lower():
                         u['password_hash'] = generate_password_hash(new_pw)
+                        u['session_nonce'] = new_nonce
                         break
                 save_users(users)
+            session['nonce'] = new_nonce
             success = "Passphrase updated successfully."
 
     return render_template_string(ACCOUNT_HTML,
@@ -1107,26 +1126,18 @@ def api_save():
                 try:
                     disk_binder = json.loads(path.read_text(encoding='utf-8'))
                     gm_binder   = json.loads(body)
-                    # Take the current on-disk relationships as the authoritative base,
-                    # then overlay any relationships the GM explicitly changed/added that
-                    # are not present on disk (keyed by sourceId+targetId+type).
                     disk_rels = disk_binder.get('relationships', [])
                     gm_rels   = gm_binder.get('relationships', [])
-                    # Build a set of keys present on disk
-                    disk_keys = {
-                        (r.get('sourceId'), r.get('targetId'), r.get('type'))
-                        for r in disk_rels if isinstance(r, dict)
-                    }
-                    # Keep disk rels; append any GM rels whose exact key is not yet on disk
-                    merged_rels = list(disk_rels)
-                    for r in gm_rels:
+                    # GM's copy is authoritative — start from it, keyed by rel id.
+                    merged_by_id = {r.get('id'): r for r in gm_rels if isinstance(r, dict) and r.get('id')}
+                    # Layer in any player-saved rels from disk that the GM doesn't have.
+                    for r in disk_rels:
                         if not isinstance(r, dict):
                             continue
-                        key = (r.get('sourceId'), r.get('targetId'), r.get('type'))
-                        if key not in disk_keys:
-                            merged_rels.append(r)
-                            disk_keys.add(key)
-                    gm_binder['relationships'] = merged_rels
+                        rid = r.get('id')
+                        if rid and rid not in merged_by_id:
+                            merged_by_id[rid] = r
+                    gm_binder['relationships'] = list(merged_by_id.values())
                     body = json.dumps(gm_binder, ensure_ascii=False)
                 except Exception as e:
                     log.warning('[Save] Relationship merge failed: %s', e)
@@ -3487,18 +3498,26 @@ def api_update_user(target_username):
 def api_admin_reset_password(target_username):
     err = _csrf_check()
     if err: return err
-    data     = request.get_json(force=True, silent=True) or {}
-    password = data.get('password', '')
-    if len(password) < 10:
-        return jsonify({'error': 'Password must be at least 10 characters.'}), 400
-    with _users_lock:
-        users = load_users()
-        target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
-        if not target:
-            return jsonify({'error': 'User not found.'}), 404
-        target['password_hash'] = generate_password_hash(password)
-        save_users(users)
-    return jsonify({'ok': True})
+    users = load_users()
+    target = next((u for u in users if u['username'].lower() == target_username.lower()), None)
+    if not target:
+        return jsonify({'error': 'User not found.'}), 404
+    email = (target.get('email') or '').strip()
+    if not email:
+        return jsonify({'error': 'No email on file for this user. Set their email first.'}), 400
+    token = _secrets_mod.token_urlsafe(32)
+    with _reset_tokens_lock:
+        _reset_tokens[token] = {'username': target['username'], 'expires': time.time() + 3600}
+    if SECRETS.get('CF_TUNNEL'):
+        base_url = 'https://pendragon-binder.com'
+    else:
+        base_url = request.host_url.rstrip('/')
+    threading.Thread(
+        target=_send_reset_email,
+        args=(email, token, base_url),
+        daemon=True,
+    ).start()
+    return jsonify({'ok': True, 'sent_to': email})
 
 
 @app.route('/api/users/<target_username>', methods=['DELETE'])

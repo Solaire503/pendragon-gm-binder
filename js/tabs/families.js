@@ -77,7 +77,7 @@ const TabFamilies = {
         roleGroups['Squires & Pages'].push(n);
       else if (r.includes('steward'))
         roleGroups['Stewards'].push(n);
-      else if (r.includes('priest') || r.includes('druid'))
+      else if (r.includes('priest') || r.includes('druid') || r.includes('oblate') || r.includes('monk') || r.includes('nun') || n.page_type === 'Oblate' || n.page_type === 'Druidic Initiate' || n.training_path === 'Clergy' || n.training_path === 'Druid')
         roleGroups['Clergy & Druids'].push(n);
       else if (r.includes('baby') || r.includes('infant') || (nAge != null && nAge < 12))
         roleGroups['Children'].push(n);

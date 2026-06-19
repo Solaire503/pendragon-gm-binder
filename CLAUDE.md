@@ -144,6 +144,10 @@ multiplayer → app
 - **Deploy:** push to main, then `sudo systemctl restart pendragon.service` on the server
 - **Backups:** Nightly 3 AM cron → tar → rclone to Google Drive (30-day retention)
 
+## Project Tracker (storybloq)
+
+Battle Records work is tracked in storybloq (MCP). At session start, run `storybloq_status` + `storybloq_handover_latest` for current state. When you complete a ticket's work, mark it complete with `storybloq_ticket_update` and leave a handover before ending the session — a stale tracker is worse than none.
+
 ## Testing
 
 No test suite. Verify changes with:

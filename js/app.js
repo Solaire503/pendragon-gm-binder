@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '3.3.0';
+const APP_VERSION = '3.3.1';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────
@@ -962,37 +962,25 @@ const APP = {
       });
     });
 
-    // Reset password buttons
+    // Reset password buttons — sends reset email to user
     document.querySelectorAll('.um-reset-pw').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const uname = btn.dataset.username;
-        const inlineDiv = document.getElementById('umInlineForm');
-        if (!inlineDiv) return;
-        inlineDiv.style.display = 'block';
-        inlineDiv.innerHTML = `
-          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-            <div>
-              <div class="detail-label">New password for <strong>${esc(uname)}</strong></div>
-              <input class="edit-input" id="umPwField" type="password" placeholder="10+ chars" style="width:200px;">
-            </div>
-            <button class="btn btn-primary" id="umPwSaveBtn" style="padding:5px 16px;">Set Password</button>
-            <button class="btn btn-ghost" onclick="document.getElementById('umInlineForm').style.display='none';" style="padding:5px 12px;">Cancel</button>
-          </div>`;
-        document.getElementById('umPwSaveBtn').addEventListener('click', async () => {
-          const pw = (document.getElementById('umPwField')?.value || '').trim();
-          if (pw.length < 10) { Toast.error('Password must be at least 10 characters'); return; }
-          try {
-            const r = await fetch(`/api/users/${encodeURIComponent(uname)}/reset-password`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ password: pw }),
-            });
-            const d = await r.json();
-            if (!d.ok) throw new Error(d.error || 'Failed');
-            Toast.success(`Password reset for ${uname}`);
-            inlineDiv.style.display = 'none';
-          } catch(e) { Toast.error(e.message || 'Could not reset password'); }
-        });
+        if (!confirm(`Send a password reset email to ${uname}?`)) return;
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+        try {
+          const r = await fetch(`/api/users/${encodeURIComponent(uname)}/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const d = await r.json();
+          if (!d.ok) throw new Error(d.error || 'Failed');
+          Toast.success(`Reset email sent to ${d.sent_to}`);
+        } catch(e) { Toast.error(e.message || 'Could not send reset email'); }
+        btn.disabled = false;
+        btn.textContent = 'Reset PW';
       });
     });
 

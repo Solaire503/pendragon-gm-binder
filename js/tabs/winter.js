@@ -282,7 +282,7 @@ const TabWinter = {
     const age   = STORE.year - npc.year_born;
     const isShe = (npc.pronoun || '').toLowerCase().includes('she');
 
-    if (isShe && age >= 15 && age <= 40) {
+    if (isShe && age >= 15) {
       const role = (npc.role || '').toLowerCase();
       // Female knights of any class roll on the Adult table
       const isKnight = role.includes('knight');
@@ -464,7 +464,7 @@ const TabWinter = {
           ${q ? `<span style="font-family:var(--font-heading);font-size:0.6rem;color:var(--ink-soft);">${visible.length} of ${eligible.length} shown</span>` : ''}
         </div>
         <div style="font-size:0.72rem;color:var(--ink-soft);margin-bottom:12px;line-height:1.5;">
-          Eligible: women (she/her · age 18–40 · not barren). Roll All covers women with a living spouse.
+          Eligible: women (she/her · age 18+ · not barren). Roll All covers women with a living spouse.
           Use individual Roll for widowed or unmarried. ⚔ = fornication/adultery (bastard). ⚜ = prestige bypass.
         </div>
         ${summaryHtml}
@@ -675,7 +675,7 @@ const TabWinter = {
       if (!(n.pronoun||'').toLowerCase().includes('she')) return false;
       if (!n.year_born) return false;
       const age = STORE.year - n.year_born;
-      return age >= 18 && age <= 40;
+      return age >= 18;
     }).sort((a, b) => (a.household||'').localeCompare(b.household||'') || a.name.localeCompare(b.name));
   },
 

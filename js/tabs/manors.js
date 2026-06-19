@@ -19,7 +19,7 @@ const HARVEST_TABLE = {
 
 const LIFESTYLE_COST = { Impoverished:0, Poor:2, Normal:4, Rich:8, Extravagant:18 };
 
-const HORSE_WAR    = ['Hobby','Charger (Small)','Charger (Normal)','Fairy Horse'];
+const HORSE_WAR    = ['Hobby','Charger (Small)','Charger (Normal)','Destrier','Fairy Horse'];
 const HORSE_RIDING = ['Jennet','Rouncey (Inferior)','Rouncy (Small)','Rouncy (Normal)','Rouncy (Large)','Courser','Dales/Irish/Cambrian Pony'];
 const HORSE_WORK   = ['Cart Horse','Cob','Nag','Sumpter','Sumpter (Strong)','Hackney','Donkey','Mule'];
 const HORSE_ALL    = [...HORSE_WAR, ...HORSE_RIDING, ...HORSE_WORK];
@@ -229,9 +229,10 @@ const TabManors = {
 
     const stewardRef = stewardNpc || stewardFallback;
     const stewardIndustryMatch = stewardRef?.skills?.match(/Industry[:\s]+(\d+)/i);
+    const stewardIndustryVal = m.steward_industry ?? (stewardIndustryMatch ? stewardIndustryMatch[1] : null);
     const stewardSkillDisplay = stewardRef
       ? `<span style="font-family:var(--font-heading);font-size:0.78rem;color:var(--verdigris-mid);margin-left:8px;" title="Stewardship skill — used in manor fate checks">Stewardship: <strong>${m.steward_skill ?? '?'}</strong></span>` +
-        (stewardIndustryMatch ? `<span style="font-family:var(--font-heading);font-size:0.78rem;color:var(--verdigris-mid);margin-left:8px;" title="Industry skill — extra income from steward">Industry: <strong>${stewardIndustryMatch[1]}</strong></span>` : '') +
+        (stewardIndustryVal != null ? `<span style="font-family:var(--font-heading);font-size:0.78rem;color:var(--verdigris-mid);margin-left:8px;" title="Industry skill — extra income from steward">Industry: <strong>${stewardIndustryVal}</strong></span>` : '') +
         (readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 6px;font-size:0.48rem;margin-left:4px;" onclick="TabManors._editStewardSkill('${esc(key)}')">✎</button>`)
       : '';
 
@@ -315,6 +316,7 @@ const TabManors = {
               <div class="improvement-meta">Maint: ${i.maintenance} L/yr${i.dvMod?' · DV +'+i.dvMod:''}</div>
               ${(i.income||i.incomeNote) ? `<div class="improvement-meta" style="color:var(--verdigris-mid);">Income: ${i.income?i.income+' L/yr':''}${i.income&&i.incomeNote?' + ':''}${esc(i.incomeNote||'')}</div>` : ''}
             </div>
+            ${readOnly ? '' : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;align-self:center;margin-left:8px;" onclick="TabManors.openEditImprovement('${esc(key)}',${i.id})">Edit</button>`}
           </div>`).join('')}
       </div>` : '';
 
@@ -1918,17 +1920,25 @@ const TabManors = {
   _editStewardSkill(key) {
     const m = STORE.getManor(key);
     const npc = m?.steward_id ? STORE.getNpc(m.steward_id) : null;
+    const npcIndustry = npc?.skills?.match(/Industry[:\s]+(\d+)/i)?.[1] ?? '';
+    const industryVal = m?.steward_industry ?? npcIndustry;
     Modal.open(`
       <div style="min-width:300px;">
-        <div class="page-title" style="font-size:1rem;margin-bottom:6px;">Stewardship Skill</div>
+        <div class="page-title" style="font-size:1rem;margin-bottom:6px;">Steward Skills</div>
         ${npc ? `<div style="font-size:0.9rem;color:var(--ink-soft);margin-bottom:14px;">${esc(npc.name)}</div>` : ''}
         <div class="detail-field mb-12">
           <div class="detail-label">Stewardship Skill Level</div>
           <input class="edit-input" id="ss-skill" type="number" min="1" max="30"
             value="${m?.steward_skill ?? ''}" placeholder="e.g. 15" style="font-size:1.1rem;text-align:center;">
         </div>
+        <div class="detail-field mb-12">
+          <div class="detail-label">Industry Skill Level</div>
+          <input class="edit-input" id="ss-industry" type="number" min="0" max="30"
+            value="${industryVal}" placeholder="e.g. 10" style="font-size:1.1rem;text-align:center;">
+        </div>
         <div style="font-size:0.82rem;color:var(--ink-soft);font-style:italic;margin-bottom:12px;">
-          Used in the Stewardship vs Fate check each manor year.
+          Stewardship is used in the Stewardship vs Fate check each manor year.<br>
+          Industry provides extra income from the steward.
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="TabManors._saveStewardSkill('${esc(key)}')">Save</button>
@@ -1939,11 +1949,17 @@ const TabManors = {
   },
 
   _saveStewardSkill(key) {
-    const val = parseInt(document.getElementById('ss-skill')?.value, 10);
-    const m   = STORE.getManor(key);
-    if (m && !isNaN(val)) { m.steward_skill = val; STORE.save(); }
+    const skillVal    = parseInt(document.getElementById('ss-skill')?.value, 10);
+    const industryVal = parseInt(document.getElementById('ss-industry')?.value, 10);
+    const m = STORE.getManor(key);
+    if (m) {
+      if (!isNaN(skillVal))    m.steward_skill    = skillVal;
+      if (!isNaN(industryVal)) m.steward_industry = industryVal;
+      else                     delete m.steward_industry;
+      STORE.save();
+    }
     Modal.close();
-    Toast.success('Stewardship skill saved');
+    Toast.success('Steward skills saved');
     this._renderManor();
   },
 

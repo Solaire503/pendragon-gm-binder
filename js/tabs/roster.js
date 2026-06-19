@@ -344,8 +344,8 @@ const TabRoster = {
 
   setSort(key) {
     this._sort = key;
+    this._refreshControls();
     this._renderList();
-    // Re-highlight selected
     if (this._selectedId) {
       document.querySelector(`#rosterList .npc-list-item[data-npc-id="${this._selectedId}"]`)?.classList.add('selected');
     }
