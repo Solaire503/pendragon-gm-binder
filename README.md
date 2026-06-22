@@ -78,6 +78,10 @@ js/
 
 This is an active personal project, not a supported product. There are no tests, no CI, no versioned releases. It works well for the campaign it was built for. Issues and PRs from curious Pendragon GMs are welcome, but response times will reflect the reality that this is a hobby project maintained by one person between sessions.
 
+## AI Use
+
+This project is developed with heavy AI assistance (Claude Code). It's a hobby project, a learning exercise, and a love letter to a game I've been running for years, in roughly equal measure.
+
 ## License
 
 MIT. See [LICENSE](LICENSE) for details.
