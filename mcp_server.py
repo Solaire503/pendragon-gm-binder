@@ -419,6 +419,100 @@ def delete_relationship(rel_id: str) -> dict:
     return _api("DELETE", f"/api/mcp/relationship/{rel_id}")
 
 
+# ── Life Event Tools ────────────────────────────────────────────────────────
+
+@mcp.tool(
+    description=(
+        "Get all life events for an NPC. Life events track personal milestones: "
+        "retirement, marriages, injuries, quests, visions, etc.\n\n"
+        "Each event has: id, year, season, title, mechDesc (mechanical "
+        "description), flavorText (narrative), userNotes."
+    )
+)
+def get_npc_events(npc_id: str) -> dict:
+    return _api("GET", f"/api/mcp/npc/{npc_id}/events")
+
+
+@mcp.tool(
+    description=(
+        "Add a life event to an NPC. 'title' is required — a short label "
+        "like 'Knighted at Sarum', 'Major Wound at Terrabil', "
+        "'Married Lady Elaine'.\n\n"
+        "Optional fields:\n"
+        "- year: game year (integer)\n"
+        "- season: 'spring', 'summer', 'autumn', or 'winter'\n"
+        "- mechDesc: mechanical description (what happened rules-wise)\n"
+        "- flavorText: narrative prose (AI-generated or hand-written)\n"
+        "- userNotes: GM/player notes about the event"
+    )
+)
+def add_life_event(
+    npc_id: str,
+    title: str,
+    year: int = 0,
+    season: str = "",
+    mechDesc: str = "",
+    flavorText: str = "",
+    userNotes: str = "",
+) -> dict:
+    body = {"title": title}
+    if year:
+        body["year"] = year
+    if season:
+        body["season"] = season
+    if mechDesc:
+        body["mechDesc"] = mechDesc
+    if flavorText:
+        body["flavorText"] = flavorText
+    if userNotes:
+        body["userNotes"] = userNotes
+    return _api("POST", f"/api/mcp/npc/{npc_id}/events", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Update a life event's fields. Pass only the fields you want to change. "
+        "Call get_npc_events first to find the event ID."
+    )
+)
+def update_life_event(
+    npc_id: str,
+    event_id: str,
+    title: str = "",
+    year: int = 0,
+    season: str = "",
+    mechDesc: str = "",
+    flavorText: str = "",
+    userNotes: str = "",
+) -> dict:
+    body = {}
+    if title:
+        body["title"] = title
+    if year:
+        body["year"] = year
+    if season:
+        body["season"] = season
+    if mechDesc:
+        body["mechDesc"] = mechDesc
+    if flavorText:
+        body["flavorText"] = flavorText
+    if userNotes:
+        body["userNotes"] = userNotes
+    if not body:
+        return {"error": "No fields to update"}
+    return _api("PATCH", f"/api/mcp/npc/{npc_id}/events/{event_id}", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Delete a life event from an NPC. Call get_npc_events first "
+        "to find the event ID."
+    )
+)
+def delete_life_event(npc_id: str, event_id: str) -> dict:
+    return _api("DELETE", f"/api/mcp/npc/{npc_id}/events/{event_id}")
+
+
 # ── Arc Write Tools ──────────────────────────────────────────────────────────
 
 @mcp.tool(

@@ -4559,6 +4559,154 @@ def api_mcp_npc_relationships(npc_id):
     return jsonify({'npc_id': npc_id, 'relationships': matched})
 
 
+@app.route('/api/mcp/npc/<npc_id>/events', methods=['GET'])
+def api_mcp_npc_events(npc_id):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    for npc in _all_npcs(binder):
+        if npc.get('id') == npc_id:
+            return jsonify({'npc_id': npc_id, 'name': npc.get('name', ''), 'events': npc.get('soloEvents', [])})
+    return jsonify({'error': 'NPC not found'}), 404
+
+
+@app.route('/api/mcp/npc/<npc_id>/events', methods=['POST'])
+def api_mcp_add_event(npc_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    title = str(data.get('title', ''))[:200]
+    if not title.strip():
+        return jsonify({'error': 'title is required'}), 400
+
+    event = {
+        'id':         'evt-' + str(uuid.uuid4()),
+        'year':       data.get('year'),
+        'season':     str(data.get('season', ''))[:20],
+        'title':      title,
+        'mechDesc':   str(data.get('mechDesc', ''))[:2000],
+        'flavorText': data.get('flavorText'),
+        'userNotes':  str(data.get('userNotes', ''))[:2000],
+    }
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        npc = None
+        for lst in [binder.get('living', []), binder.get('dead', [])]:
+            for n in lst:
+                if n.get('id') == npc_id:
+                    npc = n
+                    break
+            if npc:
+                break
+        if not npc:
+            return jsonify({'error': 'NPC not found'}), 404
+
+        if 'soloEvents' not in npc:
+            npc['soloEvents'] = []
+        npc['soloEvents'].insert(0, event)
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Added life event to %s: %s', npc_id, title)
+    return jsonify({'ok': True, 'event': event}), 201
+
+
+@app.route('/api/mcp/npc/<npc_id>/events/<event_id>', methods=['PATCH'])
+def api_mcp_update_event(npc_id, event_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    updatable = ('year', 'season', 'title', 'mechDesc', 'flavorText', 'userNotes')
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        npc = None
+        for lst in [binder.get('living', []), binder.get('dead', [])]:
+            for n in lst:
+                if n.get('id') == npc_id:
+                    npc = n
+                    break
+            if npc:
+                break
+        if not npc:
+            return jsonify({'error': 'NPC not found'}), 404
+
+        ev = None
+        for e in npc.get('soloEvents', []):
+            if e.get('id') == event_id:
+                ev = e
+                break
+        if not ev:
+            return jsonify({'error': 'Event not found'}), 404
+
+        changed = []
+        for key in updatable:
+            if key in data:
+                ev[key] = data[key]
+                changed.append(key)
+
+        if not changed:
+            return jsonify({'error': 'No updatable fields provided'}), 400
+
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Updated event %s on %s: %s', event_id, npc_id, ', '.join(changed))
+    return jsonify({'ok': True, 'event': ev, 'changed': changed})
+
+
+@app.route('/api/mcp/npc/<npc_id>/events/<event_id>', methods=['DELETE'])
+def api_mcp_delete_event(npc_id, event_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        npc = None
+        for lst in [binder.get('living', []), binder.get('dead', [])]:
+            for n in lst:
+                if n.get('id') == npc_id:
+                    npc = n
+                    break
+            if npc:
+                break
+        if not npc:
+            return jsonify({'error': 'NPC not found'}), 404
+
+        events = npc.get('soloEvents', [])
+        before = len(events)
+        npc['soloEvents'] = [e for e in events if e.get('id') != event_id]
+        if len(npc['soloEvents']) == before:
+            return jsonify({'error': 'Event not found'}), 404
+
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Deleted event %s from %s', event_id, npc_id)
+    return jsonify({'ok': True, 'deleted': event_id})
+
+
 @app.route('/api/mcp/chronicle/<year>', methods=['POST'])
 def api_mcp_add_chronicle(year):
     err = _auth_gm_or_mcp()
