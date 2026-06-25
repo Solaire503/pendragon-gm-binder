@@ -1,0 +1,17 @@
+[Unit]
+Description=Pendragon MCP Server
+After=network.target pendragon.service
+
+[Service]
+Type=simple
+User=solaire503
+Group=solaire503
+WorkingDirectory=/home/solaire503/pendragon
+ExecStart=/home/solaire503/pendragon/mcp-venv/bin/python /home/solaire503/pendragon/mcp_server.py --http
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/pendragon-mcp.log
+StandardError=append:/var/log/pendragon-mcp.log
+
+[Install]
+WantedBy=multi-user.target

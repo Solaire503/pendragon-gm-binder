@@ -15,6 +15,7 @@ import ssl
 import sys
 import threading
 import time
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -42,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.3.1'  # keep in sync with js/app.js
+APP_VERSION  = '3.4.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -52,6 +53,8 @@ PLAYER_DATA_DIR  = BASE_DIR / 'player_data'
 SUBMISSIONS_FILE     = BASE_DIR / 'submissions.json'
 BROADCAST_TASKS_FILE = BASE_DIR / 'broadcast_tasks.json'
 BATTLE_FILE          = BASE_DIR / 'battle-state.json'
+ARCS_FILE            = BASE_DIR / 'arcs.json'
+SESSION_PREP_FILE    = BASE_DIR / 'session-prep.json'
 CERT_FILE    = BASE_DIR / 'cert.pem'
 KEY_FILE     = BASE_DIR / 'key.pem'
 PORT         = 8765
@@ -79,6 +82,7 @@ def load_secrets():
 
 SECRETS = load_secrets()
 BOT_KEY = SECRETS.get('BOT_KEY', '')
+MCP_KEY = SECRETS.get('MCP_KEY', '')
 
 _reset_tokens: dict = {}   # token -> {'username': str, 'expires': float}
 _reset_tokens_lock = threading.Lock()
@@ -271,6 +275,41 @@ def bot_required(f):
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated
+
+def mcp_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if not MCP_KEY or not hmac.compare_digest(auth, f'Bearer {MCP_KEY}'):
+            return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+def _auth_gm_or_mcp_read():
+    auth = request.headers.get('Authorization', '')
+    if auth and MCP_KEY and hmac.compare_digest(auth, f'Bearer {MCP_KEY}'):
+        return None
+    if not _session_valid():
+        return jsonify({'error': 'Not authenticated'}), 401
+    if session.get('role') != 'gm':
+        return jsonify({'error': 'Forbidden'}), 403
+    live_user = get_user(session['username'])
+    if not live_user or live_user.get('role') != 'gm':
+        return jsonify({'error': 'Forbidden'}), 403
+    return None
+
+def _auth_gm_or_mcp():
+    auth = request.headers.get('Authorization', '')
+    if auth and MCP_KEY and hmac.compare_digest(auth, f'Bearer {MCP_KEY}'):
+        return None
+    if not _session_valid():
+        return jsonify({'error': 'Not authenticated'}), 401
+    if session.get('role') != 'gm':
+        return jsonify({'error': 'Forbidden'}), 403
+    live_user = get_user(session['username'])
+    if not live_user or live_user.get('role') != 'gm':
+        return jsonify({'error': 'Forbidden'}), 403
+    return _csrf_check()
 
 # ── SECURITY HEADERS ──────────────────────────────────────────────────────────
 
@@ -3741,6 +3780,904 @@ def api_bot_chronicle():
     recent_years = [k for _, k in sorted(numeric_keys, reverse=True)[:3]]
     entries = [{'year': int(y), 'entries': chronicle[y]} for y in recent_years]
     return jsonify({'chronicle': entries})
+
+# ── STORY ARCS & SESSION PREP ────────────────────────────────────────────────
+
+_arcs_lock = threading.Lock()
+_prep_lock = threading.Lock()
+
+_ARC_STATUSES  = ('active', 'cold', 'complete')
+_OBJ_STATUSES  = ('active', 'pending', 'complete')
+_PREP_STATUSES = ('draft', 'ready', 'played')
+
+def _read_arcs() -> list:
+    return _read_json(ARCS_FILE, default=[]) or []
+
+def _write_arcs(arcs: list) -> None:
+    _write_json(ARCS_FILE, arcs)
+
+def _read_preps() -> list:
+    return _read_json(SESSION_PREP_FILE, default=[]) or []
+
+def _write_preps(preps: list) -> None:
+    _write_json(SESSION_PREP_FILE, preps)
+
+# ── Arc CRUD ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/arcs')
+def api_list_arcs():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    arcs = _read_arcs()
+    status_filter = request.args.get('status')
+    if status_filter:
+        arcs = [a for a in arcs if a.get('status') == status_filter]
+    return jsonify({'arcs': arcs})
+
+@app.route('/api/arcs/<arc_id>')
+def api_get_arc(arc_id):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    arcs = _read_arcs()
+    arc = next((a for a in arcs if a.get('id') == arc_id), None)
+    if not arc:
+        return jsonify({'error': 'Arc not found'}), 404
+    return jsonify({'arc': arc})
+
+@app.route('/api/arcs', methods=['POST'])
+def api_create_arc():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    title = data.get('title', '')
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({'error': 'title is required'}), 400
+
+    status = data.get('status', 'active')
+    if status not in _ARC_STATUSES:
+        return jsonify({'error': f'status must be one of {_ARC_STATUSES}'}), 400
+
+    raw_id = data.get('id')
+    arc_id = str(raw_id)[:80] if raw_id else ('arc_' + _secrets_mod.token_hex(8))
+    arc = {
+        'id':             arc_id,
+        'title':          title.strip()[:200],
+        'status':         status,
+        'created':        str(data.get('created', ''))[:40],
+        'last_advanced':  str(data.get('last_advanced', ''))[:40],
+        'summary':        str(data.get('summary', ''))[:4000],
+        'linked_npcs':    data.get('linked_npcs', []),
+        'objectives':     data.get('objectives', []),
+        'timeline':       data.get('timeline', []),
+        'notes':          str(data.get('notes', ''))[:10000],
+    }
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        if any(a.get('id') == arc_id for a in arcs):
+            return jsonify({'error': 'Arc ID already exists'}), 409
+        arcs.append(arc)
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Created arc %s: %s', arc_id, arc['title'])
+    return jsonify({'ok': True, 'id': arc_id, 'arc': arc}), 201
+
+@app.route('/api/arcs/<arc_id>', methods=['PUT'])
+def api_update_arc(arc_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    if 'status' in data and data['status'] not in _ARC_STATUSES:
+        return jsonify({'error': f'status must be one of {_ARC_STATUSES}'}), 400
+
+    updatable = ('title', 'status', 'summary', 'notes', 'created',
+                 'last_advanced', 'linked_npcs', 'objectives', 'timeline')
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        arc = next((a for a in arcs if a.get('id') == arc_id), None)
+        if not arc:
+            return jsonify({'error': 'Arc not found'}), 404
+        for key in updatable:
+            if key in data:
+                arc[key] = data[key]
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Updated arc %s', arc_id)
+    return jsonify({'ok': True, 'arc': arc})
+
+@app.route('/api/arcs/<arc_id>', methods=['DELETE'])
+def api_delete_arc(arc_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        original_len = len(arcs)
+        arcs = [a for a in arcs if a.get('id') != arc_id]
+        if len(arcs) == original_len:
+            return jsonify({'error': 'Arc not found'}), 404
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Deleted arc %s', arc_id)
+    return jsonify({'ok': True, 'deleted': arc_id})
+
+# ── Arc Sub-Resources ────────────────────────────────────────────────────────
+
+@app.route('/api/arcs/<arc_id>/objectives', methods=['POST'])
+def api_add_objective(arc_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    text = data.get('text', '')
+    if not isinstance(text, str) or not text.strip():
+        return jsonify({'error': 'text is required'}), 400
+
+    status = data.get('status', 'active')
+    if status not in _OBJ_STATUSES:
+        return jsonify({'error': f'status must be one of {_OBJ_STATUSES}'}), 400
+
+    obj_id = 'obj_' + _secrets_mod.token_hex(8)
+    objective = {
+        'id':        obj_id,
+        'text':      text.strip()[:2000],
+        'status':    status,
+        'completed': data.get('completed'),
+        'notes':     str(data.get('notes', ''))[:2000],
+    }
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        arc = next((a for a in arcs if a.get('id') == arc_id), None)
+        if not arc:
+            return jsonify({'error': 'Arc not found'}), 404
+        arc.setdefault('objectives', []).append(objective)
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Added objective %s to arc %s', obj_id, arc_id)
+    return jsonify({'ok': True, 'id': obj_id, 'objective': objective}), 201
+
+@app.route('/api/arcs/<arc_id>/objectives/<obj_id>', methods=['PUT'])
+def api_update_objective(arc_id, obj_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    if 'status' in data and data['status'] not in _OBJ_STATUSES:
+        return jsonify({'error': f'status must be one of {_OBJ_STATUSES}'}), 400
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        arc = next((a for a in arcs if a.get('id') == arc_id), None)
+        if not arc:
+            return jsonify({'error': 'Arc not found'}), 404
+        obj = next((o for o in arc.get('objectives', []) if o.get('id') == obj_id), None)
+        if not obj:
+            return jsonify({'error': 'Objective not found'}), 404
+        for key in ('text', 'status', 'completed', 'notes'):
+            if key in data:
+                obj[key] = data[key]
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Updated objective %s in arc %s', obj_id, arc_id)
+    return jsonify({'ok': True, 'objective': obj})
+
+@app.route('/api/arcs/<arc_id>/objectives/<obj_id>', methods=['DELETE'])
+def api_delete_objective(arc_id, obj_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        arc = next((a for a in arcs if a.get('id') == arc_id), None)
+        if not arc:
+            return jsonify({'error': 'Arc not found'}), 404
+        objs = arc.get('objectives', [])
+        original_len = len(objs)
+        arc['objectives'] = [o for o in objs if o.get('id') != obj_id]
+        if len(arc['objectives']) == original_len:
+            return jsonify({'error': 'Objective not found'}), 404
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Deleted objective %s from arc %s', obj_id, arc_id)
+    return jsonify({'ok': True, 'deleted': obj_id})
+
+@app.route('/api/arcs/<arc_id>/timeline', methods=['POST'])
+def api_add_timeline(arc_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    year = data.get('year', '')
+    if not isinstance(year, str) or not year.strip():
+        return jsonify({'error': 'year is required (e.g. "502-spring")'}), 400
+
+    description = data.get('description', '')
+    if not isinstance(description, str) or not description.strip():
+        return jsonify({'error': 'description is required'}), 400
+
+    entry = {
+        'year':        year.strip()[:40],
+        'session_id':  str(data.get('session_id', ''))[:40],
+        'description': description.strip()[:4000],
+    }
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        arc = next((a for a in arcs if a.get('id') == arc_id), None)
+        if not arc:
+            return jsonify({'error': 'Arc not found'}), 404
+        arc.setdefault('timeline', []).append(entry)
+        arc['last_advanced'] = entry['year']
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Added timeline entry to arc %s: %s', arc_id, entry['year'])
+    return jsonify({'ok': True, 'entry': entry}), 201
+
+@app.route('/api/arcs/<arc_id>/npcs', methods=['POST'])
+def api_link_npc(arc_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    npc_id = data.get('npc_id', '')
+    if not isinstance(npc_id, str) or not npc_id.strip():
+        return jsonify({'error': 'npc_id is required'}), 400
+
+    role = str(data.get('role', ''))[:100]
+    link = {'npc_id': npc_id.strip(), 'role': role}
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        arc = next((a for a in arcs if a.get('id') == arc_id), None)
+        if not arc:
+            return jsonify({'error': 'Arc not found'}), 404
+        existing = arc.setdefault('linked_npcs', [])
+        if any(n.get('npc_id') == npc_id.strip() for n in existing):
+            return jsonify({'error': 'NPC already linked to this arc'}), 409
+        existing.append(link)
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Linked NPC %s to arc %s', npc_id.strip(), arc_id)
+    return jsonify({'ok': True, 'link': link}), 201
+
+@app.route('/api/arcs/<arc_id>/npcs/<npc_id>', methods=['DELETE'])
+def api_unlink_npc(arc_id, npc_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+
+    with _arcs_lock:
+        arcs = _read_arcs()
+        arc = next((a for a in arcs if a.get('id') == arc_id), None)
+        if not arc:
+            return jsonify({'error': 'Arc not found'}), 404
+        npcs = arc.get('linked_npcs', [])
+        original_len = len(npcs)
+        arc['linked_npcs'] = [n for n in npcs if n.get('npc_id') != npc_id]
+        if len(arc['linked_npcs']) == original_len:
+            return jsonify({'error': 'NPC not linked to this arc'}), 404
+        _write_arcs(arcs)
+
+    log.info('[Arcs] Unlinked NPC %s from arc %s', npc_id, arc_id)
+    return jsonify({'ok': True, 'unlinked': npc_id})
+
+# ── Session Prep CRUD ────────────────────────────────────────────────────────
+
+@app.route('/api/prep')
+def api_list_preps():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    preps = _read_preps()
+    status_filter = request.args.get('status')
+    if status_filter:
+        preps = [p for p in preps if p.get('status') == status_filter]
+    return jsonify({'preps': preps})
+
+@app.route('/api/prep/current')
+def api_current_prep():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    preps = _read_preps()
+    candidates = [p for p in preps if p.get('status') in ('draft', 'ready')]
+    if not candidates:
+        return jsonify({'error': 'No current prep found'}), 404
+    candidates.sort(key=lambda p: p.get('session_number', 0), reverse=True)
+    return jsonify({'prep': candidates[0]})
+
+@app.route('/api/prep/<prep_id>')
+def api_get_prep(prep_id):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    preps = _read_preps()
+    prep = next((p for p in preps if p.get('id') == prep_id), None)
+    if not prep:
+        return jsonify({'error': 'Prep not found'}), 404
+    return jsonify({'prep': prep})
+
+@app.route('/api/prep', methods=['POST'])
+def api_create_prep():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    session_number = data.get('session_number')
+    if session_number is None:
+        return jsonify({'error': 'session_number is required'}), 400
+    try:
+        session_number = int(session_number)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'session_number must be a number'}), 400
+
+    status = data.get('status', 'draft')
+    if status not in _PREP_STATUSES:
+        return jsonify({'error': f'status must be one of {_PREP_STATUSES}'}), 400
+
+    raw_id = data.get('id')
+    prep_id = str(raw_id)[:80] if raw_id else ('prep_' + _secrets_mod.token_hex(8))
+    prep = {
+        'id':                  prep_id,
+        'session_number':      session_number,
+        'game_year':           str(data.get('game_year', ''))[:40],
+        'location':            str(data.get('location', ''))[:200],
+        'status':              status,
+        'previous_session_id': str(data.get('previous_session_id', ''))[:40],
+        'previously':          str(data.get('previously', ''))[:10000],
+        'arcs_in_play':        data.get('arcs_in_play', []),
+        'npcs_staged':         data.get('npcs_staged', []),
+        'open_questions':      data.get('open_questions', []),
+        'gm_notes':            data.get('gm_notes', []),
+    }
+
+    with _prep_lock:
+        preps = _read_preps()
+        if any(p.get('id') == prep_id for p in preps):
+            return jsonify({'error': 'Prep ID already exists'}), 409
+        preps.append(prep)
+        _write_preps(preps)
+
+    log.info('[Prep] Created prep %s for session %s', prep_id, session_number)
+    return jsonify({'ok': True, 'id': prep_id, 'prep': prep}), 201
+
+@app.route('/api/prep/<prep_id>', methods=['PUT'])
+def api_update_prep(prep_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    if 'status' in data and data['status'] not in _PREP_STATUSES:
+        return jsonify({'error': f'status must be one of {_PREP_STATUSES}'}), 400
+
+    updatable = ('session_number', 'game_year', 'location', 'status',
+                 'previous_session_id', 'previously', 'arcs_in_play',
+                 'npcs_staged', 'open_questions', 'gm_notes')
+
+    with _prep_lock:
+        preps = _read_preps()
+        prep = next((p for p in preps if p.get('id') == prep_id), None)
+        if not prep:
+            return jsonify({'error': 'Prep not found'}), 404
+        for key in updatable:
+            if key in data:
+                prep[key] = data[key]
+        _write_preps(preps)
+
+    log.info('[Prep] Updated prep %s', prep_id)
+    return jsonify({'ok': True, 'prep': prep})
+
+@app.route('/api/prep/<prep_id>', methods=['DELETE'])
+def api_delete_prep(prep_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+
+    with _prep_lock:
+        preps = _read_preps()
+        original_len = len(preps)
+        preps = [p for p in preps if p.get('id') != prep_id]
+        if len(preps) == original_len:
+            return jsonify({'error': 'Prep not found'}), 404
+        _write_preps(preps)
+
+    log.info('[Prep] Deleted prep %s', prep_id)
+    return jsonify({'ok': True, 'deleted': prep_id})
+
+# ── Reverse Lookups ──────────────────────────────────────────────────────────
+
+@app.route('/api/npcs/<npc_id>/arcs')
+def api_npc_arcs(npc_id):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    arcs = _read_arcs()
+    linked = [a for a in arcs if any(n.get('npc_id') == npc_id for n in a.get('linked_npcs', []))]
+    return jsonify({'arcs': linked})
+
+@app.route('/api/chronicles/<year>/arcs')
+def api_chronicle_arcs(year):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    arcs = _read_arcs()
+    matched = [a for a in arcs if any(t.get('year') == year for t in a.get('timeline', []))]
+    return jsonify({'arcs': matched})
+
+# ── MCP Read API ─────────────────────────────────────────────────────────────
+
+@app.route('/api/mcp/npcs')
+@mcp_required
+def api_mcp_npcs():
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    search = request.args.get('search', '').lower()
+    npcs = [_safe_npc(n) for n in _all_npcs(binder)]
+    if search:
+        npcs = [n for n in npcs if search in (n.get('name') or '').lower()]
+    return jsonify({'npcs': npcs})
+
+@app.route('/api/mcp/npc/<name_or_id>')
+@mcp_required
+def api_mcp_npc(name_or_id):
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    all_npcs = _all_npcs(binder)
+    all_rels = binder.get('relationships', [])
+    needle = name_or_id.lower()
+    for npc in all_npcs:
+        if (npc.get('id') or '').lower() == needle or (npc.get('name') or '').lower() == needle:
+            result = _safe_npc(npc)
+            result['relationships'] = _npc_relationships(npc.get('id', ''), all_npcs, all_rels)
+            return jsonify(result)
+    return jsonify({'error': 'NPC not found'}), 404
+
+@app.route('/api/mcp/chronicle')
+@mcp_required
+def api_mcp_chronicle():
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    chronicle = binder.get('chronicle', {})
+    limit = request.args.get('limit', '5')
+    try:
+        limit = min(int(limit), 50)
+    except ValueError:
+        limit = 5
+    numeric_keys = []
+    for y in chronicle.keys():
+        try:
+            numeric_keys.append((int(y), y))
+        except (ValueError, TypeError):
+            continue
+    recent_years = [k for _, k in sorted(numeric_keys, reverse=True)[:limit]]
+    entries = [{'year': int(y), 'entries': chronicle[y]} for y in recent_years]
+    return jsonify({'chronicle': entries})
+
+@app.route('/api/mcp/binder-summary')
+@mcp_required
+def api_mcp_binder_summary():
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    arcs = _read_arcs()
+    active_arcs = [a for a in arcs if a.get('status') == 'active']
+    return jsonify({
+        'year':             binder.get('year'),
+        'npc_count':        len(_all_npcs(binder)),
+        'living_count':     len(binder.get('living', [])),
+        'dead_count':       len(binder.get('dead', [])),
+        'household_count':  len(binder.get('households', [])),
+        'manor_count':      len(binder.get('manors', {})),
+        'active_arc_count': len(active_arcs),
+    })
+
+# ── MCP Write API — NPC & Chronicle mutations ───────────────────────────────
+
+_MCP_NPC_UPDATABLE = (
+    'name', 'role', 'household', 'status', 'year_born', 'year_died',
+    'pronoun', 'manor', 'faction', 'glory', 'notes', 'eligibility', 'dowry',
+    'passions', 'skills', 'stats', 'con', 'blessed', 'blessed_note',
+    'barren', 'fate_touched', 'out_of_story', 'out_of_story_note',
+    'round_table', 'statblock_template',
+    'page_placed', 'page_court', 'page_type',
+    'training_path', 'training_where', 'training_npc_id', 'came_of_age',
+)
+
+
+@app.route('/api/mcp/npc', methods=['POST'])
+def api_mcp_create_npc():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    name = data.get('name', '')
+    if not isinstance(name, str) or not name.strip():
+        return jsonify({'error': 'name is required'}), 400
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        living = binder.get('living', [])
+        dead = binder.get('dead', [])
+        if isinstance(living, dict):
+            living = list(living.values())
+        if isinstance(dead, dict):
+            dead = list(dead.values())
+
+        existing_ids = {n.get('id') for n in living + dead if n.get('id')}
+        npc_num = 1
+        while f'npc-{npc_num:03d}' in existing_ids:
+            npc_num += 1
+        npc_id = f'npc-{npc_num:03d}'
+
+        npc = {
+            'id': npc_id,
+            'name': name.strip()[:200],
+            'role': str(data.get('role', ''))[:100],
+            'household': str(data.get('household', ''))[:100],
+            'status': str(data.get('status', 'Alive'))[:40],
+            'year_born': data.get('year_born'),
+            'year_died': data.get('year_died'),
+            'age': None,
+            'pronoun': str(data.get('pronoun', ''))[:40],
+            'manor': str(data.get('manor', ''))[:200],
+            'faction': str(data.get('faction', ''))[:100],
+            'glory': data.get('glory', 0),
+            'notes': str(data.get('notes', ''))[:10000],
+            'eligibility': str(data.get('eligibility', ''))[:200],
+            'dowry': str(data.get('dowry', ''))[:200],
+            'passions': str(data.get('passions', ''))[:4000],
+            'skills': str(data.get('skills', ''))[:4000],
+            'stats': str(data.get('stats', ''))[:4000],
+            'blessed': bool(data.get('blessed', False)),
+            'blessed_note': str(data.get('blessed_note', ''))[:500],
+            'con': data.get('con'),
+            'barren': bool(data.get('barren', False)),
+            'fate_touched': bool(data.get('fate_touched', False)),
+            'out_of_story': bool(data.get('out_of_story', False)),
+            'out_of_story_note': str(data.get('out_of_story_note', ''))[:500],
+            'round_table': bool(data.get('round_table', False)),
+            'statblock_template': str(data.get('statblock_template', ''))[:100],
+            'page_placed': data.get('page_placed', False),
+            'page_court': str(data.get('page_court', ''))[:200],
+            'page_type': str(data.get('page_type', ''))[:40],
+            'training_path': str(data.get('training_path', ''))[:40],
+            'training_where': str(data.get('training_where', ''))[:200],
+            'training_npc_id': str(data.get('training_npc_id', ''))[:40],
+            'came_of_age': data.get('came_of_age', False),
+            'retired': False,
+            'treeX': None,
+            'treeY': None,
+        }
+
+        living.append(npc)
+        binder['living'] = living
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Created NPC %s: %s', npc_id, npc['name'])
+    return jsonify({'ok': True, 'id': npc_id, 'npc': _safe_npc(npc)}), 201
+
+
+@app.route('/api/mcp/npc/<npc_id>', methods=['PATCH'])
+def api_mcp_update_npc(npc_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        living = binder.get('living', [])
+        dead = binder.get('dead', [])
+        if isinstance(living, dict):
+            living = list(living.values())
+        if isinstance(dead, dict):
+            dead = list(dead.values())
+
+        npc = None
+        source_list = None
+        for lst_name, lst in [('living', living), ('dead', dead)]:
+            for n in lst:
+                if n.get('id') == npc_id:
+                    npc = n
+                    source_list = lst_name
+                    break
+            if npc:
+                break
+
+        if not npc:
+            return jsonify({'error': 'NPC not found'}), 404
+
+        changed = []
+        for key in _MCP_NPC_UPDATABLE:
+            if key in data:
+                npc[key] = data[key]
+                changed.append(key)
+
+        if not changed:
+            return jsonify({'error': 'No updatable fields provided'}), 400
+
+        old_status = 'dead' if source_list == 'dead' else 'alive'
+        new_status = str(npc.get('status', 'Alive')).lower()
+        needs_move = (old_status == 'alive' and new_status == 'dead') or \
+                     (old_status == 'dead' and new_status != 'dead')
+
+        if needs_move:
+            if old_status == 'alive' and new_status == 'dead':
+                living = [n for n in living if n.get('id') != npc_id]
+                dead.append(npc)
+            elif old_status == 'dead' and new_status != 'dead':
+                dead = [n for n in dead if n.get('id') != npc_id]
+                living.append(npc)
+
+        binder['living'] = living
+        binder['dead'] = dead
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Updated NPC %s: %s', npc_id, ', '.join(changed))
+    return jsonify({'ok': True, 'id': npc_id, 'changed': changed, 'npc': _safe_npc(npc)})
+
+
+_VALID_REL_TYPES = {
+    'Spouse', 'Betrothed', 'Lover', 'Former Spouse',
+    'Child', 'Adopted Child', 'Bastard', 'Parent', 'Adoptive Parent',
+    'Sibling', 'Half-Sibling', 'Aunt/Uncle', 'Niece/Nephew', 'Cousin',
+    'Grandparent', 'Grandchild', 'Sworn Brother/Sister',
+    'Squire', 'Former Squire', 'Page', 'Vassal', 'Ward', 'Guardian', 'Other',
+}
+
+
+@app.route('/api/mcp/relationship', methods=['POST'])
+def api_mcp_add_relationship():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    source_id = data.get('sourceId', '')
+    target_id = data.get('targetId', '')
+    rel_type = data.get('type', '')
+    notes = str(data.get('notes', ''))[:500]
+
+    if not source_id or not target_id:
+        return jsonify({'error': 'sourceId and targetId are required'}), 400
+    if rel_type not in _VALID_REL_TYPES:
+        return jsonify({'error': f'Invalid type. Valid: {sorted(_VALID_REL_TYPES)}'}), 400
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        all_npcs = _all_npcs(binder)
+        npc_ids = {n.get('id') for n in all_npcs}
+        if source_id not in npc_ids:
+            return jsonify({'error': f'sourceId {source_id} not found'}), 404
+        if target_id not in npc_ids:
+            return jsonify({'error': f'targetId {target_id} not found'}), 404
+
+        rels = binder.get('relationships', [])
+        for r in rels:
+            if r.get('sourceId') == source_id and r.get('targetId') == target_id and r.get('type') == rel_type:
+                return jsonify({'error': 'Relationship already exists'}), 409
+
+        rel = {
+            'id': 'rel-' + str(uuid.uuid4()),
+            'sourceId': source_id,
+            'targetId': target_id,
+            'type': rel_type,
+        }
+        if notes:
+            rel['notes'] = notes
+        rels.append(rel)
+        binder['relationships'] = rels
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Added relationship %s -> %s (%s)', source_id, target_id, rel_type)
+    return jsonify({'ok': True, 'relationship': rel}), 201
+
+
+@app.route('/api/mcp/relationship/<rel_id>', methods=['DELETE'])
+def api_mcp_delete_relationship(rel_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        rels = binder.get('relationships', [])
+        before = len(rels)
+        binder['relationships'] = [r for r in rels if r.get('id') != rel_id]
+        if len(binder['relationships']) == before:
+            return jsonify({'error': 'Relationship not found'}), 404
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Deleted relationship %s', rel_id)
+    return jsonify({'ok': True, 'deleted': rel_id})
+
+
+@app.route('/api/mcp/npc/<npc_id>/relationships', methods=['GET'])
+def api_mcp_npc_relationships(npc_id):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    all_npcs = _all_npcs(binder)
+    all_rels = binder.get('relationships', [])
+    id_to_name = {n.get('id'): n.get('name', '?') for n in all_npcs if n.get('id')}
+    if npc_id not in id_to_name:
+        return jsonify({'error': 'NPC not found'}), 404
+    matched = []
+    for rel in all_rels:
+        src, tgt = rel.get('sourceId'), rel.get('targetId')
+        if src == npc_id or tgt == npc_id:
+            matched.append({
+                'id': rel.get('id', ''),
+                'sourceId': src,
+                'sourceName': id_to_name.get(src, src),
+                'targetId': tgt,
+                'targetName': id_to_name.get(tgt, tgt),
+                'type': rel.get('type', ''),
+                'notes': rel.get('notes', ''),
+            })
+    return jsonify({'npc_id': npc_id, 'relationships': matched})
+
+
+@app.route('/api/mcp/chronicle/<year>', methods=['POST'])
+def api_mcp_add_chronicle(year):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    text = data.get('text', '')
+    if not isinstance(text, str) or not text.strip():
+        return jsonify({'error': 'text is required'}), 400
+
+    try:
+        year_int = int(year)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'year must be a number'}), 400
+
+    cat = str(data.get('cat', 'political'))[:40]
+    entry_id = 'ev-' + str(uuid.uuid4())
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    entry = {
+        'id':   entry_id,
+        'text': text.strip()[:4000],
+        'cat':  cat,
+        'ts':   int(datetime.now(timezone.utc).timestamp() * 1000),
+    }
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        chronicle = binder.setdefault('chronicle', {})
+        year_key = str(year_int)
+        chronicle.setdefault(year_key, []).append(entry)
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Added chronicle entry for year %s: %s', year_int, entry_id)
+    return jsonify({'ok': True, 'id': entry_id, 'entry': entry}), 201
+
+
+@app.route('/api/mcp/chronicle/<year>/<entry_id>', methods=['PATCH'])
+def api_mcp_update_chronicle(year, entry_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    try:
+        year_int = int(year)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'year must be a number'}), 400
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        chronicle = binder.get('chronicle', {})
+        entries = chronicle.get(str(year_int), [])
+
+        entry = next((e for e in entries if e.get('id') == entry_id), None)
+        if not entry:
+            return jsonify({'error': 'Chronicle entry not found'}), 404
+
+        changed = []
+        if 'text' in data:
+            entry['text'] = str(data['text'])[:4000]
+            changed.append('text')
+        if 'cat' in data:
+            entry['cat'] = str(data['cat'])[:40]
+            changed.append('cat')
+
+        if not changed:
+            return jsonify({'error': 'No updatable fields provided (text, cat)'}), 400
+
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Updated chronicle entry %s (year %s): %s', entry_id, year_int, ', '.join(changed))
+    return jsonify({'ok': True, 'id': entry_id, 'changed': changed, 'entry': entry})
+
+
+@app.route('/api/mcp/chronicle/<year>/<entry_id>', methods=['DELETE'])
+def api_mcp_delete_chronicle(year, entry_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+
+    try:
+        year_int = int(year)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'year must be a number'}), 400
+
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        chronicle = binder.get('chronicle', {})
+        year_key = str(year_int)
+        entries = chronicle.get(year_key, [])
+
+        original_len = len(entries)
+        entries = [e for e in entries if e.get('id') != entry_id]
+        if len(entries) == original_len:
+            return jsonify({'error': 'Chronicle entry not found'}), 404
+
+        chronicle[year_key] = entries
+        _rotate_backup(save_path)
+        _write_json(save_path, binder)
+
+    log.info('[MCP] Deleted chronicle entry %s from year %s', entry_id, year_int)
+    return jsonify({'ok': True, 'deleted': entry_id})
+
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
 

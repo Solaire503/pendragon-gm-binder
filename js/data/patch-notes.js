@@ -400,6 +400,30 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.4.0',
+    date:    '2026-06-25',
+    sections: [
+      {
+        heading: 'MCP Bridge — Claude Integration',
+        items: [
+          'A new MCP (Model Context Protocol) server exposes 33 tools that let Claude read and write campaign data directly: story arcs, session prep, NPCs, chronicles, and relationships.',
+          'Claude Code connects locally via stdio. Claude App (claude.ai) connects over the internet via the public endpoint at mcp.pendragon-binder.com — secured behind Cloudflare Tunnel.',
+          'NPC updates use a partial update pattern — Claude only sends the fields being changed, keeping edits clean and targeted.',
+          'New relationship management endpoints: create, read, and delete NPC relationship edges (Spouse, Parent, Child, Squire, etc.) directly through Claude.',
+          'Runs as a dedicated systemd service (pendragon-mcp) alongside the main Binder.',
+        ],
+      },
+      {
+        heading: 'Bug Fix — Squire Relationship Duplication (for real this time)',
+        items: [
+          'The previous server-side merge fix (v3.3.1) wasn\'t the whole story — the root cause was in the client.',
+          'Three places in the training flow checked for an existing Squire relationship before creating one, but none checked for Former Squire. After coming of age converted Squire to Former Squire, re-editing training info would create a duplicate.',
+          'All three checks now also look for Former Squire, preventing the duplicate from being created in the first place.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.3.1',
     date:    '2026-06-19',
     sections: [

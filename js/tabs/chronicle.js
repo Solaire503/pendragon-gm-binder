@@ -114,6 +114,48 @@ const TabChronicle = {
     if (idx !== -1) { list.splice(idx, 1); STORE.save(); this.render(); }
   },
 
+  editEvent(year, id) {
+    const list = STORE.chronicle?.[String(year)];
+    if (!list) return;
+    const ev = list.find(e => e.id === id);
+    if (!ev) return;
+    const safeId = id.replace(/'/g, "\\'");
+    const catOptions = Object.entries(CHRONICLE_CATS)
+      .map(([k, v]) => `<option value="${k}" ${k === ev.cat ? 'selected' : ''}>${v.label}</option>`)
+      .join('');
+    Modal.open(`
+      <h2 style="font-family:var(--font-heading);font-size:1.1rem;letter-spacing:0.1em;color:var(--gold-text);margin-bottom:16px;">Edit Chronicle Entry</h2>
+      <div style="margin-bottom:10px;">
+        <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">CATEGORY</label>
+        <select class="edit-input" id="chron-edit-cat" style="width:auto;padding:5px 8px;font-size:0.78rem;">${catOptions}</select>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-family:var(--font-heading);font-size:0.65rem;letter-spacing:0.08em;color:var(--ink-soft);display:block;margin-bottom:5px;">NARRATIVE</label>
+        <textarea class="edit-input" id="chron-edit-text" rows="5"
+          style="width:100%;resize:vertical;">${esc(ev.text)}</textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+        <button class="btn btn-primary" onclick="TabChronicle._confirmEdit(${year},'${safeId}')">Save</button>
+      </div>
+    `);
+  },
+
+  _confirmEdit(year, id) {
+    const text = document.getElementById('chron-edit-text')?.value?.trim();
+    const cat  = document.getElementById('chron-edit-cat')?.value;
+    if (!text) { Toast.error('Entry text cannot be empty'); return; }
+    const list = STORE.chronicle?.[String(year)];
+    if (!list) return;
+    const ev = list.find(e => e.id === id);
+    if (!ev) return;
+    ev.text = text;
+    if (cat) ev.cat = cat;
+    STORE.save();
+    Modal.close();
+    this.render();
+  },
+
   // ── EXPORT ───────────────────────────────────────────────────
   exportYear(year) {
     const deaths    = this._getDeaths(year);
@@ -263,6 +305,8 @@ const TabChronicle = {
                 ${n.role ? `<span style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.08em;color:#5a3a2a;">${esc(n.role)}</span>` : ''}
               </div>
               ${n.household ? `<span style="font-family:var(--font-heading);font-size:0.58rem;color:#5a3a2a;flex-shrink:0;">${esc(n.household)}</span>` : ''}
+              ${isGM() ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.65rem;flex-shrink:0;opacity:0.6;"
+                onclick="Components.openNpcCard('${n.id}')" title="Edit NPC">✎</button>` : ''}
             </div>`).join('')}
         </div>
       </div>`;
@@ -282,6 +326,8 @@ const TabChronicle = {
                 ${n.fate_touched ? `<span title="Fate-Touched" style="color:#1a8a40;font-size:0.75rem;">◈</span>` : ''}
               </div>
               ${n.household ? `<span style="font-family:var(--font-heading);font-size:0.58rem;color:#5a3a2a;flex-shrink:0;">${esc(n.household)}</span>` : ''}
+              ${isGM() ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.65rem;flex-shrink:0;opacity:0.6;"
+                onclick="Components.openNpcCard('${n.id}')" title="Edit NPC">✎</button>` : ''}
             </div>`).join('')}
         </div>
       </div>`;
@@ -301,6 +347,8 @@ const TabChronicle = {
                 <span style="color:#5a3a2a;margin:0 6px;font-weight:400;">&amp;</span>
                 ${this._npcPill(m.npcB)}
               </div>
+              ${isGM() && m.npcA ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.65rem;flex-shrink:0;opacity:0.6;"
+                onclick="Components.openNpcCard('${m.npcA.id}')" title="Edit NPC">✎</button>` : ''}
             </div>`).join('')}
         </div>
       </div>`;
@@ -319,8 +367,12 @@ const TabChronicle = {
         <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 14px;background:var(--vellum-mid);border:1px solid var(--vellum-deep);border-left:3px solid ${c.colour}88;border-radius:var(--radius);">
           <span style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.07em;color:#fff;background:${c.colour};padding:2px 8px;border-radius:10px;white-space:nowrap;margin-top:2px;flex-shrink:0;">${c.label}</span>
           <div style="flex:1;font-size:0.88rem;line-height:1.55;color:var(--ink);font-weight:500;">${AtMention.render(e.text)}</div>
-          ${isGM() ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.65rem;flex-shrink:0;opacity:0.6;"
-            onclick="TabChronicle.deleteEvent(${year},'${safeId}')">✕</button>` : ''}
+          ${isGM() ? `<div style="display:flex;gap:2px;flex-shrink:0;">
+            <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.65rem;opacity:0.6;"
+              onclick="TabChronicle.editEvent(${year},'${safeId}')" title="Edit entry">✎</button>
+            <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.65rem;opacity:0.6;"
+              onclick="TabChronicle.deleteEvent(${year},'${safeId}')" title="Delete entry">✕</button>
+          </div>` : ''}
         </div>`;
     }).join('');
 

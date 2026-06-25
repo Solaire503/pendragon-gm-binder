@@ -17,6 +17,9 @@ presence.json
 broadcast_tasks.json
 # GM session notes (runtime, not source-controlled)
 comments.json
+# Story arcs & session prep (runtime campaign state)
+arcs.json
+session-prep.json
 
 # ===== Old exports / one-off files =====
 DEAD_NPCs.csv
@@ -54,6 +57,7 @@ __pycache__/
 .Python
 venv/
 .venv/
+mcp-venv/
 env/
 
 # ===== OS junk =====

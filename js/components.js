@@ -1492,8 +1492,9 @@ const Components = {
       changes.training_where  = '';
       const path = changes.training_path.toLowerCase();
       const relType = path.includes('page') ? 'Page' : 'Squire';
+      const relAlts = relType === 'Squire' ? ['Squire', 'Former Squire'] : [relType];
       const alreadyLinked = STORE.relationships.some(r =>
-        r.type === relType &&
+        relAlts.includes(r.type) &&
         ((r.sourceId === trainingNpcId && r.targetId === id) ||
          (r.sourceId === id && r.targetId === trainingNpcId))
       );
@@ -1806,7 +1807,7 @@ const Components = {
         changes.training_npc_id = npcId;
         changes.training_where  = '';
         const alreadyLinked = STORE.relationships.some(r =>
-          r.type === 'Squire' && ((r.sourceId === npcId && r.targetId === id) || (r.sourceId === id && r.targetId === npcId))
+          (r.type === 'Squire' || r.type === 'Former Squire') && ((r.sourceId === npcId && r.targetId === id) || (r.sourceId === id && r.targetId === npcId))
         );
         if (!alreadyLinked) STORE.addRelationship(npcId, id, 'Squire', '');
       } else {
@@ -2002,8 +2003,9 @@ const Components = {
     if (trainingNpcId) {
       const path = npc.training_path.toLowerCase();
       const relType = path.includes('page') ? 'Page' : 'Squire';
+      const relAlts2 = relType === 'Squire' ? ['Squire', 'Former Squire'] : [relType];
       const alreadyLinked = STORE.relationships.some(r =>
-        r.type === relType &&
+        relAlts2.includes(r.type) &&
         ((r.sourceId === trainingNpcId && r.targetId === id) ||
          (r.sourceId === id && r.targetId === trainingNpcId))
       );
