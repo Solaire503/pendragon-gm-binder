@@ -223,6 +223,16 @@ const STORE = {
     const id = 'se-' + Date.now();
     if (!npc.soloEvents) npc.soloEvents = [];
     npc.soloEvents.unshift({ id, ...event });
+    if (event.year && event.title) {
+      const yearKey = String(event.year);
+      if (!this.chronicle[yearKey]) this.chronicle[yearKey] = [];
+      this.chronicle[yearKey].push({
+        id: 'ev-' + crypto.randomUUID(),
+        text: `${npc.name} — ${event.title}`,
+        cat: 'personal',
+        ts: Date.now(),
+      });
+    }
     this.save();
     return id;
   },
