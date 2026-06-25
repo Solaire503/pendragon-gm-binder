@@ -4614,6 +4614,19 @@ def api_mcp_add_event(npc_id):
         if 'soloEvents' not in npc:
             npc['soloEvents'] = []
         npc['soloEvents'].insert(0, event)
+
+        if event.get('year'):
+            year_key = str(event['year'])
+            chronicle = binder.setdefault('chronicle', {})
+            year_list = chronicle.setdefault(year_key, [])
+            npc_name = npc.get('name', 'Unknown')
+            year_list.append({
+                'id':  'ev-' + str(uuid.uuid4()),
+                'text': f'{npc_name} — {title}',
+                'cat':  'personal',
+                'ts':   int(__import__("time").time() * 1000),
+            })
+
         _rotate_backup(save_path)
         _write_json(save_path, binder)
 
