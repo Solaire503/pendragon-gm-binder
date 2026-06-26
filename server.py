@@ -4415,10 +4415,22 @@ def api_mcp_update_npc(npc_id):
         if not npc:
             return jsonify({'error': 'NPC not found'}), 404
 
+        _STR_LIMITS = {
+            'name': 200, 'role': 100, 'household': 100, 'status': 50,
+            'pronoun': 50, 'manor': 200, 'faction': 100, 'notes': 5000,
+            'eligibility': 100, 'dowry': 200, 'passions': 3000,
+            'skills': 3000, 'stats': 3000, 'blessed_note': 500,
+            'out_of_story_note': 500, 'statblock_template': 100,
+            'page_court': 200, 'page_type': 50, 'training_path': 50,
+            'training_where': 200, 'training_npc_id': 50,
+        }
         changed = []
         for key in _MCP_NPC_UPDATABLE:
             if key in data:
-                npc[key] = data[key]
+                val = data[key]
+                if key in _STR_LIMITS and isinstance(val, str):
+                    val = val[:_STR_LIMITS[key]]
+                npc[key] = val
                 changed.append(key)
 
         if not changed:
@@ -4624,7 +4636,7 @@ def api_mcp_add_event(npc_id):
                 'id':  'ev-' + str(uuid.uuid4()),
                 'text': f'{npc_name} — {title}',
                 'cat':  'personal',
-                'ts':   int(__import__("time").time() * 1000),
+                'ts':   int(time.time() * 1000),
             })
 
         _rotate_backup(save_path)

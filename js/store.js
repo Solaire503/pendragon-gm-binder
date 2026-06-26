@@ -224,6 +224,7 @@ const STORE = {
     if (!npc.soloEvents) npc.soloEvents = [];
     npc.soloEvents.unshift({ id, ...event });
     if (event.year && event.title) {
+      if (!this.chronicle) this.chronicle = {};
       const yearKey = String(event.year);
       if (!this.chronicle[yearKey]) this.chronicle[yearKey] = [];
       this.chronicle[yearKey].push({

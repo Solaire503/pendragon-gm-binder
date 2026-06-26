@@ -267,56 +267,56 @@ def create_npc(
 )
 def update_npc(
     npc_id: str,
-    name: str = "",
-    role: str = "",
-    status: str = "",
+    name: str | None = None,
+    role: str | None = None,
+    status: str | None = None,
     year_born: int | None = None,
     year_died: int | None = None,
-    pronoun: str = "",
-    manor: str = "",
-    household: str = "",
-    faction: str = "",
+    pronoun: str | None = None,
+    manor: str | None = None,
+    household: str | None = None,
+    faction: str | None = None,
     glory: int | None = None,
-    notes: str = "",
-    eligibility: str = "",
-    dowry: str = "",
-    passions: str = "",
-    skills: str = "",
-    stats: str = "",
+    notes: str | None = None,
+    eligibility: str | None = None,
+    dowry: str | None = None,
+    passions: str | None = None,
+    skills: str | None = None,
+    stats: str | None = None,
+    con: int | None = None,
+    blessed: bool | None = None,
+    blessed_note: str | None = None,
+    barren: bool | None = None,
+    fate_touched: bool | None = None,
+    out_of_story: bool | None = None,
+    out_of_story_note: str | None = None,
+    round_table: bool | None = None,
+    statblock_template: str | None = None,
+    page_type: str | None = None,
+    page_placed: str | None = None,
+    page_court: str | None = None,
+    training_path: str | None = None,
+    training_where: str | None = None,
+    training_npc_id: str | None = None,
+    came_of_age: bool | None = None,
 ) -> dict:
     body = {}
-    if name:
-        body["name"] = name
-    if role:
-        body["role"] = role
-    if status:
-        body["status"] = status
-    if year_born is not None:
-        body["year_born"] = year_born
-    if year_died is not None:
-        body["year_died"] = year_died
-    if pronoun:
-        body["pronoun"] = pronoun
-    if manor:
-        body["manor"] = manor
-    if household:
-        body["household"] = household
-    if faction:
-        body["faction"] = faction
-    if glory is not None:
-        body["glory"] = glory
-    if notes:
-        body["notes"] = notes
-    if eligibility:
-        body["eligibility"] = eligibility
-    if dowry:
-        body["dowry"] = dowry
-    if passions:
-        body["passions"] = passions
-    if skills:
-        body["skills"] = skills
-    if stats:
-        body["stats"] = stats
+    for key, val in {
+        "name": name, "role": role, "status": status, "year_born": year_born,
+        "year_died": year_died, "pronoun": pronoun, "manor": manor,
+        "household": household, "faction": faction, "glory": glory,
+        "notes": notes, "eligibility": eligibility, "dowry": dowry,
+        "passions": passions, "skills": skills, "stats": stats, "con": con,
+        "blessed": blessed, "blessed_note": blessed_note, "barren": barren,
+        "fate_touched": fate_touched, "out_of_story": out_of_story,
+        "out_of_story_note": out_of_story_note, "round_table": round_table,
+        "statblock_template": statblock_template, "page_type": page_type,
+        "page_placed": page_placed, "page_court": page_court,
+        "training_path": training_path, "training_where": training_where,
+        "training_npc_id": training_npc_id, "came_of_age": came_of_age,
+    }.items():
+        if val is not None:
+            body[key] = val
     if not body:
         return {"error": "No fields to update"}
     return _api("PATCH", f"/api/mcp/npc/{npc_id}", json=body)
@@ -328,8 +328,8 @@ def update_npc(
     description=(
         "Add a chronicle entry to a specific game year. 'year' is the numeric "
         "game year (e.g. 502). 'text' is the event description. "
-        "'cat' is the category (default 'political' — also: 'death', 'battle', "
-        "'marriage', 'birth', 'religious', 'custom')."
+        "'cat' is the category (default 'political' — also: 'campaign', 'battle', "
+        "'personal', 'supernatural', 'other')."
     )
 )
 def add_chronicle_entry(
@@ -349,13 +349,13 @@ def add_chronicle_entry(
 def update_chronicle_entry(
     year: int,
     entry_id: str,
-    text: str = "",
-    cat: str = "",
+    text: str | None = None,
+    cat: str | None = None,
 ) -> dict:
     body = {}
-    if text:
+    if text is not None:
         body["text"] = text
-    if cat:
+    if cat is not None:
         body["cat"] = cat
     if not body:
         return {"error": "No fields to update"}
@@ -478,25 +478,25 @@ def add_life_event(
 def update_life_event(
     npc_id: str,
     event_id: str,
-    title: str = "",
-    year: int = 0,
-    season: str = "",
-    mechDesc: str = "",
-    flavorText: str = "",
-    userNotes: str = "",
+    title: str | None = None,
+    year: int | None = None,
+    season: str | None = None,
+    mechDesc: str | None = None,
+    flavorText: str | None = None,
+    userNotes: str | None = None,
 ) -> dict:
     body = {}
-    if title:
+    if title is not None:
         body["title"] = title
-    if year:
+    if year is not None:
         body["year"] = year
-    if season:
+    if season is not None:
         body["season"] = season
-    if mechDesc:
+    if mechDesc is not None:
         body["mechDesc"] = mechDesc
-    if flavorText:
+    if flavorText is not None:
         body["flavorText"] = flavorText
-    if userNotes:
+    if userNotes is not None:
         body["userNotes"] = userNotes
     if not body:
         return {"error": "No fields to update"}
@@ -559,16 +559,16 @@ def update_arc_status(arc_id: str, status: str) -> dict:
 )
 def update_arc(
     arc_id: str,
-    title: str = "",
-    summary: str = "",
-    notes: str = "",
+    title: str | None = None,
+    summary: str | None = None,
+    notes: str | None = None,
 ) -> dict:
     body = {}
-    if title:
+    if title is not None:
         body["title"] = title
-    if summary:
+    if summary is not None:
         body["summary"] = summary
-    if notes:
+    if notes is not None:
         body["notes"] = notes
     if not body:
         return {"error": "No fields to update"}
@@ -628,19 +628,19 @@ def complete_objective(
 def update_objective(
     arc_id: str,
     obj_id: str,
-    text: str = "",
-    status: str = "",
-    notes: str = "",
-    completed: str = "",
+    text: str | None = None,
+    status: str | None = None,
+    notes: str | None = None,
+    completed: str | None = None,
 ) -> dict:
     body = {}
-    if text:
+    if text is not None:
         body["text"] = text
-    if status:
+    if status is not None:
         body["status"] = status
-    if notes:
+    if notes is not None:
         body["notes"] = notes
-    if completed:
+    if completed is not None:
         body["completed"] = completed
     if not body:
         return {"error": "No fields to update"}
@@ -757,11 +757,11 @@ def create_prep(
 def update_prep(
     prep_id: str,
     session_number: int | None = None,
-    game_year: str = "",
-    location: str = "",
-    status: str = "",
-    previous_session_id: str = "",
-    previously: str = "",
+    game_year: str | None = None,
+    location: str | None = None,
+    status: str | None = None,
+    previous_session_id: str | None = None,
+    previously: str | None = None,
     arcs_in_play: list | None = None,
     npcs_staged: list | None = None,
     open_questions: list | None = None,
@@ -770,15 +770,15 @@ def update_prep(
     body = {}
     if session_number is not None:
         body["session_number"] = session_number
-    if game_year:
+    if game_year is not None:
         body["game_year"] = game_year
-    if location:
+    if location is not None:
         body["location"] = location
-    if status:
+    if status is not None:
         body["status"] = status
-    if previous_session_id:
+    if previous_session_id is not None:
         body["previous_session_id"] = previous_session_id
-    if previously:
+    if previously is not None:
         body["previously"] = previously
     if arcs_in_play is not None:
         body["arcs_in_play"] = arcs_in_play

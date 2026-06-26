@@ -406,7 +406,7 @@ const PATCH_NOTES = [
       {
         heading: 'MCP Bridge — Claude Integration',
         items: [
-          'A new MCP (Model Context Protocol) server exposes 33 tools that let Claude read and write campaign data directly: story arcs, session prep, NPCs, chronicles, and relationships.',
+          'A new MCP (Model Context Protocol) server exposes 37 tools that let Claude read and write campaign data directly: story arcs, session prep, NPCs, chronicles, relationships, and life events.',
           'Claude Code connects locally via stdio. Claude App (claude.ai) connects over the internet via the public endpoint at mcp.pendragon-binder.com — secured behind Cloudflare Tunnel.',
           'NPC updates use a partial update pattern — Claude only sends the fields being changed, keeping edits clean and targeted.',
           'New relationship management endpoints: create, read, and delete NPC relationship edges (Spouse, Parent, Child, Squire, etc.) directly through Claude.',
