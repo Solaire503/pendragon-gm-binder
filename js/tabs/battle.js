@@ -80,7 +80,7 @@ const TabBattle = {
       } else if (res.data.state === 'active') {
         await this._loadAndRenderConsole(panel);
       } else if (res.data.state === 'finalizing') {
-        this._renderFinalizingPlaceholder(panel, res.data);
+        await this._loadAndRenderFinalization(panel);
       } else {
         this._renderEmpty(panel);
       }
@@ -816,7 +816,7 @@ const TabBattle = {
         <div class="battle-empty-icon">⚔</div>
         <h2 class="battle-empty-title">${esc(b.name)}</h2>
         <p class="battle-empty-text">Round ${b.currentRound} / ${b.maxRounds}</p>
-        <p class="muted">Player battle view coming in Phase 4.</p>
+        <p class="muted" style="margin-top:12px;">Thanks for clicking the battle banner or coming to the battle tab :) Player view coming! When? TBD, ask Steve.</p>
       </div>`;
   },
 
@@ -1614,8 +1614,9 @@ const TabBattle = {
   _onEnemyDragStart(ev, eid, srcPid) {
     ev.dataTransfer.setData('text/plain', JSON.stringify({ eid, srcPid }));
     ev.dataTransfer.effectAllowed = 'move';
-    ev.currentTarget.style.opacity = '0.5';
-    ev.currentTarget.addEventListener('dragend', () => { ev.currentTarget.style.opacity = ''; }, { once: true });
+    const el = ev.currentTarget;
+    el.style.opacity = '0.5';
+    el.addEventListener('dragend', () => { el.style.opacity = ''; }, { once: true });
   },
 
   _onPKDragOver(ev) {
@@ -1680,16 +1681,128 @@ const TabBattle = {
     await this.render();
   },
 
-  _renderFinalizingPlaceholder(panel, data) {
+  async _loadAndRenderFinalization(panel) {
+    const res = await API.get('/api/battle/state');
+    if (!res.ok || !res.data.battle) {
+      panel.innerHTML = '<p class="muted" style="padding:2rem">Could not load battle state.</p>';
+      return;
+    }
+    this._battle = res.data.battle;
+    const b = this._battle;
+
+    const OUTCOME_OPTS = [
+      { value: 'decisive_victory', label: 'Decisive Victory' },
+      { value: 'victory', label: 'Victory' },
+      { value: 'indecisive', label: 'Indecisive' },
+      { value: 'defeat', label: 'Defeat' },
+      { value: 'decisive_defeat', label: 'Decisive Defeat' },
+      { value: 'scripted', label: 'Scripted' },
+    ];
+    const STATUS_LABELS = {
+      active: 'Active', major_wound: 'Major Wound', unconscious: 'Unconscious',
+      dead: 'Dead', alone: 'Alone in Field', rear: 'Retired to Rear',
+    };
+    const STATUS_COLOURS = {
+      active: '#208060', major_wound: '#c07820', unconscious: '#c07820',
+      dead: '#c03030', alone: '#9040c0', rear: '#707070',
+    };
+
+    const sizeLabel = (this.SIZES.find(s => s.value === b.size) || {}).label || b.size;
+    const sorted = [...(b.participants || [])].sort((a, b_) => {
+      if (a.isPK !== b_.isPK) return a.isPK ? -1 : 1;
+      return a.name.localeCompare(b_.name);
+    });
+
+    const participantRows = sorted.map(p => {
+      const kills = (p.killLedger || []).length;
+      const st = STATUS_LABELS[p.status] || p.status;
+      const stCol = STATUS_COLOURS[p.status] || '#707070';
+      const passionStr = p.passion
+        ? `${esc(p.passion.name)} (${esc(p.passion.result)})`
+        : '';
+      return `
+        <tr style="border-bottom:1px solid var(--vellum-deep);">
+          <td style="padding:8px 12px;font-weight:${p.isPK ? '700' : '500'};color:var(--ink);">
+            ${p.isPK ? '<span style="color:var(--gold-text);">⚜</span> ' : ''}${esc(p.name)}
+          </td>
+          <td style="padding:8px 12px;text-align:center;font-weight:600;">${kills}</td>
+          <td style="padding:8px 12px;">
+            <span style="font-size:0.75rem;padding:2px 8px;border-radius:10px;background:${stCol}18;color:${stCol};font-weight:600;">${st}</span>
+          </td>
+          <td style="padding:8px 12px;font-size:0.8rem;color:var(--ink-soft);font-style:italic;">${passionStr}</td>
+        </tr>`;
+    }).join('');
+
+    const outcomeRadios = OUTCOME_OPTS.map(o => `
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 0;">
+        <input type="radio" name="battle-outcome" value="${o.value}">
+        <span style="font-size:0.88rem;">${o.label}</span>
+      </label>`).join('');
+
     panel.innerHTML = `
-      <div class="battle-empty">
-        <div class="battle-empty-icon">⚔</div>
-        <h2 class="battle-empty-title">${esc(data.name)}</h2>
-        <p class="battle-empty-text">The battle is over. The chronicler writes...</p>
-        ${isGM() ? `<div style="margin-top:20px;display:flex;gap:12px;justify-content:center">
-          <button class="btn btn-primary" onclick="TabBattle._resumeBattle()">Resume Battle</button>
-          <button class="btn btn-muted" onclick="TabBattle._abandonBattle()">Abandon</button>
+      <div style="max-width:800px;margin:0 auto;padding:24px 16px;">
+        <div style="text-align:center;margin-bottom:28px;">
+          <div style="font-size:1.6rem;margin-bottom:6px;">⚔</div>
+          <h2 style="font-family:var(--font-heading);font-size:1.4rem;letter-spacing:0.12em;color:var(--gold-text);margin:0 0 6px 0;">${esc(b.name)}</h2>
+          <div style="font-size:0.8rem;color:var(--ink-soft);">
+            ${b.location ? esc(b.location) + ' · ' : ''}${esc(sizeLabel)} · Round ${b.currentRound}/${b.maxRounds}
+          </div>
+        </div>
+
+        ${isGM() ? `
+        <div style="margin-bottom:24px;">
+          <div style="font-family:var(--font-heading);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--crimson-mid);margin-bottom:10px;">Outcome</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;">
+            ${outcomeRadios}
+          </div>
         </div>` : ''}
+
+        <div style="margin-bottom:24px;">
+          <div style="font-family:var(--font-heading);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold-text);margin-bottom:10px;">The Conroi</div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--vellum-deep);">
+                  <th style="padding:6px 12px;text-align:left;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);text-transform:uppercase;">Name</th>
+                  <th style="padding:6px 12px;text-align:center;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);text-transform:uppercase;">Kills</th>
+                  <th style="padding:6px 12px;text-align:left;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);text-transform:uppercase;">Status</th>
+                  <th style="padding:6px 12px;text-align:left;font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.1em;color:var(--ink-soft);text-transform:uppercase;">Passion</th>
+                </tr>
+              </thead>
+              <tbody>${participantRows}</tbody>
+            </table>
+          </div>
+        </div>
+
+        ${isGM() ? `
+        <div style="margin-bottom:24px;">
+          <div style="font-family:var(--font-heading);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold-text);margin-bottom:10px;">GM Narrative</div>
+          <textarea id="battle-narrative" class="edit-input" rows="4"
+            placeholder="Record what happened in this battle..."
+            style="width:100%;resize:vertical;font-size:0.88rem;line-height:1.5;"></textarea>
+        </div>
+
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="TabBattle._commitBattle()">📜 Commit to Chronicle</button>
+          <button class="btn btn-ghost" onclick="TabBattle._resumeBattle()">Resume Battle</button>
+          <button class="btn btn-muted" onclick="TabBattle._abandonBattle()">Abandon</button>
+        </div>` : `
+        <div class="battle-empty">
+          <p class="battle-empty-text">The battle is over. The chronicler writes...</p>
+        </div>`}
       </div>`;
+  },
+
+  async _commitBattle() {
+    const outcome = document.querySelector('input[name="battle-outcome"]:checked')?.value;
+    if (!outcome) { Toast.show('Please select an outcome', 'error'); return; }
+    const gmNarrative = document.getElementById('battle-narrative')?.value?.trim() || '';
+    if (!confirm('Commit this battle to the Chronicle? This cannot be undone.')) return;
+    const res = await API.post('/api/battle/commit', { outcome, gmNarrative });
+    if (!res.ok) { Toast.show(res.error || 'Failed to commit', 'error'); return; }
+    this._battle = null;
+    Toast.show('Battle committed to the Chronicle', 'success');
+    await STORE.loadFromFile();
+    await this.render();
   },
 };

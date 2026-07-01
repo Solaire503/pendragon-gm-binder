@@ -90,7 +90,14 @@ const TabChronicle = {
 
   _getCustom(year) {
     return (STORE.chronicle[String(year)] || [])
+      .filter(e => e.type !== 'battle')
       .slice()
+      .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  },
+
+  _getBattles(year) {
+    return (STORE.chronicle[String(year)] || [])
+      .filter(e => e.type === 'battle')
       .sort((a, b) => (a.ts || 0) - (b.ts || 0));
   },
 
@@ -225,12 +232,13 @@ const TabChronicle = {
     const deaths    = this._getDeaths(year);
     const births    = this._getBirths(year);
     const marriages = this._getMarriages(year);
+    const battles   = this._getBattles(year);
     const custom    = this._getCustom(year);
     const all       = this._allYears();
     const idx       = all.indexOf(year);
     const hasPrev   = idx > 0;
     const hasNext   = idx < all.length - 1;
-    const total     = deaths.length + births.length + marriages.length + custom.length;
+    const total     = deaths.length + births.length + marriages.length + battles.length + custom.length;
 
     el.innerHTML = `
       <div style="max-width:800px;margin:0 auto;padding:24px 16px;">
@@ -261,6 +269,7 @@ const TabChronicle = {
             onclick="TabChronicle.copyExport(${year})" title="Copy this year as markdown">⎘ Export</button>
         </div>
 
+        ${this._renderBattles(battles, year)}
         ${this._renderDeaths(deaths)}
         ${this._renderBirths(births)}
         ${this._renderMarriages(marriages)}
@@ -350,6 +359,107 @@ const TabChronicle = {
               ${isGM() && m.npcA ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.65rem;flex-shrink:0;opacity:0.6;"
                 onclick="Components.openNpcCard('${m.npcA.id}')" title="Edit NPC">✎</button>` : ''}
             </div>`).join('')}
+        </div>
+      </div>`;
+  },
+
+  _renderBattles(battles, year) {
+    if (!battles.length) return '';
+    const OUTCOME_LABELS = {
+      decisive_victory: 'Decisive Victory', victory: 'Victory',
+      indecisive: 'Indecisive', defeat: 'Defeat',
+      decisive_defeat: 'Decisive Defeat', scripted: 'Scripted',
+    };
+    const SIZE_LABELS = {
+      fight: 'Fight', skirmish: 'Skirmish', clash: 'Clash',
+      small: 'Small Battle', medium: 'Medium Battle',
+      large: 'Large Battle', huge: 'Huge Battle',
+    };
+    const STATUS_LABELS = {
+      active: 'Active', major_wound: 'Major Wound', unconscious: 'Unconscious',
+      dead: 'Dead', alone: 'Alone', rear: 'Rear',
+    };
+    const STATUS_COLOURS = {
+      active: '#208060', major_wound: '#c07820', unconscious: '#c07820',
+      dead: '#c03030', alone: '#9040c0', rear: '#707070',
+    };
+
+    const cards = battles.map(e => {
+      const p = e.payload || {};
+      const outcome = OUTCOME_LABELS[p.outcome] || p.outcome || 'Unknown';
+      const size = SIZE_LABELS[p.size] || p.size || '';
+      const pks = (p.participants || []).filter(x => x.isPK);
+      const npcs = (p.participants || []).filter(x => !x.isPK);
+
+      const pkRows = pks.map(pk => {
+        const st = STATUS_LABELS[pk.status] || pk.status;
+        const stCol = STATUS_COLOURS[pk.status] || '#707070';
+        const passionStr = pk.passion ? `${esc(pk.passion.name)} (${esc(pk.passion.result)})` : '';
+        const npc = pk.npcId ? this._findNpc(pk.npcId) : null;
+        const nameHtml = npc ? this._npcPill(npc) : `<span style="font-weight:600;">${esc(pk.name)}</span>`;
+        return `
+          <tr style="border-bottom:1px solid rgba(192,48,48,0.12);">
+            <td style="padding:6px 10px;">${nameHtml}</td>
+            <td style="padding:6px 10px;text-align:center;font-weight:600;">${pk.kills}</td>
+            <td style="padding:6px 10px;">
+              <span style="font-size:0.72rem;padding:1px 7px;border-radius:8px;background:${stCol}15;color:${stCol};font-weight:600;">${st}</span>
+            </td>
+            <td style="padding:6px 10px;font-size:0.78rem;color:var(--ink-soft);font-style:italic;">${passionStr}</td>
+          </tr>`;
+      }).join('');
+
+      const npcRows = npcs.length ? npcs.map(n => {
+        const st = STATUS_LABELS[n.status] || n.status;
+        const stCol = STATUS_COLOURS[n.status] || '#707070';
+        const npc = n.npcId ? this._findNpc(n.npcId) : null;
+        const nameHtml = npc ? this._npcPill(npc) : `<span>${esc(n.name)}</span>`;
+        return `
+          <tr style="border-bottom:1px solid rgba(192,48,48,0.08);">
+            <td style="padding:4px 10px;font-size:0.82rem;color:var(--ink-soft);">${nameHtml}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:0.82rem;">${n.kills}</td>
+            <td style="padding:4px 10px;">
+              <span style="font-size:0.68rem;padding:1px 6px;border-radius:8px;background:${stCol}12;color:${stCol};">${st}</span>
+            </td>
+            <td style="padding:4px 10px;font-size:0.75rem;color:var(--ink-soft);font-style:italic;">
+              ${n.passion ? esc(n.passion.name) : ''}
+            </td>
+          </tr>`;
+      }).join('') : '';
+
+      const narrative = p.gmNarrative
+        ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(192,48,48,0.04);border-radius:var(--radius);font-size:0.85rem;line-height:1.55;color:var(--ink);font-style:italic;white-space:pre-wrap;">${esc(p.gmNarrative)}</div>`
+        : '';
+
+      return `
+        <div style="padding:16px;background:var(--vellum-mid);border:1px solid rgba(192,48,48,0.3);border-left:4px solid rgba(192,48,48,0.8);border-radius:var(--radius);">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;">
+            <span style="font-size:1rem;">⚔</span>
+            <span style="font-family:var(--font-heading);font-size:1.05rem;letter-spacing:0.08em;color:var(--ink);font-weight:700;">${esc(p.name || e.text)}</span>
+            <span style="font-size:0.72rem;padding:2px 10px;border-radius:10px;background:#c0303018;color:#c03030;font-weight:600;font-family:var(--font-heading);letter-spacing:0.06em;">${esc(outcome)}</span>
+          </div>
+          <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:12px;">
+            ${p.location ? esc(p.location) + ' · ' : ''}${esc(size)}${p.rounds ? ` · ${p.rounds} round${p.rounds !== 1 ? 's' : ''} fought` : ''}
+          </div>
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:2px solid rgba(192,48,48,0.2);">
+                <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Knight</th>
+                <th style="padding:4px 10px;text-align:center;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Kills</th>
+                <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Status</th>
+                <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Passion</th>
+              </tr>
+            </thead>
+            <tbody>${pkRows}${npcRows}</tbody>
+          </table>
+          ${narrative}
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="margin-bottom:28px;">
+        ${this._sectionHeader('⚔', 'Battles', battles.length, '#c03030')}
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${cards}
         </div>
       </div>`;
   },

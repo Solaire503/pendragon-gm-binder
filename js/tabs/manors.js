@@ -2628,11 +2628,15 @@ const TabManors = {
     const horses = this._horsesCache[this._stablesCacheKey(key)] || [];
     const url = isGM() ? `/api/horses/${encodeURIComponent(key)}` : '/api/horses';
     try {
-      await fetch(url, {
+      const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ horses }),
       });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        Toast.error(d.error || 'Failed to save horses');
+      }
     } catch (e) {
       Toast.error('Failed to save horses');
     }

@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.4.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.4.1'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -1495,6 +1495,28 @@ def api_succession():
                     npc['role'] = 'Player Knight'
                     break
 
+        # Update manor + household to reflect succession
+        if new_pk_id:
+            new_npc = next((n for n in living if n.get('id') == new_pk_id), None)
+            if new_npc:
+                new_hh = (new_npc.get('household') or '').strip()
+                for mkey, manor in save_data.get('manors', {}).items():
+                    if mkey.lower() == new_hh.lower():
+                        manor['lord_id'] = new_pk_id
+                        name = new_npc.get('name', '')
+                        pronoun = (new_npc.get('pronoun') or '').lower()
+                        title = 'Dame' if pronoun.startswith('she') else 'Sir'
+                        if not name.startswith('Sir ') and not name.startswith('Dame '):
+                            name = f'{title} {name}'
+                        manor['knight'] = name
+                        if manor.get('heir_id') == new_pk_id:
+                            manor['heir_id'] = None
+                        break
+                for hh in save_data.get('households', []):
+                    if (hh.get('name') or '').lower() == new_hh.lower():
+                        hh['household_head'] = new_pk_id
+                        break
+
         save_data['living'] = living
         save_data['dead']   = dead
 
@@ -1720,7 +1742,7 @@ def api_get_horses():
 
 
 _HORSE_TYPES = {
-    'Hobby', 'Charger (Small)', 'Charger (Normal)', 'Fairy Horse',
+    'Hobby', 'Charger (Small)', 'Charger (Normal)', 'Destrier', 'Fairy Horse',
     'Jennet', 'Rouncey (Inferior)', 'Rouncy (Small)', 'Rouncy (Normal)',
     'Rouncy (Large)', 'Courser', 'Dales/Irish/Cambrian Pony',
     'Cart Horse', 'Cob', 'Nag', 'Sumpter', 'Sumpter (Strong)',
@@ -2556,6 +2578,7 @@ def api_battle_active():
         'id': battle.get('id'),
         'name': battle.get('name', ''),
         'state': battle.get('state', 'setup'),
+        'size': battle.get('size', ''),
         'currentRound': battle.get('currentRound', 0),
         'maxRounds': battle.get('maxRounds', 0),
     })
@@ -3239,7 +3262,58 @@ def api_battle_resume():
 def api_battle_commit():
     err = _csrf_check()
     if err: return err
-    return _battle_stub()
+    battle = _get_active_battle()
+    if not battle or battle.get('state') != 'finalizing':
+        return jsonify({'error': 'No battle in finalizing state'}), 400
+    body = request.get_json(force=True) or {}
+    outcome = body.get('outcome', 'indecisive')
+    if outcome not in BATTLE_OUTCOMES:
+        return jsonify({'error': 'Invalid outcome'}), 400
+    gm_narrative = str(body.get('gmNarrative', '')).strip()
+    participants = []
+    for p in battle.get('participants', []):
+        ledger = p.get('killLedger', [])
+        participants.append({
+            'name': p['name'], 'npcId': p.get('npcId'),
+            'isPK': p.get('isPK', False), 'status': p.get('status', 'active'),
+            'kills': len(ledger),
+            'kv': sum(k.get('kv', 0) for k in ledger),
+            'glory': sum(k.get('glory', 0) for k in ledger),
+            'passion': p.get('passion'),
+        })
+    year_key = str(battle.get('year', ''))
+    entry = {
+        'id': 'ev-' + _secrets_mod.token_hex(8),
+        'text': battle['name'], 'cat': 'battle',
+        'ts': int(time.time() * 1000), 'type': 'battle',
+        'payload': {
+            'name': battle['name'], 'location': battle.get('location', ''),
+            'size': battle.get('size', ''), 'outcome': outcome,
+            'gmNarrative': gm_narrative,
+            'rounds': battle.get('currentRound', 0),
+            'maxRounds': battle.get('maxRounds', 0),
+            'friendlyCommander': battle.get('friendlyCommander'),
+            'enemyCommander': battle.get('enemyCommander'),
+            'participants': participants,
+            'morale': battle.get('morale'),
+        },
+    }
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 500
+    with _save_lock:
+        binder = json.loads(save_path.read_text(encoding='utf-8'))
+        binder.setdefault('chronicle', {}).setdefault(year_key, []).append(entry)
+        _rotate_backup(save_path)
+        _atomic_write(save_path, json.dumps(binder, indent=2))
+    battle['state'] = 'finalized'
+    battle['outcome'] = outcome
+    battle['gmNarrative'] = gm_narrative
+    _archive_battle(battle)
+    _rotate_battle_backup()
+    log.info('[Battle] Committed to chronicle: %s (year %s, %s)',
+             battle['name'], year_key, outcome)
+    return jsonify({'ok': True})
 
 
 @app.route('/api/battle/abandon', methods=['DELETE'])

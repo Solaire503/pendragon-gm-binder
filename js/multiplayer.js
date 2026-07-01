@@ -10,6 +10,7 @@ const Multiplayer = {
   _broadcastTimer:   null,
   _heartbeatTimer:   null,
   _presenceTimer:    null,
+  _battleTimer:      null,
   _presenceUsers:    [],      // cached list from last poll
   _presenceExpanded: false,
 
@@ -29,6 +30,10 @@ const Multiplayer = {
       this._presenceTimer = setInterval(() => this._pollPresence(), 15000);
     }, 3000);
 
+    // Poll battle status (every 3s for the IN BATTLE banner)
+    this._pollBattle();
+    this._battleTimer = setInterval(() => this._pollBattle(), 3000);
+
     // Render presence widget in header
     this._injectPresenceWidget();
 
@@ -39,6 +44,7 @@ const Multiplayer = {
         if (this._heartbeatTimer) { clearInterval(this._heartbeatTimer); this._heartbeatTimer = null; }
         if (this._broadcastTimer) { clearInterval(this._broadcastTimer); this._broadcastTimer = null; }
         if (this._presenceTimer)  { clearInterval(this._presenceTimer);  this._presenceTimer  = null; }
+        if (this._battleTimer)    { clearInterval(this._battleTimer);    this._battleTimer    = null; }
       } else {
         if (!this._heartbeatTimer) {
           this._sendHeartbeat();
@@ -51,6 +57,10 @@ const Multiplayer = {
         if (!this._presenceTimer) {
           this._pollPresence();
           this._presenceTimer = setInterval(() => this._pollPresence(), 15000);
+        }
+        if (!this._battleTimer) {
+          this._pollBattle();
+          this._battleTimer = setInterval(() => this._pollBattle(), 3000);
         }
       }
     });
@@ -109,6 +119,68 @@ const Multiplayer = {
 
   dismissBroadcast() {
     const el = document.getElementById('broadcast-banner');
+    if (el) el.remove();
+  },
+
+  // ── BATTLE BANNER ───────────────────────────────────────────
+  _battleSizeLabels: {
+    fight: 'Fight', skirmish: 'Skirmish', clash: 'Clash',
+    small: 'Small Battle', medium: 'Medium Battle',
+    large: 'Large Battle', huge: 'Huge Battle',
+  },
+
+  async _pollBattle() {
+    try {
+      const r = await fetch('/api/battle/active');
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data.active && data.state !== 'setup') {
+        this._showBattleBanner(data);
+      } else {
+        this._hideBattleBanner();
+      }
+    } catch (e) { /* silent */ }
+  },
+
+  _showBattleBanner(data) {
+    const sizeLabel = this._battleSizeLabels[data.size] || '';
+    const roundInfo = data.state === 'finalizing'
+      ? 'The Chronicler Writes...'
+      : 'Round ' + data.currentRound + '/' + data.maxRounds;
+    const detail = [sizeLabel, roundInfo].filter(Boolean).join(' · ');
+    const titleText = '⚔ TO ARMS! ' + (data.name || '').toUpperCase();
+
+    let banner = document.getElementById('battle-banner');
+    if (banner) {
+      const titleEl = banner.querySelector('.battle-banner-title');
+      const detailEl = banner.querySelector('.battle-banner-detail');
+      if (titleEl) titleEl.textContent = titleText;
+      if (detailEl) detailEl.textContent = detail;
+      return;
+    }
+
+    banner = document.createElement('div');
+    banner.id = 'battle-banner';
+    banner.className = 'battle-banner';
+    banner.onclick = function() { if (typeof APP !== 'undefined') APP.switchTab('battle'); };
+    banner.innerHTML =
+      '<span class="battle-banner-title">' + esc(titleText) + '</span>' +
+      '<span style="flex:1"></span>' +
+      '<span class="battle-banner-detail">' + esc(detail) + '</span>';
+
+    const header = document.querySelector('.app-header');
+    const broadcast = document.getElementById('broadcast-banner');
+    if (broadcast) {
+      broadcast.parentNode.insertBefore(banner, broadcast);
+    } else if (header && header.nextSibling) {
+      header.parentNode.insertBefore(banner, header.nextSibling);
+    } else {
+      document.getElementById('app')?.prepend(banner);
+    }
+  },
+
+  _hideBattleBanner() {
+    const el = document.getElementById('battle-banner');
     if (el) el.remove();
   },
 

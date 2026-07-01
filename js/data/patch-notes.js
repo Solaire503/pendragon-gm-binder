@@ -400,6 +400,39 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.4.1',
+    date:    '2026-07-01',
+    sections: [
+      {
+        heading: 'Battle Tracker — Finalization & Chronicle',
+        items: [
+          'Ending a battle now opens a full finalization screen: set the outcome, review the conroi table (kills, status, passions), write a GM narrative, then commit to the Chronicle.',
+          'Committed battles appear in the Chronicle as crimson battle cards with outcome badge, participant table, and GM narrative.',
+          'IN BATTLE banner appears across all tabs during active battles — crimson "TO ARMS!" bar with battle name, size, and round info. Polls every 3 seconds. Click to jump to the battle tab.',
+        ],
+      },
+      {
+        heading: 'Bug Fix — Succession Data Integrity',
+        items: [
+          'PK succession now correctly updates manor lord, knight display name, heir, and household head. Previously only NPC roles were changed, leaving stale names on the dashboard and family tab.',
+        ],
+      },
+      {
+        heading: 'Bug Fix — Destrier Horse Type',
+        items: [
+          'Destrier was missing from the server-side horse type whitelist. Adding a Destrier appeared to work but silently failed to save — the horse vanished on page refresh. Fixed.',
+          'Horse save errors now show a toast instead of failing silently.',
+        ],
+      },
+      {
+        heading: 'Bug Fix — Enemy Drag Ghosting',
+        items: [
+          'Dragging a foe card in the battle tracker no longer leaves it permanently greyed out.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.4.0',
     date:    '2026-06-25',
     sections: [
