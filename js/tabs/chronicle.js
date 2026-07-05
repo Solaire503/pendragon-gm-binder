@@ -427,7 +427,7 @@ const TabChronicle = {
       }).join('') : '';
 
       const narrative = p.gmNarrative
-        ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(192,48,48,0.04);border-radius:var(--radius);font-size:0.85rem;line-height:1.55;color:var(--ink);font-style:italic;white-space:pre-wrap;">${esc(p.gmNarrative)}</div>`
+        ? `<div class="illuminated-initial-gold" style="margin-top:12px;padding:10px 14px;background:rgba(192,48,48,0.04);border-radius:var(--radius);font-size:0.85rem;line-height:1.55;color:var(--ink);font-style:italic;white-space:pre-wrap;">${esc(p.gmNarrative)}</div>`
         : '';
 
       return `

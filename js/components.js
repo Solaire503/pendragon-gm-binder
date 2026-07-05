@@ -1187,7 +1187,7 @@ function buildSoloChronicleHtml(npc) {
         ${isGM() ? `<button class="btn btn-ghost solo-chr-edit-btn" onclick="Components.promptChronicleEvent('${npc.id}','${ev.id}')">📜</button>` : ''}
       </div>
       ${ev.mechDesc   ? `<div class="solo-chr-mech">${esc(ev.mechDesc)}</div>` : ''}
-      ${ev.flavorText ? `<div class="solo-chr-flavor">${esc(ev.flavorText)}</div>` : ''}
+      ${ev.flavorText ? `<div class="solo-chr-flavor illuminated-initial">${esc(ev.flavorText)}</div>` : ''}
       ${ev.userNotes  ? `<div class="solo-chr-notes atm-rendered">${AtMention.render(ev.userNotes)}</div>` : ''}
     </div>`;
   };

@@ -231,6 +231,8 @@ const TabPrep = {
             onchange="TabPrep.saveField('previously', this.value)">${esc(p.previously || '')}</textarea>
         </div>
 
+        <div class="ornament-divider-sm"></div>
+
         <div class="arc-section">
           <div class="arc-section-title">Arcs in Play
             <button class="btn btn-ghost arc-add-btn" onclick="TabPrep.addArcModal()">+ Add Arc</button>

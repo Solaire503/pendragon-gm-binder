@@ -58,6 +58,9 @@
   --presence-glow:  rgba(96,168,130,0.55);
   --fate-glow:      rgba(61,122,98,0.55);
 
+  /* Parchment noise texture (UI polish brief §1) */
+  --texture-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+
   /* Common tints (top-5 consolidations; deeper palette sweep pending) */
   --gold-tint-1:      rgba(184,134,11,0.1);
   --gold-tint-2:      rgba(184,134,11,0.2);
@@ -513,6 +516,8 @@ html.is-player .player-readonly-banner {
 #tab-chronicle  { overflow-y: auto; background: var(--vellum); }
 #tab-journal    { overflow-y: auto; background: var(--vellum); }
 #tab-npc-manors { overflow-y: auto; background: var(--vellum); }
+#tab-arcs       { overflow-y: auto; background: var(--vellum); }
+#tab-prep       { overflow-y: auto; background: var(--vellum); }
 #tab-battle     { overflow-y: auto; background: var(--vellum); }
 .battle-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; text-align:center; padding:40px 20px; }
 .battle-empty-icon { font-size:3rem; margin-bottom:16px; opacity:0.5; }
@@ -3929,3 +3934,105 @@ html.is-player .player-readonly-banner {
   .brand-sub     { display: none; }
   .year-label    { display: none; }
 }
+
+/* ══ UI Polish (planning/binder-ui-polish-brief.md) ══════════ */
+
+/* §1 Parchment noise texture on content surfaces */
+.pane-content, .card, .bs-section, .bc-pk-card, .bc-encounter,
+.bc-sidebar-panel, .mausoleum-layout,
+#tab-chronicle, #tab-journal, #tab-arcs, #tab-prep,
+.arc-section, .arc-row, .bp-card {
+  background-image: var(--texture-noise);
+}
+
+/* §6 Illuminated initials — narrative prose only */
+.illuminated-initial::first-letter {
+  font-family: var(--font-display);
+  font-size: 2.8em;
+  float: left;
+  line-height: 0.8;
+  margin-right: 6px;
+  margin-top: 3px;
+  color: var(--crimson);
+  text-shadow: 0 1px 2px rgba(122,28,28,0.15);
+}
+.illuminated-initial-gold::first-letter {
+  font-family: var(--font-display);
+  font-size: 2.8em;
+  float: left;
+  line-height: 0.8;
+  margin-right: 6px;
+  margin-top: 3px;
+  color: var(--gold-bright);
+  text-shadow: 0 0 8px rgba(212,160,23,0.3);
+}
+
+/* §3 Gold glow on interactive elements */
+.nav-tab.active { text-shadow: 0 0 12px rgba(212,160,23,0.25); }
+.hdr-btn-gold:hover { box-shadow: 0 0 10px rgba(184,134,11,0.2); }
+.bc-morale-fill { box-shadow: 0 0 6px rgba(45,90,74,0.3); }
+
+/* §2 Richer border treatments — double manuscript rule, scoped to
+   top-level pane sections so modals/cards stay uncluttered */
+.pane-content > .section-title {
+  border-bottom: 2px solid var(--vellum-deep);
+  padding-bottom: 10px;
+  position: relative;
+}
+.pane-content > .section-title::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--vellum-deep);
+  opacity: 0.5;
+}
+.bc-pk-card.expanded {
+  border-width: 1px 1px 1px 3px;
+  box-shadow: 0 2px 8px var(--shadow-soft);
+}
+.bc-sidebar-panel { border-top: 2px solid var(--gold-tint-2); }
+
+/* §4 Typography hierarchy bumps (nav-tab bump skipped — header width) */
+.page-title {
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(26,18,8,0.08);
+}
+.section-title { font-size: 0.65rem; }
+.bc-sidebar-title { font-size: 0.9rem; }
+
+/* §5 Card hover & focus depth */
+.dead-card, .bs-section, .bc-pk-card, .arc-row { transition: box-shadow 0.15s ease, border-color 0.15s; }
+.dead-card:hover, .bs-section:hover, .bc-pk-card:hover, .arc-row:hover {
+  box-shadow: 0 2px 12px var(--shadow-soft);
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(184,134,11,0.12);
+  outline: none;
+}
+
+/* §7 Ornamental dividers */
+.ornament-divider {
+  text-align: center;
+  margin: 20px 0;
+  border: none;
+  line-height: 1;
+  font-size: 0.9rem;
+  color: var(--vellum-deep);
+  letter-spacing: 0.3em;
+}
+.ornament-divider::before { content: '·  ✦  ·'; }
+.ornament-divider-sm {
+  text-align: center;
+  margin: 12px 0;
+  border: none;
+  line-height: 1;
+  font-size: 0.7rem;
+  color: var(--vellum-deep);
+  letter-spacing: 0.2em;
+}
+.ornament-divider-sm::before { content: '· · ·'; }

@@ -870,7 +870,7 @@ const TabBattle = {
     return `
       <div class="bp-card">
         <div class="bp-card-title">The Field</div>
-        ${enc.text ? `<p class="bp-field-text">${esc(enc.text)}</p>` : ''}
+        ${enc.text ? `<p class="bp-field-text illuminated-initial">${esc(enc.text)}</p>` : ''}
         ${facing}
       </div>`;
   },
@@ -1107,6 +1107,7 @@ const TabBattle = {
           <div class="battle-console-main">
             ${this._renderMoraleBar()}
             ${this._renderEncounterCard()}
+            <div class="ornament-divider"></div>
             ${this._renderParticipantCards()}
             ${this._renderRoundNotes()}
           </div>
@@ -2035,6 +2036,7 @@ const TabBattle = {
           </div>
         </div>` : ''}
 
+        <div class="ornament-divider"></div>
         <div style="margin-bottom:24px;">
           <div style="font-family:var(--font-heading);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold-text);margin-bottom:10px;">The Conroi</div>
           <div style="overflow-x:auto;">

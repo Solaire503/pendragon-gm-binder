@@ -400,6 +400,29 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.7.0',
+    date:    '2026-07-05',
+    sections: [
+      {
+        heading: 'Fix — Story Pages Readability',
+        items: [
+          'The Story Arcs and Session Prep pages were missing their parchment backing, leaving dark text on the dark page behind. Both now sit on proper vellum like every other tab.',
+        ],
+      },
+      {
+        heading: 'Illuminated Manuscript Polish',
+        items: [
+          'Parchment now has texture — a subtle fibrous grain across cards, panels, and reading surfaces instead of flat digital fills.',
+          'Illuminated initials: narrative prose now opens with a manuscript drop cap — crimson for solo adventure flavor text and battle-field descriptions, gold for battle narratives in the Chronicle.',
+          'Gold breathes: the active nav tab glows softly, gold buttons shimmer on hover, and the morale bar has a faint verdigris light.',
+          'Manuscript ruling: major section titles get a double-rule underline; battle sidebar panels get a gold top rule.',
+          'Ornamental dividers (· ✦ ·) mark the great divisions — between the encounter and the conroi in battle, and before the outcome table when the chronicler takes over.',
+          'Deeper hierarchy: page titles are larger, cards lift gently on hover, and focused inputs glow gold instead of just changing border.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.6.1',
     date:    '2026-07-05',
     sections: [
