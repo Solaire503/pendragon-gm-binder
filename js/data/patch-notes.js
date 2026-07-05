@@ -400,6 +400,20 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.7.2',
+    date:    '2026-07-05',
+    sections: [
+      {
+        heading: 'Fixes — Battle Cards & Notifications',
+        items: [
+          '@mentions in a battle\'s Chronicle narrative now render as proper clickable character links instead of raw text.',
+          'Battle cards in the Chronicle now show the opposing commanders — with the commander linked to their character card when they\'re an NPC in the binder.',
+          'Notifications now say who the comment was about by name ("commented on Lady Jenna of Salisbury") instead of showing the internal NPC id. Older notifications keep their old wording until they age out.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.7.1',
     date:    '2026-07-05',
     sections: [

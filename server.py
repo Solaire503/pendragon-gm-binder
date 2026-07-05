@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.7.1'  # keep in sync with js/app.js
+APP_VERSION  = '3.7.2'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -2330,14 +2330,20 @@ def api_post_comment():
         all_comments.append(new_comment)
         _write_comments(all_comments)
 
-    # Notify all other users
+    # Notify all other users — resolve the NPC's name for readable text
+    npc_name = npc_id
+    binder = _load_binder()
+    if binder:
+        npc = next((n for n in _all_npcs(binder) if n.get('id') == npc_id), None)
+        if npc and npc.get('name'):
+            npc_name = npc['name']
     all_users = load_users()
     for u in all_users:
         uname = u['username']
         if uname != author:
             _push_notification(
                 uname, 'comment',
-                f'{author} commented on {npc_id}',
+                f'{author} commented on {npc_name}',
                 link=npc_id,
             )
 

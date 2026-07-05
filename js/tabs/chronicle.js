@@ -427,7 +427,18 @@ const TabChronicle = {
       }).join('') : '';
 
       const narrative = p.gmNarrative
-        ? `<div class="illuminated-initial-gold" style="margin-top:12px;padding:10px 14px;background:rgba(192,48,48,0.04);border-radius:var(--radius);font-size:0.85rem;line-height:1.55;color:var(--ink);font-style:italic;white-space:pre-wrap;">${esc(p.gmNarrative)}</div>`
+        ? `<div class="illuminated-initial-gold" style="margin-top:12px;padding:10px 14px;background:rgba(192,48,48,0.04);border-radius:var(--radius);font-size:0.85rem;line-height:1.55;color:var(--ink);font-style:italic;">${AtMention.render(p.gmNarrative)}</div>`
+        : '';
+
+      const cmdrHtml = (c) => {
+        if (!c || !c.name) return '';
+        const npc = c.npcId ? this._findNpc(c.npcId) : null;
+        return npc ? this._npcPill(npc) : esc(c.name);
+      };
+      const fc = cmdrHtml(p.friendlyCommander);
+      const ec = cmdrHtml(p.enemyCommander);
+      const commanders = (fc || ec)
+        ? `<div style="font-size:0.78rem;color:var(--ink-soft);margin-bottom:10px;">${fc || '—'} <span style="font-style:italic;color:var(--crimson-mid);">against</span> ${ec || '—'}</div>`
         : '';
 
       return `
@@ -437,9 +448,10 @@ const TabChronicle = {
             <span style="font-family:var(--font-heading);font-size:1.05rem;letter-spacing:0.08em;color:var(--ink);font-weight:700;">${esc(p.name || e.text)}</span>
             <span style="font-size:0.72rem;padding:2px 10px;border-radius:10px;background:#c0303018;color:#c03030;font-weight:600;font-family:var(--font-heading);letter-spacing:0.06em;">${esc(outcome)}</span>
           </div>
-          <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:12px;">
+          <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:${(p.friendlyCommander?.name || p.enemyCommander?.name) ? '4' : '12'}px;">
             ${p.location ? esc(p.location) + ' · ' : ''}${esc(size)}${p.rounds ? ` · ${p.rounds} round${p.rounds !== 1 ? 's' : ''} fought` : ''}
           </div>
+          ${commanders}
           <table style="width:100%;border-collapse:collapse;">
             <thead>
               <tr style="border-bottom:2px solid rgba(192,48,48,0.2);">
