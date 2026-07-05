@@ -2054,7 +2054,11 @@ const TabBattle = {
 
         ${isGM() ? `
         <div style="margin-bottom:24px;">
-          <div style="font-family:var(--font-heading);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold-text);margin-bottom:10px;">GM Narrative</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-family:var(--font-heading);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold-text);">GM Narrative</div>
+            <button id="battle-draft-btn" class="btn btn-ghost" style="font-size:0.75rem;padding:4px 14px;"
+              onclick="TabBattle._draftSummary()">✒ Draft Summary</button>
+          </div>
           <textarea id="battle-narrative" class="edit-input" rows="4"
             placeholder="Record what happened in this battle..."
             style="width:100%;resize:vertical;font-size:0.88rem;line-height:1.5;"></textarea>
@@ -2069,6 +2073,24 @@ const TabBattle = {
           <p class="battle-empty-text">The battle is over. The chronicler writes...</p>
         </div>`}
       </div>`;
+  },
+
+  async _draftSummary() {
+    const ta = document.getElementById('battle-narrative');
+    if (!ta) return;
+    if (ta.value.trim() && !confirm('Replace the current narrative with a fresh draft?')) return;
+    const btn = document.getElementById('battle-draft-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'The chronicler writes…'; }
+    const outcome = document.querySelector('input[name="battle-outcome"]:checked')?.value || '';
+    const res = await API.post('/api/battle/summary', { outcome });
+    if (btn) { btn.disabled = false; btn.textContent = '✒ Draft Summary'; }
+    if (!res.ok) { Toast.show(res.error || 'Failed to draft summary', 'error'); return; }
+    ta.value = res.data.summary;
+    if (res.data.source === 'haiku') {
+      Toast.show('Draft written — edit as you see fit', 'success');
+    } else {
+      Toast.show('Chronicler unavailable — basic summary drafted from the record', 'error');
+    }
   },
 
   async _commitBattle() {

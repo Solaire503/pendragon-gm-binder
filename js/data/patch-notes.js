@@ -400,6 +400,20 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.5.1',
+    date:    '2026-07-05',
+    sections: [
+      {
+        heading: 'Battle Tracker — Auto-Summary (GM)',
+        items: [
+          'The finalization screen now has a "✒ Draft Summary" button. The chronicler (Claude Haiku) reads the battle record — rounds, encounters, morale, kills, wounds, and passions — and drafts a 3-5 sentence period-voice narrative into the GM Narrative box.',
+          'The draft only recounts what was actually recorded — it never invents deeds for the knights. Edit it freely before committing to the Chronicle.',
+          'If the API is unreachable, a plain summary is built directly from the record instead, so the button always works.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.5.0',
     date:    '2026-07-05',
     sections: [

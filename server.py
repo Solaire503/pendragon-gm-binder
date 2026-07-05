@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.5.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.5.1'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -3259,6 +3259,138 @@ def api_battle_resume():
     _save_active_battle(battle)
     log.info('Battle resumed: %s', battle['name'])
     return jsonify({'battle': battle})
+
+
+# ── Battle API — Auto-summary ────────────────────────────────────────────────
+# Drafts a chronicle narrative from the battle record via Claude Haiku
+# (ANTHROPIC_KEY in secrets.env). Falls back to a plain data-built summary if
+# the key is missing or the API call fails. The GM always edits before commit.
+
+BATTLE_OUTCOME_LABELS = {
+    'decisive_victory': 'a decisive victory', 'victory': 'a victory',
+    'indecisive': 'indecisive', 'defeat': 'a defeat',
+    'decisive_defeat': 'a decisive defeat', 'scripted': 'as fate decreed',
+}
+BATTLE_SIZE_LABELS = {
+    'fight': 'Fight', 'skirmish': 'Skirmish', 'clash': 'Clash',
+    'small': 'Small Battle', 'medium': 'Medium Battle',
+    'large': 'Large Battle', 'huge': 'Huge Battle',
+}
+BATTLE_SUMMARY_SYSTEM = (
+    'You are the chronicler for a Pendragon 6th Edition tabletop campaign set in '
+    'Arthurian Britain. Draft a battle account for the campaign chronicle from the '
+    'battle record provided.\n'
+    '- Write 3 to 5 sentences of flowing prose in the voice of a medieval chronicler.\n'
+    '- Recount only what the record states. Never invent actions, words, thoughts, or '
+    'motives for any knight, and never add events that are not in the record.\n'
+    '- Name the knights whose deeds (kills, wounds, passions) the record shows.\n'
+    "- Describe only what the assembled host could witness; do not reveal the GM's "
+    'secret notes or plans even if the record hints at them.\n'
+    '- Return only the chronicle text — no preamble, headings, or commentary.'
+)
+
+
+def _build_battle_digest(battle, outcome):
+    """Flatten the battle record into plain text for the summary model."""
+    lines = []
+    size = BATTLE_SIZE_LABELS.get(battle.get('size'), battle.get('size', ''))
+    lines.append(f"Battle: {battle.get('name', 'Unnamed Battle')} ({size})")
+    if battle.get('year'):
+        lines.append(f"Year: {battle['year']} AD")
+    if battle.get('location'):
+        lines.append(f"Location: {battle['location']}")
+    if outcome in BATTLE_OUTCOME_LABELS:
+        lines.append(f"Outcome for the conroi: {BATTLE_OUTCOME_LABELS[outcome]}")
+    fc, ec = battle.get('friendlyCommander') or {}, battle.get('enemyCommander') or {}
+    if fc.get('name') or ec.get('name'):
+        lines.append(f"Commanders: {fc.get('name', 'unknown')} against {ec.get('name', 'unknown')}")
+    m = battle.get('morale') or {}
+    lines.append(f"Conroi morale: began at {m.get('starting', '?')}, ended at {m.get('current', '?')}")
+    lines.append('')
+    lines.append('Rounds:')
+    for r in battle.get('rounds', []):
+        rm = r.get('morale') or {}
+        parts = [f"Round {r.get('round')}: {r.get('encounter') or 'no encounter'}"]
+        if r.get('retired'):
+            parts.append('(the conroi retired to the rear)')
+        parts.append(f"morale {rm.get('start', '?')} to {rm.get('end', '?')}")
+        if r.get('notes'):
+            parts.append(f"— GM round notes: {r['notes']}")
+        lines.append('  ' + ', '.join(parts))
+    lines.append('')
+    lines.append('The conroi:')
+    status_labels = {
+        'active': 'stood at battle\'s end', 'major_wound': 'suffered a major wound',
+        'unconscious': 'was struck unconscious', 'dead': 'was slain',
+        'alone': 'was left alone in the field', 'rear': 'retired to the rear',
+    }
+    for p in battle.get('participants', []):
+        ledger = p.get('killLedger', [])
+        kinds = {}
+        for k in ledger:
+            kinds[k.get('type', 'foe')] = kinds.get(k.get('type', 'foe'), 0) + 1
+        kills = ', '.join(f"{n}x {t}" for t, n in kinds.items()) if kinds else 'no recorded kills'
+        line = f"  {p.get('name', '?')}: {status_labels.get(p.get('status'), p.get('status', ''))}; kills: {kills}"
+        if p.get('passion'):
+            line += f"; invoked passion {p['passion'].get('name', '')} ({p['passion'].get('result', '')})"
+        if p.get('participantId') == battle.get('conroiCommanderId'):
+            line += ' [conroi commander]'
+        lines.append(line)
+    return '\n'.join(lines)
+
+
+def _fallback_battle_summary(battle, outcome):
+    """Deterministic summary from the record, used when the API is unavailable."""
+    name = battle.get('name', 'The battle')
+    where = f" at {battle['location']}" if battle.get('location') else ''
+    when = f" in the year {battle['year']}" if battle.get('year') else ''
+    rounds = battle.get('rounds', [])
+    sentences = [f"{name} was fought{where}{when}, over {max(len(rounds), 1)} round(s)."]
+    if outcome in BATTLE_OUTCOME_LABELS:
+        sentences.append(f"For the conroi it was {BATTLE_OUTCOME_LABELS[outcome]}.")
+    deeds = []
+    for p in battle.get('participants', []):
+        n = len(p.get('killLedger', []))
+        if n:
+            deeds.append(f"{p.get('name', '?')} felled {n} foe{'s' if n != 1 else ''}")
+    if deeds:
+        sentences.append('; '.join(deeds) + '.')
+    fallen = [p.get('name', '?') for p in battle.get('participants', []) if p.get('status') == 'dead']
+    if fallen:
+        sentences.append(f"Slain in the fighting: {', '.join(fallen)}.")
+    return ' '.join(sentences)
+
+
+@app.route('/api/battle/summary', methods=['POST'])
+@gm_required
+def api_battle_summary():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle.get('state') != 'finalizing':
+        return jsonify({'error': 'No battle in finalizing state'}), 400
+    body = request.get_json(silent=True) or {}
+    outcome = body.get('outcome') or ''
+    digest = _build_battle_digest(battle, outcome)
+    api_key = SECRETS.get('ANTHROPIC_KEY')
+    if api_key:
+        try:
+            # Imported lazily so the binder still boots if the SDK isn't installed.
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key, timeout=25.0, max_retries=1)
+            resp = client.messages.create(
+                model='claude-haiku-4-5',
+                max_tokens=400,
+                system=BATTLE_SUMMARY_SYSTEM,
+                messages=[{'role': 'user', 'content': digest}],
+            )
+            text = ''.join(b.text for b in resp.content if b.type == 'text').strip()
+            if text:
+                return jsonify({'summary': text, 'source': 'haiku'})
+            log.warning('[Battle] Summary API returned no text (stop_reason=%s)', resp.stop_reason)
+        except Exception as e:
+            log.warning('[Battle] Summary API call failed: %s', e)
+    return jsonify({'summary': _fallback_battle_summary(battle, outcome), 'source': 'fallback'})
 
 
 @app.route('/api/battle/commit', methods=['POST'])
