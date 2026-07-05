@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '3.7.0';
+const APP_VERSION = '3.7.1';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────
@@ -91,7 +91,7 @@ const APP = {
         const opening = !fateMenu.classList.contains('open');
         fateMenu.classList.toggle('open');
         if (opening) {
-          document.getElementById('navManorsMenu')?.classList.remove('open');
+          document.getElementById('navRealmMenu')?.classList.remove('open');
           document.getElementById('navRecordsMenu')?.classList.remove('open');
           document.getElementById('navStoryMenu')?.classList.remove('open');
         }
@@ -106,26 +106,26 @@ const APP = {
     }
 
     // Wire Manors dropdown
-    const manorsTrigger = document.getElementById('navManorsBtn');
-    const manorsMenu    = document.getElementById('navManorsMenu');
-    if (manorsTrigger && manorsMenu) {
-      manorsTrigger.addEventListener('click', e => {
+    const realmTrigger = document.getElementById('navRealmBtn');
+    const realmMenu    = document.getElementById('navRealmMenu');
+    if (realmTrigger && realmMenu) {
+      realmTrigger.addEventListener('click', e => {
         e.stopPropagation();
-        const opening = !manorsMenu.classList.contains('open');
-        manorsMenu.classList.toggle('open');
+        const opening = !realmMenu.classList.contains('open');
+        realmMenu.classList.toggle('open');
         if (opening) {
           document.getElementById('navFateMenu')?.classList.remove('open');
           document.getElementById('navRecordsMenu')?.classList.remove('open');
           document.getElementById('navStoryMenu')?.classList.remove('open');
         }
       });
-      manorsMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
+      realmMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
           this.switchTab(item.dataset.tab);
-          manorsMenu.classList.remove('open');
+          realmMenu.classList.remove('open');
         });
       });
-      document.addEventListener('click', () => manorsMenu.classList.remove('open'));
+      document.addEventListener('click', () => realmMenu.classList.remove('open'));
     }
 
     // Wire Records dropdown
@@ -137,7 +137,7 @@ const APP = {
         const opening = !recordsMenu.classList.contains('open');
         recordsMenu.classList.toggle('open');
         if (opening) {
-          document.getElementById('navManorsMenu')?.classList.remove('open');
+          document.getElementById('navRealmMenu')?.classList.remove('open');
           document.getElementById('navFateMenu')?.classList.remove('open');
           document.getElementById('navStoryMenu')?.classList.remove('open');
         }
@@ -160,7 +160,7 @@ const APP = {
         const opening = !storyMenu.classList.contains('open');
         storyMenu.classList.toggle('open');
         if (opening) {
-          document.getElementById('navManorsMenu')?.classList.remove('open');
+          document.getElementById('navRealmMenu')?.classList.remove('open');
           document.getElementById('navFateMenu')?.classList.remove('open');
           document.getElementById('navRecordsMenu')?.classList.remove('open');
         }
@@ -601,9 +601,12 @@ const APP = {
     document.querySelectorAll('.nav-tab').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === name);
     });
-    // Manors dropdown button: active when manors or npc-manors is showing
-    const manorsBtn = document.getElementById('navManorsBtn');
-    if (manorsBtn) manorsBtn.classList.toggle('active', name === 'manors' || name === 'npc-manors');
+    // Realm dropdown button: active for roster, families, and both manor tabs
+    const realmBtn = document.getElementById('navRealmBtn');
+    if (realmBtn) realmBtn.classList.toggle('active', ['roster', 'families', 'manors', 'npc-manors'].includes(name));
+    // Story dropdown button: active when arcs or prep is showing
+    const storyBtn = document.getElementById('navStoryBtn');
+    if (storyBtn) storyBtn.classList.toggle('active', name === 'arcs' || name === 'prep');
     // Fate dropdown button: active when winter or mausoleum is showing
     const fateBtn = document.getElementById('navFateBtn');
     if (fateBtn) fateBtn.classList.toggle('active', name === 'winter' || name === 'mausoleum');
@@ -611,8 +614,10 @@ const APP = {
     const recordsBtn = document.getElementById('navRecordsBtn');
     if (recordsBtn) recordsBtn.classList.toggle('active', name === 'chronicle' || name === 'journal');
     // Close dropdowns on any tab switch
-    const manorsMenu = document.getElementById('navManorsMenu');
-    if (manorsMenu) manorsMenu.classList.remove('open');
+    const realmMenu2 = document.getElementById('navRealmMenu');
+    if (realmMenu2) realmMenu2.classList.remove('open');
+    const storyMenu2 = document.getElementById('navStoryMenu');
+    if (storyMenu2) storyMenu2.classList.remove('open');
     const fateMenu = document.getElementById('navFateMenu');
     if (fateMenu) fateMenu.classList.remove('open');
     const recordsMenu = document.getElementById('navRecordsMenu');

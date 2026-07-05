@@ -26,17 +26,19 @@
         <span class="nav-icon">⚜</span>
         <span class="nav-label">Dashboard</span>
       </button>
-      <button class="nav-tab" data-tab="roster" title="NPC Roster">
-        <span class="nav-icon">📜</span>
-        <span class="nav-label">Roster</span>
-      </button>
-      <div class="nav-dropdown" id="navManors">
-        <button class="nav-tab nav-dropdown-trigger" id="navManorsBtn" title="Player Manors &amp; NPC Manors">
-          <span class="nav-icon">🏰</span>
-          <span class="nav-label">Manors</span>
+      <div class="nav-dropdown" id="navRealm">
+        <button class="nav-tab nav-dropdown-trigger" id="navRealmBtn" title="Roster, Families &amp; Manors">
+          <span class="nav-icon">👑</span>
+          <span class="nav-label">Realm</span>
           <span class="nav-caret">▾</span>
         </button>
-        <div class="nav-dropdown-menu" id="navManorsMenu">
+        <div class="nav-dropdown-menu" id="navRealmMenu">
+          <button class="nav-dropdown-item" data-tab="roster">
+            <span class="nav-icon">📜</span> Roster
+          </button>
+          <button class="nav-dropdown-item" data-tab="families">
+            <span class="nav-icon">🌳</span> Families
+          </button>
           <button class="nav-dropdown-item" data-tab="manors">
             <span class="nav-icon">🏰</span> Player Manors
           </button>
@@ -45,10 +47,6 @@
           </button>
         </div>
       </div>
-      <button class="nav-tab" data-tab="families" title="Families">
-        <span class="nav-icon">🌳</span>
-        <span class="nav-label">Families</span>
-      </button>
       <div class="nav-dropdown gm-only" id="navStory">
         <button class="nav-tab nav-dropdown-trigger" id="navStoryBtn" title="Story Arcs &amp; Session Prep">
           <span class="nav-icon">🧵</span>

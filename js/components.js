@@ -186,6 +186,7 @@ const Modal = {
     document.getElementById('navFateMenu')?.classList.remove('open');
     document.getElementById('navRecordsMenu')?.classList.remove('open');
     document.getElementById('navStoryMenu')?.classList.remove('open');
+    document.getElementById('navRealmMenu')?.classList.remove('open');
     const overlay = document.getElementById('modalOverlay');
     const box     = document.getElementById('modalBox');
     const content = document.getElementById('modalContent');

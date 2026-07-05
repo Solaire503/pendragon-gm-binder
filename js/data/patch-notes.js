@@ -400,6 +400,19 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.7.1',
+    date:    '2026-07-05',
+    sections: [
+      {
+        heading: 'Navigation — The Realm Menu',
+        items: [
+          'Roster, Families, Player Manors, and NPC Manors now live together under one 👑 Realm menu — the people and lands of the campaign in one place.',
+          'This takes the top bar from 8 entries down to 6, so everything through the Version button fits comfortably on laptop screens.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.7.0',
     date:    '2026-07-05',
     sections: [
