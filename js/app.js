@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '3.5.1';
+const APP_VERSION = '3.6.0';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────
@@ -93,6 +93,7 @@ const APP = {
         if (opening) {
           document.getElementById('navManorsMenu')?.classList.remove('open');
           document.getElementById('navRecordsMenu')?.classList.remove('open');
+          document.getElementById('navStoryMenu')?.classList.remove('open');
         }
       });
       fateMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
@@ -115,6 +116,7 @@ const APP = {
         if (opening) {
           document.getElementById('navFateMenu')?.classList.remove('open');
           document.getElementById('navRecordsMenu')?.classList.remove('open');
+          document.getElementById('navStoryMenu')?.classList.remove('open');
         }
       });
       manorsMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
@@ -137,6 +139,7 @@ const APP = {
         if (opening) {
           document.getElementById('navManorsMenu')?.classList.remove('open');
           document.getElementById('navFateMenu')?.classList.remove('open');
+          document.getElementById('navStoryMenu')?.classList.remove('open');
         }
       });
       recordsMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
@@ -146,6 +149,29 @@ const APP = {
         });
       });
       document.addEventListener('click', () => recordsMenu.classList.remove('open'));
+    }
+
+    // Wire Story dropdown (GM only — hidden for players via .gm-only)
+    const storyTrigger = document.getElementById('navStoryBtn');
+    const storyMenu    = document.getElementById('navStoryMenu');
+    if (storyTrigger && storyMenu) {
+      storyTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        const opening = !storyMenu.classList.contains('open');
+        storyMenu.classList.toggle('open');
+        if (opening) {
+          document.getElementById('navManorsMenu')?.classList.remove('open');
+          document.getElementById('navFateMenu')?.classList.remove('open');
+          document.getElementById('navRecordsMenu')?.classList.remove('open');
+        }
+      });
+      storyMenu.querySelectorAll('.nav-dropdown-item').forEach(item => {
+        item.addEventListener('click', () => {
+          this.switchTab(item.dataset.tab);
+          storyMenu.classList.remove('open');
+        });
+      });
+      document.addEventListener('click', () => storyMenu.classList.remove('open'));
     }
 
     // Wire Archive dropdown
@@ -613,6 +639,8 @@ const APP = {
       case 'chronicle':  TabChronicle.render();   break;
       case 'battle':     if (typeof TabBattle !== 'undefined') TabBattle.render(); break;
       case 'journal':    if (typeof TabJournal !== 'undefined') TabJournal.render(); break;
+      case 'arcs':       if (typeof TabArcs !== 'undefined') TabArcs.render(); break;
+      case 'prep':       if (typeof TabPrep !== 'undefined') TabPrep.render(); break;
     }
   },
 

@@ -75,7 +75,7 @@ store → at-mention → statblock-templates → components →
 dashboard → roster → manors → families → tree → winter →
 solos → mausoleum → chronicle → npc-manors → battle →
 pins → event-staging → tasks → notifications → notes → comments → journal →
-multiplayer → app
+arcs → prep → multiplayer → app
 ```
 
 ## Key Globals

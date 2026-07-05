@@ -400,6 +400,21 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.6.0',
+    date:    '2026-07-05',
+    sections: [
+      {
+        heading: 'Story Arcs & Session Prep (GM)',
+        items: [
+          'New GM-only "Story" menu in the nav with two tabs: Story Arcs and Session Prep — the campaign\'s memory layer, built on the same data Claude reads and writes during prep conversations.',
+          'Story Arcs: every ongoing plot thread as a card — status (Active / Cold / Complete), summary, linked NPCs as clickable chips, an objectives checklist, a timeline of how the thread has advanced, and GM notes with @mention support.',
+          'Session Prep: a game-night dashboard per session — the "Previously…" recap up top, tonight\'s arcs tagged On the Table / May Surface / Background, staged NPCs with their current stance, open questions, and GM notes. Everything clicks through: arcs to arc detail, NPCs straight to their cards.',
+          'Draft prep with Claude in a conversation, then refine and run it from this screen on game night — or build it all by hand here. Same data either way.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.5.1',
     date:    '2026-07-05',
     sections: [
