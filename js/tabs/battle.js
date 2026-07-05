@@ -72,6 +72,7 @@ const TabBattle = {
       }
 
       this._state = res.data;
+      this._renderedState = res.data.active ? res.data.state : 'empty';
 
       if (!res.data.active) {
         this._renderEmpty(panel);
@@ -82,8 +83,11 @@ const TabBattle = {
       } else if (res.data.state === 'finalizing') {
         await this._loadAndRenderFinalization(panel);
       } else {
+        this._renderedState = 'empty';
         this._renderEmpty(panel);
       }
+
+      if (!isGM()) this._startPlayerPoll();
     } catch (err) {
       Toast.show('Battle render error: ' + err.message, 'error');
       if (panel) panel.innerHTML = `<p style="padding:2rem;color:var(--crimson-mid)">Battle render error: ${esc(String(err.message))}</p>`;
@@ -809,15 +813,289 @@ const TabBattle = {
     }
   },
 
+  /* ── Player battle view ─────────────────────────────────────── */
+
+  PLAYER_STATUS_LABELS: {
+    active: 'Active', major_wound: 'Major Wound', unconscious: 'Unconscious',
+    dead: 'Dead', alone: 'Alone in Field', rear: 'Retired to Rear',
+  },
+  PLAYER_STATUS_COLOURS: {
+    active: '#208060', major_wound: '#c07820', unconscious: '#c07820',
+    dead: '#c03030', alone: '#9040c0', rear: '#707070',
+  },
+  ENEMY_STATUS_LABELS: {
+    active: 'Fighting', major_wound: 'Grievously Wounded', dead: 'Slain',
+    captured: 'Captured', fled: 'Fled',
+  },
+  PASSION_RESULT_LABELS: {
+    inspired: 'Inspired', impassioned: 'Impassioned', failed: 'Failed', fumbled: 'Fumbled',
+  },
+
+  _addKillOpenFor: null,
+
   _renderPlayerView(panel) {
     const b = this._battle;
+    const me = window.__USER__?.username;
+    const mine = (b.participants || []).filter(p => p.controlledBy === me);
+    const cmdr = (b.participants || []).find(p => p.participantId === b.conroiCommanderId);
+    const iAmCommander = !!(cmdr && cmdr.controlledBy === me);
+    const sizeLabel = (this.SIZES.find(s => s.value === b.size) || {}).label || b.size;
+    const fc = b.friendlyCommander || {};
+    const ec = b.enemyCommander || {};
+
     panel.innerHTML = `
-      <div class="battle-empty">
-        <div class="battle-empty-icon">⚔</div>
-        <h2 class="battle-empty-title">${esc(b.name)}</h2>
-        <p class="battle-empty-text">Round ${b.currentRound} / ${b.maxRounds}</p>
-        <p class="muted" style="margin-top:12px;">Thanks for clicking the battle banner or coming to the battle tab :) Player view coming! When? TBD, ask Steve.</p>
+      <div class="battle-player">
+        <div class="bp-header">
+          <h2 class="bp-title">⚔ ${esc(b.name)}</h2>
+          <div class="bp-subtitle">${b.location ? esc(b.location) + ' · ' : ''}${esc(sizeLabel)} · Round ${b.currentRound} / ${b.maxRounds}</div>
+        </div>
+        ${this._bpFieldCard(b)}
+        ${this._bpMoraleCard(b, cmdr, iAmCommander)}
+        ${mine.map(p => this._bpKnightCard(b, p)).join('')}
+        ${mine.length === 0 ? `<div class="bp-card"><p class="bp-empty-note">You have no knight in this battle. Watch the field below.</p></div>` : ''}
+        ${this._bpConroiCard(b)}
+        ${this._bpFoesCard(b)}
+        ${this._bpRoundLogCard(b)}
+        <div class="bp-commanders">${esc(fc.name || '—')} <span class="bp-vs">vs</span> ${esc(ec.name || '—')}</div>
       </div>`;
+  },
+
+  _bpFieldCard(b) {
+    const enc = b.encounter || {};
+    const foe = enc.foeId ? (b.foes || []).find(f => f.foeId === enc.foeId) : null;
+    const facing = enc.retired
+      ? '<span class="bp-facing bp-facing-rear">Retired to the Rear</span>'
+      : (foe ? `<span class="bp-facing">Facing: <strong>${esc(foe.type)}</strong></span>` : '');
+    if (!enc.text && !facing) return '';
+    return `
+      <div class="bp-card">
+        <div class="bp-card-title">The Field</div>
+        ${enc.text ? `<p class="bp-field-text">${esc(enc.text)}</p>` : ''}
+        ${facing}
+      </div>`;
+  },
+
+  _bpMoraleCard(b, cmdr, iAmCommander) {
+    const m = b.morale || { current: 0, starting: 0 };
+    const pct = m.starting > 0 ? Math.min(100, Math.round((m.current / m.starting) * 100)) : (m.current > 0 ? 100 : 0);
+    const btns = iAmCommander ? `
+      <div class="bp-morale-btns">
+        <button onclick="TabBattle._myMorale(-5)" title="-5">−5</button>
+        <button onclick="TabBattle._myMorale(-1)" title="-1">−1</button>
+        <button onclick="TabBattle._myMorale(1)" title="+1">+1</button>
+        <button onclick="TabBattle._myMorale(5)" title="+5">+5</button>
+      </div>` : '';
+    return `
+      <div class="bp-card">
+        <div class="bp-card-title">Conroi Morale</div>
+        <div class="bp-morale-row">
+          <div class="bc-morale-track"><div class="bc-morale-fill" style="width:${pct}%"></div></div>
+          <span class="bp-morale-num">${m.current} / ${m.starting}</span>
+          ${btns}
+        </div>
+        ${cmdr ? `<div class="bp-cmdr-line">Commander: <strong>${esc(cmdr.name)}</strong>${iAmCommander ? ' (you — adjust as the GM calls it)' : ''}</div>` : ''}
+      </div>`;
+  },
+
+  _bpKnightCard(b, p) {
+    const st = this.PLAYER_STATUS_LABELS[p.status] || p.status;
+    const stCol = this.PLAYER_STATUS_COLOURS[p.status] || '#707070';
+    const posture = p.posture ? p.posture.charAt(0).toUpperCase() + p.posture.slice(1) : '—';
+    const passion = p.passion
+      ? `<div class="bp-passion">✦ ${esc(p.passion.name)} — ${esc(this.PASSION_RESULT_LABELS[p.passion.result] || p.passion.result)}</div>`
+      : '';
+    const isCmdr = p.participantId === b.conroiCommanderId;
+
+    const opponents = (p.enemies || []).map(e => {
+      const est = this.ENEMY_STATUS_LABELS[e.status] || e.status;
+      const down = e.status !== 'active';
+      return `<div class="bp-opp ${down ? 'bp-opp-down' : ''}">
+        <span class="bp-opp-name">${esc(e.label || e.type)}</span>
+        <span class="bp-opp-weapon">${esc(e.weapon || '')}</span>
+        <span class="bp-opp-status">${esc(est)}</span>
+      </div>`;
+    }).join('');
+
+    const ledger = p.killLedger || [];
+    const totalGlory = ledger.reduce((s, k) => s + (Number(k.glory) || 0), 0);
+    const totalKv = ledger.reduce((s, k) => s + (Number(k.kv) || 0), 0);
+    const killRows = ledger.map(k => `
+      <div class="bp-kill-row">
+        <span>${esc(k.type)} <span class="bp-kill-round">(Rd ${k.round})</span></span>
+        <span class="bp-kill-glory">${Number(k.glory) || 0} gl${k.enemyId ? '' : `
+          <button class="bp-kill-undo" title="Remove this kill"
+            onclick="TabBattle._myUndoKill('${p.participantId}','${k.killId}')">✕</button>`}</span>
+      </div>`).join('');
+
+    const panelOpen = this._addKillOpenFor === p.participantId;
+    const foeBtns = (b.foes || []).map(f =>
+      `<button class="bp-foe-btn" onclick="TabBattle._myAddKill('${p.participantId}','${f.foeId}')">${esc(f.type)}</button>`
+    ).join('');
+    const addKillPanel = panelOpen ? `
+      <div class="bp-addkill-panel">
+        <div class="bp-addkill-hint">Tap the foe you felled:</div>
+        <div class="bp-foe-btn-wrap">${foeBtns}</div>
+        <div class="bp-addkill-custom">
+          <input type="text" class="edit-input bp-custom-input" id="bp-custom-${esc(p.participantId)}"
+            placeholder="Other… (GM sets glory later)" maxlength="60">
+          <button class="btn btn-ghost bp-custom-add" onclick="TabBattle._myAddCustomKill('${p.participantId}')">Add</button>
+        </div>
+      </div>` : '';
+
+    return `
+      <div class="bp-card bp-knight">
+        <div class="bp-knight-head">
+          <span class="bp-knight-name">⚜ ${esc(p.name)}${isCmdr ? ' <span class="bp-cmd-flag">[cmd]</span>' : ''}</span>
+          <span class="bp-status" style="background:${stCol}18;color:${stCol};">${esc(st)}</span>
+        </div>
+        <div class="bp-knight-meta">Posture: <strong>${esc(posture)}</strong></div>
+        ${passion}
+        ${opponents ? `<div class="bp-sub">Opponents</div>${opponents}` : ''}
+        <div class="bp-kills-head">
+          <span class="bp-sub" style="margin:0">Kill Tally</span>
+          <button class="btn btn-primary bp-addkill-btn" onclick="TabBattle._toggleAddKill('${p.participantId}')">${panelOpen ? 'Close' : '+ Add Kill'}</button>
+        </div>
+        ${addKillPanel}
+        ${killRows || '<div class="bp-kill-row bp-kill-none">No kills yet this battle.</div>'}
+        ${ledger.length ? `<div class="bp-kill-total">Total: ${totalGlory} Glory · ${totalKv.toFixed(2)} KV</div>` : ''}
+      </div>`;
+  },
+
+  _bpConroiCard(b) {
+    const sorted = [...(b.participants || [])].sort((a, b_) => {
+      if (a.isPK !== b_.isPK) return a.isPK ? -1 : 1;
+      return a.name.localeCompare(b_.name);
+    });
+    const rows = sorted.map(p => {
+      const st = this.PLAYER_STATUS_LABELS[p.status] || p.status;
+      const stCol = this.PLAYER_STATUS_COLOURS[p.status] || '#707070';
+      const posture = p.posture ? p.posture.charAt(0).toUpperCase() + p.posture.slice(1) : '—';
+      const passion = p.passion ? `✦ ${esc(p.passion.name)}` : '';
+      const isCmdr = p.participantId === b.conroiCommanderId;
+      return `
+        <div class="bp-conroi-row">
+          <span class="bp-conroi-name">${p.isPK ? '⚜ ' : ''}${esc(p.name)}${isCmdr ? ' <span class="bp-cmd-flag">[cmd]</span>' : ''}</span>
+          <span class="bp-conroi-posture">${esc(posture)}</span>
+          <span class="bp-conroi-passion">${passion}</span>
+          <span class="bp-status" style="background:${stCol}18;color:${stCol};">${esc(st)}</span>
+        </div>`;
+    }).join('');
+    return `
+      <div class="bp-card">
+        <div class="bp-card-title">The Conroi</div>
+        ${rows}
+      </div>`;
+  },
+
+  _bpFoesCard(b) {
+    const foes = b.foes || [];
+    if (!foes.length) return '';
+    return `
+      <div class="bp-card">
+        <div class="bp-card-title">Possible Foes</div>
+        <div class="bp-foe-chips">${foes.map(f => `<span class="bp-foe-chip">${esc(f.type)}</span>`).join('')}</div>
+      </div>`;
+  },
+
+  _bpRoundLogCard(b) {
+    const rounds = b.rounds || [];
+    if (!rounds.length) return '';
+    const rows = [...rounds].reverse().map(r => {
+      const mor = r.morale || {};
+      return `
+        <div class="bp-log-row">
+          <span class="bp-log-round">Rd ${r.round}</span>
+          <span class="bp-log-enc">${esc(r.encounter || '—')}</span>
+          <span class="bp-log-morale">${mor.start ?? '—'} → ${mor.end ?? '—'}</span>
+        </div>`;
+    }).join('');
+    return `
+      <div class="bp-card">
+        <div class="bp-card-title bp-log-toggle" onclick="TabBattle._togglePlayerLog()">
+          Round Log <span class="bp-log-caret">${this._roundLogOpen ? '▾' : '▸'}</span>
+        </div>
+        ${this._roundLogOpen ? rows : ''}
+      </div>`;
+  },
+
+  _togglePlayerLog() {
+    this._roundLogOpen = !this._roundLogOpen;
+    const panel = document.getElementById('tab-battle');
+    if (panel && panel.querySelector('.battle-player')) this._renderPlayerView(panel);
+  },
+
+  _toggleAddKill(pid) {
+    this._addKillOpenFor = this._addKillOpenFor === pid ? null : pid;
+    const panel = document.getElementById('tab-battle');
+    if (panel && panel.querySelector('.battle-player')) this._renderPlayerView(panel);
+  },
+
+  async _myAddKill(pid, foeId) {
+    const res = await API.post('/api/battle/my-kill', { participantId: pid, foeId });
+    if (!res.ok) { Toast.show(res.error || 'Failed to record kill', 'error'); return; }
+    this._applyMyLedger(pid, res.data.killLedger);
+    Toast.show('Kill recorded — ' + (res.data.kill?.type || ''), 'success');
+  },
+
+  async _myAddCustomKill(pid) {
+    const input = document.getElementById('bp-custom-' + pid);
+    const custom = (input?.value || '').trim();
+    if (!custom) { Toast.show('Name the foe first', 'error'); return; }
+    const res = await API.post('/api/battle/my-kill', { participantId: pid, custom });
+    if (!res.ok) { Toast.show(res.error || 'Failed to record kill', 'error'); return; }
+    this._applyMyLedger(pid, res.data.killLedger);
+    Toast.show('Kill recorded — GM will set glory', 'success');
+  },
+
+  async _myUndoKill(pid, killId) {
+    const res = await API.post('/api/battle/my-kill', { participantId: pid, removeKillId: killId });
+    if (!res.ok) { Toast.show(res.error || 'Failed to remove kill', 'error'); return; }
+    this._applyMyLedger(pid, res.data.killLedger);
+    Toast.show('Kill removed', 'success');
+  },
+
+  _applyMyLedger(pid, ledger) {
+    const p = (this._battle.participants || []).find(x => x.participantId === pid);
+    if (p && ledger) p.killLedger = ledger;
+    const panel = document.getElementById('tab-battle');
+    if (panel && panel.querySelector('.battle-player')) this._renderPlayerView(panel);
+  },
+
+  async _myMorale(delta) {
+    const res = await API.post('/api/battle/my-morale', { delta });
+    if (!res.ok) { Toast.show(res.error || 'Failed to adjust morale', 'error'); return; }
+    this._battle.morale = res.data.morale;
+    const panel = document.getElementById('tab-battle');
+    if (panel && panel.querySelector('.battle-player')) this._renderPlayerView(panel);
+  },
+
+  /* ── Player polling (3s while on the battle tab) ────────────── */
+
+  _playerPollTimer: null,
+  _renderedState: null,
+
+  _startPlayerPoll() {
+    if (this._playerPollTimer) return;
+    this._playerPollTimer = setInterval(() => this._playerPollTick(), 3000);
+  },
+
+  async _playerPollTick() {
+    if (isGM() || document.hidden) return;
+    if (typeof APP === 'undefined' || APP._currentTab !== 'battle') return;
+    const ae = document.activeElement;
+    if (ae && ae.classList && ae.classList.contains('bp-custom-input')) return;
+    try {
+      const res = await API.get('/api/battle/state');
+      if (!res.ok) return;
+      const nb = res.data.battle;
+      const nstate = nb ? nb.state : 'empty';
+      if (nstate !== this._renderedState) { await this.render(); return; }
+      if (nstate !== 'active') return;
+      if (JSON.stringify(nb) === JSON.stringify(this._battle)) return;
+      this._battle = nb;
+      const panel = document.getElementById('tab-battle');
+      if (panel && panel.querySelector('.battle-player')) this._renderPlayerView(panel);
+    } catch (e) { /* silent */ }
   },
 
   _renderBattleConsole(panel) {
@@ -1565,7 +1843,7 @@ const TabBattle = {
 
   async _endRound() {
     if (!confirm('End Round ' + this._battle.currentRound + '?')) return;
-    const res = await API.post('/api/battle/round/end');
+    const res = await API.post('/api/battle/round/end', { round: this._battle.currentRound });
     if (!res.ok) { Toast.show(res.error || 'Failed', 'error'); return; }
     this._battle = res.data.battle;
     this._expandedPKs.clear();

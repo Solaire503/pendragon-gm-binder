@@ -3762,3 +3762,67 @@ html.is-player .player-readonly-banner {
   .npc-sidebar-close { width: 40px; height: 40px; }
   .filter-chip     { min-height: 32px; display: inline-flex; align-items: center; }
 }
+
+/* ══ Battle player view ══════════════════════════════════════ */
+.battle-player { max-width: 600px; margin: 0 auto; padding: 16px 16px 48px; display: flex; flex-direction: column; gap: 12px; }
+.bp-header { text-align: center; padding: 8px 0 4px; }
+.bp-title { font-family: var(--font-display); font-size: 1.25rem; color: var(--ink); margin: 0 0 4px; }
+.bp-subtitle { font-size: 0.78rem; color: var(--ink-soft); }
+.bp-card { background: var(--vellum-mid); border: 1px solid var(--vellum-deep); border-radius: var(--radius); padding: 14px 16px; }
+.bp-card-title { font-family: var(--font-heading); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold-text); margin-bottom: 10px; }
+.bp-sub { font-family: var(--font-heading); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 6px; }
+.bp-empty-note { font-size: 0.85rem; color: var(--ink-soft); font-style: italic; margin: 0; }
+.bp-field-text { font-size: 0.9rem; line-height: 1.5; color: var(--ink); font-style: italic; margin: 0 0 8px; }
+.bp-facing { font-size: 0.85rem; color: var(--ink); }
+.bp-facing-rear { color: var(--ink-soft); font-style: italic; }
+.bp-morale-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bp-morale-num { font-size: 0.9rem; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.bp-morale-btns { display: flex; gap: 4px; }
+.bp-morale-btns button { min-width: 34px; min-height: 34px; font-size: 0.85rem; font-weight: 700; border: 1px solid var(--vellum-deep); border-radius: 4px; background: var(--vellum); color: var(--ink-mid); cursor: pointer; }
+.bp-morale-btns button:hover { border-color: var(--gold-text); color: var(--gold-text); }
+.bp-cmdr-line { font-size: 0.78rem; color: var(--ink-soft); margin-top: 8px; }
+.bp-knight-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.bp-knight-name { font-size: 0.95rem; font-weight: 700; color: var(--ink); }
+.bp-cmd-flag { font-size: 0.68rem; color: var(--gold-text); font-weight: 600; letter-spacing: 0.05em; }
+.bp-status { font-size: 0.72rem; padding: 2px 9px; border-radius: 10px; font-weight: 600; white-space: nowrap; }
+.bp-knight-meta { font-size: 0.8rem; color: var(--ink-mid); margin-top: 6px; }
+.bp-passion { font-size: 0.8rem; color: var(--crimson-mid); font-style: italic; margin-top: 4px; }
+.bp-opp { display: flex; align-items: baseline; gap: 8px; font-size: 0.83rem; padding: 3px 0; }
+.bp-opp-name { font-weight: 600; color: var(--ink); }
+.bp-opp-weapon { color: var(--ink-soft); font-size: 0.75rem; flex: 1; }
+.bp-opp-status { font-size: 0.75rem; font-weight: 600; color: #208060; white-space: nowrap; }
+.bp-opp-down .bp-opp-name { text-decoration: line-through; opacity: 0.6; }
+.bp-opp-down .bp-opp-status { color: #c03030; }
+.bp-kills-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 6px; }
+.bp-addkill-btn { font-size: 0.78rem; padding: 6px 14px; min-height: 34px; }
+.bp-addkill-panel { background: var(--vellum); border: 1px dashed var(--vellum-deep); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
+.bp-addkill-hint { font-size: 0.75rem; color: var(--ink-soft); margin-bottom: 8px; }
+.bp-foe-btn-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.bp-foe-btn { font-size: 0.8rem; padding: 8px 12px; min-height: 38px; border: 1px solid var(--vellum-deep); border-radius: 6px; background: var(--vellum-mid); color: var(--ink); cursor: pointer; font-weight: 600; }
+.bp-foe-btn:hover { border-color: var(--gold-text); color: var(--gold-text); }
+.bp-addkill-custom { display: flex; gap: 6px; margin-top: 8px; }
+.bp-addkill-custom .bp-custom-input { flex: 1; font-size: 0.83rem; }
+.bp-custom-add { font-size: 0.78rem; padding: 6px 12px; }
+.bp-kill-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.83rem; color: var(--ink); padding: 3px 0; }
+.bp-kill-none { color: var(--ink-soft); font-style: italic; }
+.bp-kill-round { color: var(--ink-soft); font-size: 0.72rem; }
+.bp-kill-glory { font-weight: 600; color: var(--gold-text); white-space: nowrap; }
+.bp-kill-undo { border: none; background: none; color: var(--crimson-mid); cursor: pointer; font-size: 0.8rem; padding: 2px 4px; margin-left: 4px; }
+.bp-kill-total { border-top: 1px solid var(--vellum-deep); margin-top: 6px; padding-top: 6px; font-size: 0.83rem; font-weight: 700; color: var(--ink); text-align: right; }
+.bp-conroi-row { display: flex; align-items: center; gap: 8px; font-size: 0.83rem; padding: 4px 0; border-bottom: 1px solid var(--vellum-deep); }
+.bp-conroi-row:last-child { border-bottom: none; }
+.bp-conroi-name { flex: 1; font-weight: 600; color: var(--ink); min-width: 0; }
+.bp-conroi-posture { font-size: 0.75rem; color: var(--ink-mid); white-space: nowrap; }
+.bp-conroi-passion { font-size: 0.75rem; color: var(--crimson-mid); font-style: italic; white-space: nowrap; }
+.bp-foe-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bp-foe-chip { font-size: 0.78rem; padding: 4px 10px; border-radius: 12px; background: var(--vellum); border: 1px solid var(--vellum-deep); color: var(--ink-mid); }
+.bp-log-toggle { cursor: pointer; user-select: none; margin-bottom: 0; }
+.bp-log-toggle .bp-log-caret { color: var(--ink-soft); }
+.bp-log-row { display: flex; gap: 10px; font-size: 0.8rem; padding: 4px 0; border-bottom: 1px solid var(--vellum-deep); }
+.bp-log-row:first-of-type { margin-top: 8px; }
+.bp-log-row:last-child { border-bottom: none; }
+.bp-log-round { font-weight: 700; color: var(--ink-mid); white-space: nowrap; }
+.bp-log-enc { flex: 1; color: var(--ink); min-width: 0; }
+.bp-log-morale { color: var(--ink-soft); white-space: nowrap; }
+.bp-commanders { text-align: center; font-size: 0.75rem; color: var(--ink-soft); padding: 4px 0 12px; }
+.bp-vs { color: var(--crimson-mid); font-style: italic; }

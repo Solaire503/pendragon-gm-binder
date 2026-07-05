@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.4.1'  # keep in sync with js/app.js
+APP_VERSION  = '3.5.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -2533,10 +2533,6 @@ def _filter_battle_for_player(battle: dict, username: str) -> dict | None:
     return b
 
 
-def _battle_stub():
-    return jsonify({'error': 'Not implemented yet'}), 501
-
-
 def _find_participant(battle, pid):
     for p in battle.get('participants', []):
         if p.get('participantId') == pid:
@@ -2687,6 +2683,11 @@ def api_battle_start():
         return jsonify({'error': 'Battle needs a name'}), 422
     if not battle.get('participants'):
         return jsonify({'error': 'Add at least one participant'}), 422
+    try:
+        if int(battle.get('maxRounds') or 0) < 1:
+            return jsonify({'error': 'Max rounds must be at least 1'}), 422
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Max rounds must be at least 1'}), 422
     battle['state'] = 'active'
     battle['currentRound'] = 1
     battle['rounds'] = []
@@ -2877,6 +2878,7 @@ def api_battle_morale():
             m['current'] = min(m['starting'], max(0, m['current'] + int(body['delta'])))
         if 'starting' in body:
             m['starting'] = max(0, int(body['starting']))
+            m['current'] = min(m['current'], m['starting'])
     except (ValueError, TypeError):
         return jsonify({'error': 'Morale values must be integers'}), 422
     _save_active_battle(battle)
@@ -3168,6 +3170,9 @@ def api_battle_round_end():
     battle = _get_active_battle()
     if not battle or battle['state'] != 'active':
         return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    if 'round' in body and body['round'] != battle['currentRound']:
+        return jsonify({'error': 'Round already ended'}), 409
     snapshot = {
         'participants': copy.deepcopy(battle['participants']),
         'morale': copy.deepcopy(battle['morale']),
@@ -3336,19 +3341,81 @@ def api_battle_abandon():
 @login_required
 @_with_battle_lock
 def api_battle_my_kill():
+    """Player kill tally. Add a kill by foe type (or custom name), or remove
+    a manually-added entry. Kills the GM tracks via enemy cards carry an
+    enemyId and cannot be removed here."""
     err = _csrf_check()
     if err: return err
-    return _battle_stub()
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    p = _find_participant(battle, body.get('participantId'))
+    if not p:
+        return jsonify({'error': 'Participant not found'}), 404
+    if session.get('role') != 'gm' and p.get('controlledBy') != session.get('username'):
+        return jsonify({'error': 'You do not control this knight'}), 403
+    ledger = p.setdefault('killLedger', [])
+
+    remove_id = body.get('removeKillId')
+    if remove_id:
+        for i, k in enumerate(ledger):
+            if k.get('killId') == remove_id:
+                if k.get('enemyId'):
+                    return jsonify({'error': 'That kill is tracked by the GM — ask them to undo it'}), 409
+                ledger.pop(i)
+                _save_active_battle(battle)
+                return jsonify({'killLedger': ledger})
+        return jsonify({'error': 'Kill not found'}), 404
+
+    foe_id = body.get('foeId')
+    custom = str(body.get('custom', '')).strip()[:60]
+    if foe_id:
+        foe = next((f for f in battle.get('foes', []) if f.get('foeId') == foe_id), None)
+        if not foe:
+            return jsonify({'error': 'Foe type not found in this battle'}), 404
+        kill = {
+            'type': foe.get('type', ''),
+            'weapon': foe.get('weapon', ''),
+            'glory': foe.get('glory', 0),
+            'kv': foe.get('kv', 0),
+        }
+    elif custom:
+        kill = {'type': custom, 'weapon': '', 'glory': 0, 'kv': 0}
+    else:
+        return jsonify({'error': 'Provide foeId or custom foe name'}), 422
+    kill['killId'] = 'k_' + _secrets_mod.token_hex(8)
+    kill['round'] = battle['currentRound']
+    ledger.append(kill)
+    _save_active_battle(battle)
+    return jsonify({'kill': kill, 'killLedger': ledger})
 
 
 @app.route('/api/battle/my-morale', methods=['POST'])
 @login_required
 @_with_battle_lock
 def api_battle_my_morale():
-    """Conroi commander only — adjust morale by delta."""
+    """Conroi commander's player only — adjust morale by delta (GM calls it out)."""
     err = _csrf_check()
     if err: return err
-    return _battle_stub()
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    cmdr = _find_participant(battle, battle.get('conroiCommanderId'))
+    if session.get('role') != 'gm' and (
+            not cmdr or cmdr.get('controlledBy') != session.get('username')):
+        return jsonify({'error': 'Only the conroi commander may adjust morale'}), 403
+    body = request.get_json(silent=True) or {}
+    try:
+        delta = int(body.get('delta'))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Delta must be an integer'}), 422
+    if abs(delta) > 10:
+        return jsonify({'error': 'Delta too large'}), 422
+    m = battle['morale']
+    m['current'] = min(m['starting'], max(0, m['current'] + delta))
+    _save_active_battle(battle)
+    return jsonify({'morale': m})
 
 
 # ── NPC PURGE (LO-18) ─────────────────────────────────────────────────────────

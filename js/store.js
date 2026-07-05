@@ -220,7 +220,7 @@ const STORE = {
   addSoloEvent(npcId, event) {
     const npc = this.getNpc(npcId);
     if (!npc) return null;
-    const id = 'se-' + Date.now();
+    const id = 'se-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
     if (!npc.soloEvents) npc.soloEvents = [];
     npc.soloEvents.unshift({ id, ...event });
     if (event.year && event.title) {

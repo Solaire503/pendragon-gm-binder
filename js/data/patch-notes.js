@@ -400,6 +400,37 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.5.0',
+    date:    '2026-07-05',
+    sections: [
+      {
+        heading: 'Battle Tracker — Player View',
+        items: [
+          'Players now get a full battle view during active battles: the encounter narrative, who you\'re facing, conroi morale, your knight\'s card with status, posture, and passion, your opponents (names and weapons only — no stats), and a live view of your fellow conroi members.',
+          'Kill Tally with "+ Add Kill" — tap the foe type you felled and it\'s recorded with the correct glory, live for the GM. There\'s an "Other…" option for anything unusual (GM sets glory later), and you can remove your own mis-taps.',
+          'The conroi commander gets morale +/− buttons — the GM calls the adjustment, you enter it.',
+          'The view updates automatically every 3 seconds while you\'re on the battle tab, and is built for phones.',
+          'Squires and any NPC the GM grants you control of appear as your own cards with the same kill tracking.',
+        ],
+      },
+      {
+        heading: 'Battle Tracker — Fixes',
+        items: [
+          'Lowering starting morale below current morale no longer leaves the bar showing over 100%.',
+          'Double-clicking "End Round" can no longer skip a round and wipe the round log snapshot.',
+          'A battle can no longer be started with zero max rounds.',
+        ],
+      },
+      {
+        heading: 'Misc Fixes',
+        items: [
+          'Solo event IDs can no longer collide when created in the same instant.',
+          'Caliburn\'s /chronicle Discord command works again (it had silently broken after a server update).',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.4.1',
     date:    '2026-07-01',
     sections: [
