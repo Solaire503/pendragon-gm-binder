@@ -440,6 +440,7 @@ html.is-gm .hdr-dropdown.gm-only      { display: block !important; }
 /* GM-only elements: hidden by default, shown only when html.is-gm */
 .gm-only { display: none !important; }
 html.is-gm .nav-tab.gm-only  { display: flex !important; }
+html.is-gm .nav-dropdown.gm-only { display: flex !important; }
 html.is-gm button.gm-only    { display: inline-flex !important; }
 
 /* Player read-only: hide edit controls inside tab panels */
@@ -3910,4 +3911,21 @@ html.is-player .player-readonly-banner {
   .prep-npc-name { flex-basis: 110px; }
   .arc-detail-top { flex-direction: column; align-items: stretch; }
   .arc-status-toggle { justify-content: center; }
+}
+
+/* ══ Header compression — laptop widths ══════════════════════
+   Mobile (≤640px) wraps the nav onto its own row; these tiers keep
+   the single-row header fitting on 13-15" laptops. */
+@media (min-width: 641px) and (max-width: 1500px) {
+  .header-brand { min-width: 0; padding: 0 12px; }
+  .nav-tab      { padding: 0 9px; letter-spacing: 0.07em; }
+  .header-right { gap: 4px; padding: 0 6px; }
+  .hdr-btn      { padding: 5px 7px; letter-spacing: 0.06em; }
+}
+@media (min-width: 641px) and (max-width: 1320px) {
+  .app-nav .nav-label { display: none; }   /* icons only — titles give tooltips */
+  .nav-tab       { padding: 0 11px; }
+  .nav-tab .nav-icon { font-size: 1.05rem; }
+  .brand-sub     { display: none; }
+  .year-label    { display: none; }
 }

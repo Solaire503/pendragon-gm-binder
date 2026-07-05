@@ -400,6 +400,19 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.6.1',
+    date:    '2026-07-05',
+    sections: [
+      {
+        heading: 'Fixes — Story Menu & Header Fit',
+        items: [
+          'The Story menu was invisible even for the GM — the GM-only visibility rules didn\'t cover nav dropdowns. Fixed.',
+          'The header now fits on 13-15" laptops: nav tabs compress below 1500px wide, and below 1320px they collapse to icons only (hover for the name). The Guide button stays reachable.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.6.0',
     date:    '2026-07-05',
     sections: [
