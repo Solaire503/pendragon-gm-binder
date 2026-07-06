@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.8.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.9.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -1122,20 +1122,29 @@ def api_player_load():
     try:
         data = path.read_text(encoding='utf-8')
         binder = json.loads(data)
-        # Strip GM-only fields from every NPC before sending to players
+        # Strip GM-only fields from every NPC before sending to players —
+        # except NPCs in the player's own household, whose notes/skills/
+        # passions/stats stay visible (and editable, see /api/npc PATCH).
         _GM_NPC_FIELDS = {'stats', 'passions', 'skills', 'notes', 'statblock_template'}
+        user_hh = (session.get('household') or '').lower()
+
+        def _strip(npc):
+            if not isinstance(npc, dict):
+                return
+            if user_hh and (npc.get('household') or '').lower() == user_hh:
+                npc.pop('statblock_template', None)
+                return
+            for f in _GM_NPC_FIELDS:
+                npc.pop(f, None)
+
         for key in ('living', 'dead'):
             npc_list = binder.get(key, [])
             if isinstance(npc_list, list):
                 for npc in npc_list:
-                    if isinstance(npc, dict):
-                        for f in _GM_NPC_FIELDS:
-                            npc.pop(f, None)
+                    _strip(npc)
             elif isinstance(npc_list, dict):
                 for npc in npc_list.values():
-                    if isinstance(npc, dict):
-                        for f in _GM_NPC_FIELDS:
-                            npc.pop(f, None)
+                    _strip(npc)
         return app.response_class(json.dumps(binder), mimetype='application/json')
     except Exception:
         return jsonify({'error': 'Failed to load save data'}), 500
@@ -3683,6 +3692,64 @@ def _push_notification(username: str, notif_type: str, text: str, link: str = ''
         notifs.insert(0, notif)
         notifs = notifs[:50]
         _write_json(_notifications_path(username), notifs)
+
+
+# ── PLAYER NPC EDIT (household-scoped) ────────────────────────────────────────
+
+_PLAYER_NPC_UPDATABLE = ('name', 'pronoun', 'notes', 'passions', 'skills', 'stats')
+
+
+@app.route('/api/npc/<npc_id>', methods=['PATCH'])
+@login_required
+def api_npc_household_update(npc_id):
+    """Household-scoped NPC edit. Players may edit only NPCs in their own
+    household, and only the _PLAYER_NPC_UPDATABLE fields. Every player edit
+    pushes a notification to the GM(s) naming the changed fields."""
+    err = _csrf_check()
+    if err: return err
+    is_gm = session.get('role') == 'gm'
+    body = request.get_json(silent=True) or {}
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 500
+    with _save_lock:
+        binder = json.loads(save_path.read_text(encoding='utf-8'))
+        npc = next((n for n in binder.get('living', []) if n.get('id') == npc_id), None) \
+           or next((n for n in binder.get('dead', []) if n.get('id') == npc_id), None)
+        if npc is None:
+            return jsonify({'error': 'NPC not found'}), 404
+        if not is_gm:
+            user_hh = (session.get('household') or '').lower()
+            if not user_hh:
+                return jsonify({'error': 'No household assigned'}), 403
+            if (npc.get('household') or '').lower() != user_hh:
+                return jsonify({'error': 'You may only edit members of your own household'}), 403
+        changed = []
+        for field in _PLAYER_NPC_UPDATABLE:
+            if field not in body:
+                continue
+            val = body[field]
+            if not isinstance(val, str):
+                return jsonify({'error': f'{field} must be a string'}), 422
+            limit = 5000 if field in ('notes', 'passions', 'skills', 'stats') else 200
+            val = val.strip()[:limit]
+            if field == 'name' and not val:
+                return jsonify({'error': 'Name cannot be empty'}), 422
+            if (npc.get(field) or '') != val:
+                npc[field] = val
+                changed.append(field)
+        if changed:
+            _rotate_backup(save_path)
+            _atomic_write(save_path, json.dumps(binder, indent=2))
+    if changed and not is_gm:
+        text = f"{session['username']} edited {npc.get('name', npc_id)} — {', '.join(changed)}"
+        for u in load_users():
+            if u.get('role') == 'gm':
+                _push_notification(u['username'], 'npc_edit', text, npc_id)
+    if changed:
+        log.info('NPC %s edited by %s (%s)', npc_id, session['username'], ', '.join(changed))
+    resp_npc = {k: v for k, v in npc.items() if is_gm or k != 'statblock_template'}
+    return jsonify({'ok': True, 'changed': changed, 'npc': resp_npc})
 
 
 @app.route('/api/notifications')

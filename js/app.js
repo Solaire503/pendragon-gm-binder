@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '3.8.0';
+const APP_VERSION = '3.9.0';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────
@@ -302,7 +302,16 @@ const APP = {
       headerRight.prepend(userEl);
     }
 
-    if (!user || user.role === 'gm') return;
+    if (!user) return;
+
+    if (user.role === 'gm') {
+      // GM gets the same idle auto-refresh: player household NPC edits
+      // land via PATCH /api/npc, and a stale GM STORE would revert them
+      // on the next full /api/save. The HI-7 guard below prevents the
+      // refresh from clobbering the GM's own in-progress work.
+      this._startPlayerRefresh();
+      return;
+    }
 
     // CSS class already set server-side (html.is-player) — hides GM-only elements
     // and shows the read-only banner with no flash.

@@ -406,6 +406,15 @@ const TabDashboard = {
         attentionItems.push({ icon:'⚠', text:'No Heir designated for your manor', urgent:false });
       damaged.filter(d=>d.yearRepaired && d.yearRepaired <= year).forEach(d =>
         attentionItems.push({ icon:'🔨', text:`Overdue repair: ${esc(d.description||d.type)} (${d.repairCost||0} L)`, urgent:true }));
+      // Vassal manors needing a knight enfeoffed — no linked NPC, or the knight has died
+      (manor.vassals || []).forEach(v => {
+        const knight = v.knightId ? [...STORE.living, ...STORE.dead].find(n => n.id === v.knightId) : null;
+        const knightDead = knight && (knight.status === 'Dead' || STORE.dead.some(d => d.id === knight.id));
+        if (!knight)
+          attentionItems.push({ icon:'🏰', text:`${esc(v.manorName || 'A vassal manor')} has no knight enfeoffed — an NPC must be granted the manor`, urgent:true });
+        else if (knightDead)
+          attentionItems.push({ icon:'🏰', text:`† ${esc(knight.name)} of ${esc(v.manorName || 'a vassal manor')} has fallen — a new knight must be enfeoffed`, urgent:true });
+      });
     }
     // Succession check — is the household head dead or missing?
     if (hh?.household_head) {
@@ -457,11 +466,14 @@ const TabDashboard = {
 
     const attentionHtml = attentionItems.length ? `
       <div class="card" style="border-top:3px solid var(--crimson-mid);">
-        <div class="section-title" style="margin-bottom:12px;color:var(--crimson-mid);">⚠ Matters Requiring Attention, ${lordTitle}</div>
+        <div class="section-title" style="margin-bottom:12px;color:var(--crimson-mid);display:flex;align-items:center;gap:8px;">
+          <span>⚠ Matters Requiring Attention, ${lordTitle}</span>
+          <span style="font-family:var(--font-heading);font-size:0.6rem;padding:2px 9px;border-radius:10px;background:var(--crimson-mid);color:#fff;letter-spacing:0.06em;">${attentionItems.length}</span>
+        </div>
         ${attentionItems.map(a => `
           <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px dotted var(--vellum-deep);">
             <span style="flex-shrink:0;">${a.icon}</span>
-            <span style="font-size:0.85rem;color:${a.urgent?'var(--crimson-mid)':'var(--ink)'};">${a.text}</span>
+            <span style="font-size:0.85rem;color:${a.urgent?'var(--crimson-mid)':'var(--ink)'};${a.urgent?'font-weight:600;':''}">${a.text}</span>
           </div>`).join('')}
       </div>`
     : `<div class="card" style="border-top:3px solid var(--verdigris-mid);opacity:0.8;">

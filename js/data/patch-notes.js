@@ -14,6 +14,16 @@ const FEATURES = [
     label: 'Your View — Player Knight Features',
   },
   {
+    heading: 'Your Household — Editing',
+    icon: '🖋',
+    items: [
+      'You can edit any NPC in your own household — open their card and use the Edit button.',
+      'Editable fields: name, pronoun, notes, passions & traits, skills, and stats. Role changes, deaths, and household moves remain with the GM.',
+      'Your household members\' notes, passions, skills, and stats are now visible to you on their cards.',
+      'Every edit is saved to the shared binder and the GM is notified of who changed what.',
+    ],
+  },
+  {
     heading: 'Tasks & Reminders',
     icon: '📋',
     items: [
@@ -30,7 +40,7 @@ const FEATURES = [
     items: [
       'Your dashboard opens to a personalised welcome addressed to your Player Knight by name and title. The greeting rotates daily through Arthurian phrases.',
       'Manor Snapshot — your treasury balance, base harvest, last year\'s result and net income, active improvements, and any property damage. Click the damage count to expand each item.',
-      'Matters Requiring Attention — a living checklist that flags anything your household needs action on: treasury deficits, missing steward or heir, overdue repairs, household members ready for an age transition (page → squire → knighting), family members eligible for marriage, and betrothed pairs who are both now of age and ready to wed.',
+      'Matters Requiring Attention — a living checklist that flags anything your household needs action on: treasury deficits, missing steward or heir, overdue repairs, vassal manors with no knight enfeoffed (or whose knight has fallen), household members ready for an age transition (page → squire → knighting), family members eligible for marriage, and betrothed pairs who are both now of age and ready to wed. The header shows a count of open items.',
       'Household Roster — your full household at a glance. Click any name to open their NPC card. Expand the roster to see everyone, and sort by rank, age, or A–Z.',
       'Recent Deaths — the last three years of deaths across all households, with your own household\'s losses listed first in crimson.',
       'Recent Chronicle — the last five events recorded in the Chronicle across the past two years.',
@@ -401,6 +411,28 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '3.9.0',
+    date:    '2026-07-06',
+    sections: [
+      {
+        heading: 'Dashboard — Items to Resolve',
+        items: [
+          'The Matters Requiring Attention checklist now flags vassal manors that need a knight enfeoffed — either no NPC is linked to the manor, or the enfeoffed knight has died.',
+          'The panel header shows a count of open items, and urgent items are now bold as well as crimson.',
+        ],
+      },
+      {
+        heading: 'Players — Household Editing',
+        items: [
+          'Players can now edit NPCs in their own household: name, pronoun, notes, passions & traits, skills, and stats. The Edit button appears on household members\' cards.',
+          'Household members\' notes, passions, skills, and stats are now visible to their own player (other households\' remain GM-only).',
+          'The GM receives a notification for every player edit — who edited whom, and which fields changed. Clicking it opens the NPC\'s card.',
+          'The GM\'s binder view now quietly refreshes every 30 seconds (when idle) so player edits appear without a reload — same careful guard the player refresh uses, so it never interrupts work in progress.',
+        ],
+      },
+    ],
+  },
   {
     version: '3.8.0',
     date:    '2026-07-06',

@@ -6,6 +6,15 @@
 const isGM       = () => window.__USER__?.role === 'gm';
 const isObserver = () => window.__USER__?.role === 'observer';
 
+// True for the GM, or for a player viewing an NPC of their own household —
+// gates the household edit form and the passions/skills/stats card blocks
+const canEditHouseholdNpc = (npc) => {
+  if (isGM()) return true;
+  const u = window.__USER__;
+  if (!u || u.role !== 'player' || !u.household || !npc?.household) return false;
+  return npc.household.toLowerCase() === u.household.toLowerCase();
+};
+
 // HTML escape helper — use whenever interpolating untrusted data into innerHTML
 const esc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;')
@@ -784,9 +793,9 @@ function buildNpcCardHtml(npc, opts = {}) {
       ${ageFlagHtml}
       ${pageWarningHtml}
       ${npc.notes    ? `<div class="detail-block"><div class="detail-label">Notes</div><div class="detail-value atm-rendered">${AtMention.render(npc.notes)}</div></div>` : ''}
-      ${isGM() && npc.passions ? `<div class="detail-block"><div class="detail-label">Passions &amp; Traits</div><div class="detail-value atm-rendered">${AtMention.render(npc.passions)}</div></div>` : ''}
-      ${isGM() && npc.skills   ? `<div class="detail-block"><div class="detail-label">Skills</div><div class="detail-value atm-rendered">${AtMention.render(npc.skills)}</div></div>` : ''}
-      ${isGM() && npc.stats    ? `<div class="detail-block"><div class="detail-label">Stats</div><div class="detail-value atm-rendered">${AtMention.render(npc.stats)}</div></div>` : ''}
+      ${canEditHouseholdNpc(npc) && npc.passions ? `<div class="detail-block"><div class="detail-label">Passions &amp; Traits</div><div class="detail-value atm-rendered">${AtMention.render(npc.passions)}</div></div>` : ''}
+      ${canEditHouseholdNpc(npc) && npc.skills   ? `<div class="detail-block"><div class="detail-label">Skills</div><div class="detail-value atm-rendered">${AtMention.render(npc.skills)}</div></div>` : ''}
+      ${canEditHouseholdNpc(npc) && npc.stats    ? `<div class="detail-block"><div class="detail-label">Stats</div><div class="detail-value atm-rendered">${AtMention.render(npc.stats)}</div></div>` : ''}
       ${isGM() && npc.statblock_template ? `<div class="detail-block" style="border-left:3px solid var(--cobalt);"><div class="detail-label" style="color:var(--cobalt-mid);">📋 Template</div><div class="detail-value" style="font-family:var(--font-heading);font-size:0.78rem;">${esc(npc.statblock_template)}</div></div>` : ''}
       ${headHtml}${blessedHtml}${fateTouchedHtml}
       ${trainingHistoryHtml}
@@ -808,6 +817,8 @@ function buildNpcCardHtml(npc, opts = {}) {
             ? `<button class="btn btn-danger" onclick="Components.confirmKill('${npc.id}')">Mark Deceased</button>`
             : `<button class="btn btn-ghost" onclick="Components.confirmRestore('${npc.id}')">Restore to Living</button>`}
           ${typeof EventStaging !== 'undefined' && !isDead ? EventStaging.buildButtonHtml(npc.id) : ''}
+        ` : canEditHouseholdNpc(npc) ? `
+          <button class="btn btn-primary" onclick="Components.openPlayerEditNpc('${npc.id}')">Edit</button>
         ` : ''}
         <button class="btn btn-ghost pin-btn${typeof PinsManager !== 'undefined' && PinsManager.isPinned(npc.id) ? ' pin-active' : ''}"
                 onclick="PinsManager.toggleAndRefreshCard('${npc.id}')"
@@ -1279,6 +1290,66 @@ const Components = {
         }
       }
     }});
+  },
+
+  // ── Player household edit (name/pronoun/notes/passions/skills/stats) ──
+  // Saves via PATCH /api/npc/<id> — server enforces the household check and
+  // field allowlist, and notifies the GM of every player edit.
+  openPlayerEditNpc(id) {
+    const npc = STORE.getNpc(id);
+    if (!npc || !canEditHouseholdNpc(npc)) return;
+    Modal.open(`
+      <h2 style="font-family:var(--font-heading);font-size:1.1rem;letter-spacing:0.1em;color:var(--gold-text);margin-bottom:4px;">Edit ${esc(npc.name)}</h2>
+      <p style="font-size:0.75rem;color:var(--ink-soft);font-style:italic;margin-bottom:14px;">Changes save to the shared binder — the GM is notified of every edit.</p>
+      <div class="detail-field mb-8">
+        <div class="detail-label">Name</div>
+        <input class="edit-input" id="pef-name" value="${esc(npc.name || '')}">
+      </div>
+      <div class="detail-field mb-8">
+        <div class="detail-label">Pronoun</div>
+        <input class="edit-input" id="pef-pronoun" value="${esc(npc.pronoun || '')}" placeholder="She/her">
+      </div>
+      <div class="detail-field mb-8">
+        <div class="detail-label">Notes</div>
+        <textarea class="edit-input edit-textarea" id="pef-notes">${esc(npc.notes || '')}</textarea>
+      </div>
+      <div class="detail-field mb-8">
+        <div class="detail-label">Passions &amp; Traits</div>
+        <textarea class="edit-input edit-textarea" id="pef-passions">${esc(npc.passions || '')}</textarea>
+      </div>
+      <div class="detail-field mb-8">
+        <div class="detail-label">Skills</div>
+        <textarea class="edit-input edit-textarea" id="pef-skills">${esc(npc.skills || '')}</textarea>
+      </div>
+      <div class="detail-field mb-8">
+        <div class="detail-label">Stats</div>
+        <textarea class="edit-input edit-textarea" id="pef-stats">${esc(npc.stats || '')}</textarea>
+      </div>
+      <div class="btn-row mt-16">
+        <button class="btn btn-primary" onclick="Components.savePlayerEditNpc('${esc(npc.id)}')">Save</button>
+        <button class="btn btn-ghost" onclick="Modal.close()">Cancel</button>
+      </div>
+    `);
+  },
+
+  async savePlayerEditNpc(id) {
+    const g = (x) => document.getElementById(x);
+    const body = {
+      name:     g('pef-name')?.value?.trim() || '',
+      pronoun:  g('pef-pronoun')?.value?.trim() || '',
+      notes:    g('pef-notes')?.value ?? '',
+      passions: g('pef-passions')?.value ?? '',
+      skills:   g('pef-skills')?.value ?? '',
+      stats:    g('pef-stats')?.value ?? '',
+    };
+    if (!body.name) { Toast.show('Name cannot be empty', 'error'); return; }
+    const res = await API.patch('/api/npc/' + id, body);
+    if (!res.ok) { Toast.show(res.error || 'Failed to save', 'error'); return; }
+    const npc = STORE.getNpc(id);
+    if (npc && res.data.npc) Object.assign(npc, res.data.npc);
+    Modal.close();
+    Toast.show((res.data.changed || []).length ? 'Saved — the GM has been notified' : 'No changes to save', 'success');
+    this.openNpcCard(id);
   },
 
   // ── Import NPC from Claude.ai JSON ───────────────────────────

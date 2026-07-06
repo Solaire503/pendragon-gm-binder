@@ -103,6 +103,7 @@ const Notifications = {
       const icon = n.type === 'comment'    ? '💬'
                  : n.type === 'note'       ? '📝'
                  : n.type === 'chronicle'  ? '📜'
+                 : n.type === 'npc_edit'   ? '✎'
                  : '🔔';
       const ts = relTime(n.timestamp);
       const unreadClass = n.read ? '' : ' notif-unread';
