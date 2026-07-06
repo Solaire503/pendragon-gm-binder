@@ -1126,12 +1126,36 @@ const TabBattle = {
     const b = this._battle;
     const fc = b.friendlyCommander || {};
     const ec = b.enemyCommander || {};
+    const cmdr = b.participants.find(p => p.participantId === b.conroiCommanderId);
+    const cmdrDown = !!cmdr && (cmdr.status === 'dead' || cmdr.status === 'unconscious' || cmdr.status === 'major_wound');
+    const opts = b.participants.map(p => {
+      const marker = p.status === 'dead' ? ' ✝' : (p.status === 'unconscious' ? ' (KO)' : (p.status === 'major_wound' ? ' (MW)' : ''));
+      return `<option value="${esc(p.participantId)}" ${b.conroiCommanderId === p.participantId ? 'selected' : ''}>${esc(p.name)}${marker}</option>`;
+    }).join('');
     return `
       <div class="battle-header-bar">
         <h2 class="battle-header-name">${esc(b.name)}</h2>
         <span class="battle-header-round">Round ${b.currentRound} / ${b.maxRounds}</span>
         <span class="battle-header-cmdr">${esc(fc.name || '—')} vs ${esc(ec.name || '—')}</span>
+        <span class="bc-conroi-cmd${cmdrDown ? ' bc-cmd-down' : ''}"
+          title="${cmdrDown ? 'The conroi commander is down — designate a new one' : 'Conroi commander (may adjust morale)'}">
+          <span class="bc-conroi-cmd-label">⚜ CMD</span>
+          <select class="edit-input edit-select" onchange="TabBattle._swapConroiCommander(this.value || null)">
+            <option value="">— none —</option>
+            ${opts}
+          </select>
+          ${cmdrDown ? '<span class="bc-cmd-down-badge">DOWN</span>' : ''}
+        </span>
       </div>`;
+  },
+
+  async _swapConroiCommander(pid) {
+    const res = await API.patch('/api/battle/conroi-commander', { participantId: pid });
+    if (!res.ok) { Toast.show(res.error || 'Failed to change commander', 'error'); return; }
+    this._battle = res.data.battle;
+    const bar = document.querySelector('.battle-header-bar');
+    if (bar) bar.outerHTML = this._renderBattleHeader();
+    Toast.show(pid ? 'Conroi commander updated' : 'Conroi commander cleared', 'success');
   },
 
   _renderMoraleBar() {

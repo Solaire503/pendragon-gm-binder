@@ -392,6 +392,8 @@ const FEATURES = [
       'Round Management: End Round snapshots all state (participants, morale, encounter, notes) for undo. Back restores the previous round\'s snapshot completely — kills, participants, everything. Adjust max rounds on the fly with ± Rd buttons.',
       'End Battle moves to a finalization screen. Resume Battle returns to the console if needed. Abandon Battle discards everything with double-confirm.',
       'Blocked status gating: MW, unconscious, dead, and rear participants cannot have foes assigned without an explicit GM override. Warning modal shows natural-language status ("has a major wound", "is in the rear", "is separated from the conroi").',
+      'Conroi Commander Swap: a ⚜ CMD selector in the battle header lets the GM hand command to another knight mid-battle. If the commander goes down, a pulsing DOWN badge appears until a new one is designated. Morale-adjustment rights follow the new commander.',
+      'Chronicle Battle Tiers: committed battles appear in the Chronicle at a weight matching their size — a Fight is a single line, a Skirmish a small card with kill tallies, a Clash a card with a compact kill grid, and a Small Battle (or larger) a full sectioned record with participants and round-by-round key moments. Each knight\'s entry lists the actual foes they defeated.',
     ],
   },
 ];
@@ -399,6 +401,28 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '3.8.0',
+    date:    '2026-07-06',
+    sections: [
+      {
+        heading: 'Chronicle — Battle Tiers',
+        items: [
+          'Battles in the Chronicle now render at a weight matching their size: a Fight is a single line, a Skirmish a small card with each knight\'s kill tally, a Clash a card with a compact kill grid, and a Small Battle (or larger) a full sectioned record.',
+          'Each knight\'s Chronicle entry now lists the actual foes they defeated — "slew Saxon Warrior ×2, Bandit" — not just a number. (Battles recorded before this update only have the count.)',
+          'Small Battle records gain a Key Moments section: the round-by-round log with encounters, morale swings, and the GM\'s round notes.',
+          'Knights who ended a battle wounded, unconscious, or dead are flagged on every tier — even the one-line Fight entry.',
+        ],
+      },
+      {
+        heading: 'Battle Console — Commander Swap',
+        items: [
+          'The GM can now hand the conroi command to another knight mid-battle via the ⚜ CMD selector in the battle header — for when the commander falls and a new one must take up the banner.',
+          'If the current commander is down, a pulsing DOWN badge appears until a new commander is designated. Morale-adjustment rights follow immediately.',
+        ],
+      },
+    ],
+  },
   {
     version: '3.7.2',
     date:    '2026-07-05',

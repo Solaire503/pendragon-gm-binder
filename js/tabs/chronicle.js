@@ -13,6 +13,25 @@ const CHRONICLE_CATS = {
   other:        { label: 'Other',        colour: '#707070' },
 };
 
+const BATTLE_OUTCOME_LABELS = {
+  decisive_victory: 'Decisive Victory', victory: 'Victory',
+  indecisive: 'Indecisive', defeat: 'Defeat',
+  decisive_defeat: 'Decisive Defeat', scripted: 'Scripted',
+};
+const BATTLE_SIZE_LABELS = {
+  fight: 'Fight', skirmish: 'Skirmish', clash: 'Clash',
+  small: 'Small Battle', medium: 'Medium Battle',
+  large: 'Large Battle', huge: 'Huge Battle',
+};
+const BATTLE_STATUS_LABELS = {
+  active: 'Active', major_wound: 'Major Wound', unconscious: 'Unconscious',
+  dead: 'Dead', alone: 'Alone', rear: 'Rear',
+};
+const BATTLE_STATUS_COLOURS = {
+  active: '#208060', major_wound: '#c07820', unconscious: '#c07820',
+  dead: '#c03030', alone: '#9040c0', rear: '#707070',
+};
+
 const TabChronicle = {
 
   _year: null,
@@ -363,108 +382,18 @@ const TabChronicle = {
       </div>`;
   },
 
+  // Battles render at a visual weight matching their size (chronicle tiers):
+  //   fight → one-line entry · skirmish → small card ·
+  //   clash → header + compact kill grid · small → sectioned card.
+  // Medium/large/huge use the sectioned card until tiers 5-7 exist (T-030).
   _renderBattles(battles, year) {
     if (!battles.length) return '';
-    const OUTCOME_LABELS = {
-      decisive_victory: 'Decisive Victory', victory: 'Victory',
-      indecisive: 'Indecisive', defeat: 'Defeat',
-      decisive_defeat: 'Decisive Defeat', scripted: 'Scripted',
-    };
-    const SIZE_LABELS = {
-      fight: 'Fight', skirmish: 'Skirmish', clash: 'Clash',
-      small: 'Small Battle', medium: 'Medium Battle',
-      large: 'Large Battle', huge: 'Huge Battle',
-    };
-    const STATUS_LABELS = {
-      active: 'Active', major_wound: 'Major Wound', unconscious: 'Unconscious',
-      dead: 'Dead', alone: 'Alone', rear: 'Rear',
-    };
-    const STATUS_COLOURS = {
-      active: '#208060', major_wound: '#c07820', unconscious: '#c07820',
-      dead: '#c03030', alone: '#9040c0', rear: '#707070',
-    };
-
     const cards = battles.map(e => {
-      const p = e.payload || {};
-      const outcome = OUTCOME_LABELS[p.outcome] || p.outcome || 'Unknown';
-      const size = SIZE_LABELS[p.size] || p.size || '';
-      const pks = (p.participants || []).filter(x => x.isPK);
-      const npcs = (p.participants || []).filter(x => !x.isPK);
-
-      const pkRows = pks.map(pk => {
-        const st = STATUS_LABELS[pk.status] || pk.status;
-        const stCol = STATUS_COLOURS[pk.status] || '#707070';
-        const passionStr = pk.passion ? `${esc(pk.passion.name)} (${esc(pk.passion.result)})` : '';
-        const npc = pk.npcId ? this._findNpc(pk.npcId) : null;
-        const nameHtml = npc ? this._npcPill(npc) : `<span style="font-weight:600;">${esc(pk.name)}</span>`;
-        return `
-          <tr style="border-bottom:1px solid rgba(192,48,48,0.12);">
-            <td style="padding:6px 10px;">${nameHtml}</td>
-            <td style="padding:6px 10px;text-align:center;font-weight:600;">${pk.kills}</td>
-            <td style="padding:6px 10px;">
-              <span style="font-size:0.72rem;padding:1px 7px;border-radius:8px;background:${stCol}15;color:${stCol};font-weight:600;">${st}</span>
-            </td>
-            <td style="padding:6px 10px;font-size:0.78rem;color:var(--ink-soft);font-style:italic;">${passionStr}</td>
-          </tr>`;
-      }).join('');
-
-      const npcRows = npcs.length ? npcs.map(n => {
-        const st = STATUS_LABELS[n.status] || n.status;
-        const stCol = STATUS_COLOURS[n.status] || '#707070';
-        const npc = n.npcId ? this._findNpc(n.npcId) : null;
-        const nameHtml = npc ? this._npcPill(npc) : `<span>${esc(n.name)}</span>`;
-        return `
-          <tr style="border-bottom:1px solid rgba(192,48,48,0.08);">
-            <td style="padding:4px 10px;font-size:0.82rem;color:var(--ink-soft);">${nameHtml}</td>
-            <td style="padding:4px 10px;text-align:center;font-size:0.82rem;">${n.kills}</td>
-            <td style="padding:4px 10px;">
-              <span style="font-size:0.68rem;padding:1px 6px;border-radius:8px;background:${stCol}12;color:${stCol};">${st}</span>
-            </td>
-            <td style="padding:4px 10px;font-size:0.75rem;color:var(--ink-soft);font-style:italic;">
-              ${n.passion ? esc(n.passion.name) : ''}
-            </td>
-          </tr>`;
-      }).join('') : '';
-
-      const narrative = p.gmNarrative
-        ? `<div class="illuminated-initial-gold" style="margin-top:12px;padding:10px 14px;background:rgba(192,48,48,0.04);border-radius:var(--radius);font-size:0.85rem;line-height:1.55;color:var(--ink);font-style:italic;">${AtMention.render(p.gmNarrative)}</div>`
-        : '';
-
-      const cmdrHtml = (c) => {
-        if (!c || !c.name) return '';
-        const npc = c.npcId ? this._findNpc(c.npcId) : null;
-        return npc ? this._npcPill(npc) : esc(c.name);
-      };
-      const fc = cmdrHtml(p.friendlyCommander);
-      const ec = cmdrHtml(p.enemyCommander);
-      const commanders = (fc || ec)
-        ? `<div style="font-size:0.78rem;color:var(--ink-soft);margin-bottom:10px;">${fc || '—'} <span style="font-style:italic;color:var(--crimson-mid);">against</span> ${ec || '—'}</div>`
-        : '';
-
-      return `
-        <div style="padding:16px;background:var(--vellum-mid);border:1px solid rgba(192,48,48,0.3);border-left:4px solid rgba(192,48,48,0.8);border-radius:var(--radius);">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;">
-            <span style="font-size:1rem;">⚔</span>
-            <span style="font-family:var(--font-heading);font-size:1.05rem;letter-spacing:0.08em;color:var(--ink);font-weight:700;">${esc(p.name || e.text)}</span>
-            <span style="font-size:0.72rem;padding:2px 10px;border-radius:10px;background:#c0303018;color:#c03030;font-weight:600;font-family:var(--font-heading);letter-spacing:0.06em;">${esc(outcome)}</span>
-          </div>
-          <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:${(p.friendlyCommander?.name || p.enemyCommander?.name) ? '4' : '12'}px;">
-            ${p.location ? esc(p.location) + ' · ' : ''}${esc(size)}${p.rounds ? ` · ${p.rounds} round${p.rounds !== 1 ? 's' : ''} fought` : ''}
-          </div>
-          ${commanders}
-          <table style="width:100%;border-collapse:collapse;">
-            <thead>
-              <tr style="border-bottom:2px solid rgba(192,48,48,0.2);">
-                <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Knight</th>
-                <th style="padding:4px 10px;text-align:center;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Kills</th>
-                <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Status</th>
-                <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Passion</th>
-              </tr>
-            </thead>
-            <tbody>${pkRows}${npcRows}</tbody>
-          </table>
-          ${narrative}
-        </div>`;
+      const size = (e.payload || {}).size;
+      if (size === 'fight')    return this._battleFightLine(e);
+      if (size === 'skirmish') return this._battleSkirmishCard(e);
+      if (size === 'clash')    return this._battleClashCard(e);
+      return this._battleSectionedCard(e);
     }).join('');
 
     return `
@@ -473,6 +402,243 @@ const TabChronicle = {
         <div style="display:flex;flex-direction:column;gap:8px;">
           ${cards}
         </div>
+      </div>`;
+  },
+
+  // ── Battle card shared pieces ─────────────────────────────
+
+  _battleOutcomeBadge(outcome, small = false) {
+    const label = BATTLE_OUTCOME_LABELS[outcome] || outcome || 'Unknown';
+    return `<span style="font-size:${small ? '0.65rem' : '0.72rem'};padding:${small ? '1px 8px' : '2px 10px'};border-radius:10px;background:#c0303018;color:#c03030;font-weight:600;font-family:var(--font-heading);letter-spacing:0.06em;white-space:nowrap;">${esc(label)}</span>`;
+  },
+
+  _battleFighterName(x) {
+    const npc = x.npcId ? this._findNpc(x.npcId) : null;
+    return npc ? this._npcPill(npc) : `<span style="font-weight:600;">${esc(x.name)}</span>`;
+  },
+
+  _battleStatusTag(status, small = false) {
+    if (!status || status === 'active') return '';
+    const label = BATTLE_STATUS_LABELS[status] || status;
+    const col = BATTLE_STATUS_COLOURS[status] || '#707070';
+    return `<span style="font-size:${small ? '0.62rem' : '0.72rem'};padding:1px ${small ? '6' : '7'}px;border-radius:8px;background:${col}15;color:${col};font-weight:600;">${esc(label)}</span>`;
+  },
+
+  _battleKillTotal(p) {
+    return (p.participants || []).reduce((s, x) => s + (x.kills || 0), 0);
+  },
+
+  // Grouped foe list from a participant's kill ledger, e.g. "Saxon Warrior ×2, Bandit".
+  // Battles committed before v3.8.0 have no foes array — returns '' for those.
+  _battleFoeList(foes) {
+    if (!foes || !foes.length) return '';
+    const counts = {};
+    foes.forEach(f => { counts[f] = (counts[f] || 0) + 1; });
+    return Object.entries(counts)
+      .map(([f, n]) => n > 1 ? `${esc(f)} ×${n}` : esc(f))
+      .join(', ');
+  },
+
+  // Participants who ended the battle in a state worth recording
+  _battleCasualtyLine(p, small) {
+    return (p.participants || [])
+      .filter(x => x.status && x.status !== 'active')
+      .map(x => `<span style="white-space:nowrap;">${this._battleFighterName(x)} ${this._battleStatusTag(x.status, small)}</span>`)
+      .join(' &nbsp; ');
+  },
+
+  _battleHeader(p, e, nameSize = '1.05rem') {
+    return `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;">
+        <span style="font-size:1rem;">⚔</span>
+        <span style="font-family:var(--font-heading);font-size:${nameSize};letter-spacing:0.08em;color:var(--ink);font-weight:700;">${esc(p.name || e.text)}</span>
+        ${this._battleOutcomeBadge(p.outcome)}
+      </div>`;
+  },
+
+  _battleSubline(p) {
+    const size = BATTLE_SIZE_LABELS[p.size] || p.size || '';
+    return `
+      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:${(p.friendlyCommander?.name || p.enemyCommander?.name) ? '4' : '12'}px;">
+        ${p.location ? esc(p.location) + ' · ' : ''}${esc(size)}${p.rounds ? ` · ${p.rounds} round${p.rounds !== 1 ? 's' : ''} fought` : ''}
+      </div>`;
+  },
+
+  _battleCommanders(p) {
+    const cmdrHtml = (c) => {
+      if (!c || !c.name) return '';
+      const npc = c.npcId ? this._findNpc(c.npcId) : null;
+      return npc ? this._npcPill(npc) : esc(c.name);
+    };
+    const fc = cmdrHtml(p.friendlyCommander);
+    const ec = cmdrHtml(p.enemyCommander);
+    return (fc || ec)
+      ? `<div style="font-size:0.78rem;color:var(--ink-soft);margin-bottom:10px;">${fc || '—'} <span style="font-style:italic;color:var(--crimson-mid);">against</span> ${ec || '—'}</div>`
+      : '';
+  },
+
+  _battleSectionLabel(text) {
+    return `<div style="font-family:var(--font-heading);font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--crimson-mid);margin:12px 0 6px;">${text}</div>`;
+  },
+
+  _battleParticipantTable(p) {
+    const pks  = (p.participants || []).filter(x => x.isPK);
+    const npcs = (p.participants || []).filter(x => !x.isPK);
+
+    const pkRows = pks.map(pk => {
+      const passionStr = pk.passion ? `${esc(pk.passion.name)} (${esc(pk.passion.result)})` : '';
+      const foes = this._battleFoeList(pk.foes);
+      return `
+        <tr style="border-bottom:1px solid rgba(192,48,48,0.12);">
+          <td style="padding:6px 10px;">${this._battleFighterName(pk)}${foes ? `<div style="font-size:0.7rem;color:var(--ink-soft);font-style:italic;margin-top:2px;">slew ${foes}</div>` : ''}</td>
+          <td style="padding:6px 10px;text-align:center;font-weight:600;">${pk.kills}</td>
+          <td style="padding:6px 10px;">${this._battleStatusTag(pk.status) || `<span style="font-size:0.72rem;color:${BATTLE_STATUS_COLOURS.active};font-weight:600;">Active</span>`}</td>
+          <td style="padding:6px 10px;font-size:0.78rem;color:var(--ink-soft);font-style:italic;">${passionStr}</td>
+        </tr>`;
+    }).join('');
+
+    const npcRows = npcs.map(n => `
+        <tr style="border-bottom:1px solid rgba(192,48,48,0.08);">
+          <td style="padding:4px 10px;font-size:0.82rem;color:var(--ink-soft);">${this._battleFighterName(n)}${this._battleFoeList(n.foes) ? `<div style="font-size:0.68rem;color:var(--ink-soft);font-style:italic;margin-top:2px;">slew ${this._battleFoeList(n.foes)}</div>` : ''}</td>
+          <td style="padding:4px 10px;text-align:center;font-size:0.82rem;">${n.kills}</td>
+          <td style="padding:4px 10px;">${this._battleStatusTag(n.status, true) || `<span style="font-size:0.68rem;color:${BATTLE_STATUS_COLOURS.active};">Active</span>`}</td>
+          <td style="padding:4px 10px;font-size:0.75rem;color:var(--ink-soft);font-style:italic;">
+            ${n.passion ? esc(n.passion.name) : ''}
+          </td>
+        </tr>`).join('');
+
+    return `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:2px solid rgba(192,48,48,0.2);">
+            <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Knight</th>
+            <th style="padding:4px 10px;text-align:center;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Kills</th>
+            <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Status</th>
+            <th style="padding:4px 10px;text-align:left;font-family:var(--font-heading);font-size:0.55rem;letter-spacing:0.08em;color:var(--ink-soft);text-transform:uppercase;">Passion</th>
+          </tr>
+        </thead>
+        <tbody>${pkRows}${npcRows}</tbody>
+      </table>`;
+  },
+
+  _battleKeyMoments(p) {
+    const log = p.roundLog || [];
+    if (!log.length) return '';
+    const rows = log.map(r => {
+      const mor = r.morale || {};
+      const moraleStr = (mor.start != null && mor.end != null && mor.start !== mor.end)
+        ? `<span style="font-size:0.72rem;color:var(--ink-soft);white-space:nowrap;">morale ${esc(String(mor.start))} → ${esc(String(mor.end))}</span>` : '';
+      return `
+        <div style="display:flex;align-items:baseline;gap:10px;padding:4px 0;border-bottom:1px solid rgba(192,48,48,0.08);flex-wrap:wrap;">
+          <span style="font-family:var(--font-heading);font-size:0.6rem;letter-spacing:0.08em;color:var(--crimson-mid);white-space:nowrap;">RD ${esc(String(r.round ?? '?'))}</span>
+          <span style="font-size:0.8rem;color:var(--ink);">${esc(r.encounter || '—')}</span>
+          ${moraleStr}
+          ${r.notes ? `<span style="flex-basis:100%;padding-left:34px;font-size:0.78rem;color:var(--ink-soft);font-style:italic;">${AtMention.render(r.notes)}</span>` : ''}
+        </div>`;
+    }).join('');
+    return `${this._battleSectionLabel('Key Moments')}<div>${rows}</div>`;
+  },
+
+  // ── Tier 1 — Fight: a single chronicle line ───────────────
+
+  _battleFightLine(e) {
+    const p = e.payload || {};
+    const total = this._battleKillTotal(p);
+    const casualties = this._battleCasualtyLine(p, true);
+    const allFoes = this._battleFoeList((p.participants || []).flatMap(x => x.foes || []));
+    const detail = [
+      p.location ? esc(p.location) : '',
+      total ? `${total} foe${total !== 1 ? 's' : ''} slain${allFoes ? ' — ' + allFoes : ''}` : '',
+    ].filter(Boolean).join(' · ');
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--vellum-mid);border:1px solid var(--vellum-deep);border-left:3px solid rgba(192,48,48,0.55);border-radius:var(--radius);flex-wrap:wrap;">
+        <span style="font-size:0.82rem;opacity:0.65;">⚔</span>
+        <span style="font-size:0.88rem;font-weight:600;color:var(--ink);">${esc(p.name || e.text)}</span>
+        ${this._battleOutcomeBadge(p.outcome, true)}
+        ${casualties}
+        <span style="flex:1;"></span>
+        ${detail ? `<span style="font-size:0.75rem;color:var(--ink-soft);font-style:italic;">${detail}</span>` : ''}
+      </div>`;
+  },
+
+  // ── Tier 2 — Skirmish: small card + kill tally summary ────
+
+  _battleSkirmishCard(e) {
+    const p = e.payload || {};
+    const total = this._battleKillTotal(p);
+    const tally = (p.participants || [])
+      .filter(x => x.isPK && (x.kills || 0) > 0)
+      .map(x => {
+        const foes = this._battleFoeList(x.foes);
+        return `<span>${this._battleFighterName(x)} <span style="font-weight:700;color:var(--crimson-mid);">×${x.kills}</span>${foes ? ` <span style="font-size:0.72rem;color:var(--ink-soft);font-style:italic;">(${foes})</span>` : ''}</span>`;
+      })
+      .join('<span style="color:var(--ink-soft);"> · </span>');
+    const casualties = this._battleCasualtyLine(p, true);
+    const narrative = p.gmNarrative
+      ? `<div style="margin-top:8px;font-size:0.8rem;line-height:1.5;color:var(--ink);font-style:italic;">${AtMention.render(p.gmNarrative)}</div>`
+      : '';
+    return `
+      <div style="padding:12px 14px;background:var(--vellum-mid);border:1px solid rgba(192,48,48,0.25);border-left:3px solid rgba(192,48,48,0.6);border-radius:var(--radius);">
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+          <span style="font-size:0.9rem;">⚔</span>
+          <span style="font-family:var(--font-heading);font-size:0.92rem;letter-spacing:0.06em;color:var(--ink);font-weight:700;">${esc(p.name || e.text)}</span>
+          ${this._battleOutcomeBadge(p.outcome, true)}
+        </div>
+        <div style="font-size:0.72rem;color:var(--ink-soft);margin:3px 0 ${(tally || casualties) ? '8' : '0'}px;">
+          ${p.location ? esc(p.location) + ' · ' : ''}Skirmish${p.rounds ? ` · ${p.rounds} round${p.rounds !== 1 ? 's' : ''}` : ''}${total ? ` · ${total} foe${total !== 1 ? 's' : ''} slain` : ''}
+        </div>
+        ${tally ? `<div style="font-size:0.82rem;">${tally}</div>` : ''}
+        ${casualties ? `<div style="font-size:0.8rem;margin-top:4px;">${casualties}</div>` : ''}
+        ${narrative}
+      </div>`;
+  },
+
+  // ── Tier 3 — Clash: proper header + compact kill grid ─────
+
+  _battleClashCard(e) {
+    const p = e.payload || {};
+    const chips = (p.participants || []).map(x => {
+      const foes = this._battleFoeList(x.foes);
+      return `
+      <div style="display:flex;align-items:center;gap:7px;padding:4px 10px;background:rgba(192,48,48,0.05);border:1px solid rgba(192,48,48,0.15);border-radius:10px;font-size:0.8rem;flex-wrap:wrap;">
+        ${this._battleFighterName(x)}
+        <span style="font-weight:700;color:var(--crimson-mid);">×${x.kills || 0}</span>
+        ${foes ? `<span style="font-size:0.68rem;color:var(--ink-soft);font-style:italic;">${foes}</span>` : ''}
+        ${this._battleStatusTag(x.status, true)}
+      </div>`;
+    }).join('');
+    const narrative = p.gmNarrative
+      ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(192,48,48,0.04);border-radius:var(--radius);font-size:0.82rem;line-height:1.5;color:var(--ink);font-style:italic;">${AtMention.render(p.gmNarrative)}</div>`
+      : '';
+    return `
+      <div style="padding:14px 16px;background:var(--vellum-mid);border:1px solid rgba(192,48,48,0.3);border-left:4px solid rgba(192,48,48,0.7);border-radius:var(--radius);">
+        ${this._battleHeader(p, e, '0.98rem')}
+        ${this._battleSubline(p)}
+        ${this._battleCommanders(p)}
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">${chips}</div>
+        ${narrative}
+      </div>`;
+  },
+
+  // ── Tier 4 — Small Battle: sectioned card ─────────────────
+  // (medium/large/huge also land here until T-030 builds tiers 5-7)
+
+  _battleSectionedCard(e) {
+    const p = e.payload || {};
+    const moments = this._battleKeyMoments(p);
+    const narrative = p.gmNarrative
+      ? `${this._battleSectionLabel('The Outcome')}
+         <div class="illuminated-initial-gold" style="padding:10px 14px;background:rgba(192,48,48,0.04);border-radius:var(--radius);font-size:0.85rem;line-height:1.55;color:var(--ink);font-style:italic;">${AtMention.render(p.gmNarrative)}</div>`
+      : '';
+    return `
+      <div style="padding:16px;background:var(--vellum-mid);border:1px solid rgba(192,48,48,0.3);border-left:4px solid rgba(192,48,48,0.8);border-radius:var(--radius);">
+        ${this._battleHeader(p, e)}
+        ${this._battleSubline(p)}
+        ${this._battleCommanders(p)}
+        ${this._battleSectionLabel('Participants')}
+        ${this._battleParticipantTable(p)}
+        ${moments ? `<div class="ornament-divider-sm"></div>${moments}` : ''}
+        ${narrative ? `<div class="ornament-divider-sm"></div>${narrative}` : ''}
       </div>`;
   },
 

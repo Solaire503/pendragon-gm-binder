@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.7.2'  # keep in sync with js/app.js
+APP_VERSION  = '3.8.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -3167,6 +3167,27 @@ def api_battle_max_rounds():
     return jsonify({'maxRounds': battle['maxRounds']})
 
 
+@app.route('/api/battle/conroi-commander', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_conroi_commander():
+    """Designate (or swap) the conroi commander — allowed mid-battle, unlike
+    /api/battle/setup, so the GM can hand off command when the commander falls."""
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] not in ('setup', 'active'):
+        return jsonify({'error': 'No battle in setup or in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    pid = body.get('participantId')
+    if pid is not None and not _find_participant(battle, pid):
+        return jsonify({'error': 'Participant not found'}), 404
+    battle['conroiCommanderId'] = pid
+    _save_active_battle(battle)
+    log.info('Conroi commander set to %s: %s', pid, battle['id'])
+    return jsonify({'battle': battle})
+
+
 @app.route('/api/battle/round/end', methods=['POST'])
 @gm_required
 @_with_battle_lock
@@ -3422,6 +3443,7 @@ def api_battle_commit():
             'kills': len(ledger),
             'kv': sum(k.get('kv', 0) for k in ledger),
             'glory': sum(k.get('glory', 0) for k in ledger),
+            'foes': [k.get('type', '') for k in ledger if k.get('type')],
             'passion': p.get('passion'),
         })
     year_key = str(battle.get('year', ''))
@@ -3439,6 +3461,17 @@ def api_battle_commit():
             'enemyCommander': battle.get('enemyCommander'),
             'participants': participants,
             'morale': battle.get('morale'),
+            # Trimmed round log for chronicle key-moments rendering — snapshots
+            # are dropped (they hold full participant deep-copies per round).
+            'roundLog': [
+                {
+                    'round': r.get('round'),
+                    'encounter': r.get('encounter', ''),
+                    'morale': r.get('morale'),
+                    'notes': r.get('notes', ''),
+                }
+                for r in battle.get('rounds', [])
+            ],
         },
     }
     save_path = get_save_path()

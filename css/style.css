@@ -635,6 +635,24 @@ html.is-player .player-readonly-banner {
 }
 .battle-header-cmdr { font-size: 0.75rem; color: var(--ink-mid); }
 
+/* Conroi commander swap (header) */
+.bc-conroi-cmd { display: inline-flex; align-items: center; gap: 6px; }
+.bc-conroi-cmd-label {
+  font-family: var(--font-heading); font-size: 0.62rem; letter-spacing: 0.08em;
+  color: var(--ink-mid); white-space: nowrap;
+}
+.bc-conroi-cmd select { width: auto; padding: 3px 6px; font-size: 0.75rem; }
+.bc-conroi-cmd.bc-cmd-down select { border-color: var(--crimson); }
+.bc-cmd-down-badge {
+  font-family: var(--font-heading); font-size: 0.58rem; letter-spacing: 0.08em;
+  padding: 2px 7px; border-radius: 8px; background: var(--crimson); color: #fff;
+  animation: cmd-down-pulse 1.6s ease-in-out infinite;
+}
+@keyframes cmd-down-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 /* Morale bar */
 .bc-morale-wrap {
   display: flex; align-items: center; gap: 10px;
