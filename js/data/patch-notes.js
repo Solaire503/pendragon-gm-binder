@@ -412,6 +412,59 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.9.3',
+    date:    '2026-07-17',
+    sections: [
+      {
+        heading: 'Dashboard — Enfeoffment Alerts',
+        items: [
+          'Fixed a false "a new knight must be enfeoffed" alert when succession had already been recorded in NPC Manors — the dashboard was reading the manor page\'s vassal ledger, which never learned about the new holder. (Reported by Zerkle — thanks!)',
+          'Recording an enfeoffment, succession, escheat, or abdication in NPC Manors now updates the matching vassal entry on PK manor pages automatically.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '3.9.2',
+    date:    '2026-07-17',
+    sections: [
+      {
+        heading: 'Yearly & Solo Events',
+        items: [
+          'Fixed the page jumping while reading freshly rolled events — arriving narrative text no longer shoves your scroll position around.',
+          'New buttons under the knight picker: 🎲 Random Wed and 🎲 Random Unwed add a random knight (wed = has a living spouse) and set the Status toggle to match; ✕ Clear All Selected empties the selection in one click.',
+        ],
+      },
+      {
+        heading: 'Life Events',
+        items: [
+          'The narrative text on a life event is now editable — the Edit form has a Narrative field alongside title, mechanics, and notes.',
+          'Fixed edits silently going nowhere when the NPC card was opened from a dashboard widget or the family tree — the edit form was opening underneath the card popup.',
+          'Editing a life event\'s title or year now updates its auto-created Chronicle line too (and deleting the event removes it).',
+          'Season can now be left blank ("—") when editing, instead of being forced to Spring.',
+        ],
+      },
+      {
+        heading: 'General',
+        items: [
+          'All background refreshes now preserve your scroll position on every tab, not just the dashboard.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '3.9.1',
+    date:    '2026-07-16',
+    sections: [
+      {
+        heading: 'Fixes',
+        items: [
+          'The background refresh no longer snaps the page back to the top — it skips the redraw entirely when nothing has changed, and keeps your scroll position when it does redraw.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.9.0',
     date:    '2026-07-06',
     sections: [

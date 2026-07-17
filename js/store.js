@@ -232,6 +232,8 @@ const STORE = {
         text: `${npc.name} — ${event.title}`,
         cat: 'personal',
         ts: Date.now(),
+        sourceEventId: id,   // ties the mirror to the life event so edits/deletes stay in sync
+        auto: true,          // distinguishes auto-mirrors from GM-penned entries (never auto-rewritten)
       });
     }
     this.save();
@@ -244,8 +246,28 @@ const STORE = {
     const ev = npc.soloEvents.find(e => e.id === eventId);
     if (!ev) return false;
     Object.assign(ev, changes);
+    this._syncSoloEventMirror(npc, ev);
     this.save();
     return true;
+  },
+
+  // Keep the auto-created chronicle line matching its life event —
+  // rewrite the text and move it to the right year if that changed.
+  _syncSoloEventMirror(npc, ev) {
+    if (!this.chronicle) return;
+    Object.keys(this.chronicle).forEach(yr => {
+      const list = this.chronicle[yr];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const entry = list[i];
+        if (!entry.auto || entry.sourceEventId !== ev.id) continue;
+        entry.text = `${npc.name} — ${ev.title}`;
+        const targetYr = String(ev.year || yr);
+        if (targetYr !== yr) {
+          list.splice(i, 1);
+          (this.chronicle[targetYr] = this.chronicle[targetYr] || []).push(entry);
+        }
+      }
+    });
   },
 
   deleteSoloEvent(npcId, eventId) {
@@ -254,8 +276,46 @@ const STORE = {
     const idx = npc.soloEvents.findIndex(e => e.id === eventId);
     if (idx === -1) return false;
     npc.soloEvents.splice(idx, 1);
+    if (this.chronicle) {
+      Object.keys(this.chronicle).forEach(yr => {
+        this.chronicle[yr] = this.chronicle[yr].filter(e => !(e.auto && e.sourceEventId === eventId));
+      });
+    }
     this.save();
     return true;
+  },
+
+  // ── VASSAL LEDGER ↔ NPC-MANOR REGISTRY ─────────────────────
+  // PK manor pages keep their own vassal ledger (manor.vassals[].knightId),
+  // while the NPC Manors registry (npcManors[].holderId) is where succession
+  // and enfeoffment actually happen. Match the two by manor name — registry
+  // names may carry a parenthetical like "Bedwyn (Under Blackwood)".
+  // Returns null when there is no single unambiguous match (e.g. two
+  // registry manors both named "Wilton (…)"), so callers fall back safely.
+  npcManorForVassalName(name) {
+    const q = (name || '').trim().toLowerCase();
+    if (!q) return null;
+    const all = this.npcManors || [];
+    const exact = all.filter(nm => (nm.name || '').trim().toLowerCase() === q);
+    if (exact.length === 1) return exact[0];
+    if (exact.length > 1) return null;
+    const baseOf = nm => (nm.name || '').replace(/\s*\(.*\)\s*$/, '').trim().toLowerCase();
+    const matches = all.filter(nm => baseOf(nm) === q);
+    return matches.length === 1 ? matches[0] : null;
+  },
+
+  // Push a registry manor's current holder into every PK vassal-ledger
+  // entry that unambiguously refers to it. Call whenever holderId changes,
+  // or dashboards keep alerting on the previous (possibly dead) knight.
+  syncVassalKnight(npcManor) {
+    if (!npcManor) return;
+    Object.values(this.manors || {}).forEach(pk => {
+      (pk.vassals || []).forEach(v => {
+        if (this.npcManorForVassalName(v.manorName) === npcManor) {
+          v.knightId = npcManor.holderId || null;
+        }
+      });
+    });
   },
 
   addNpc(npc) {
@@ -962,8 +1022,15 @@ const STORE = {
         if (maybe.status) return maybe.status;
       } catch(e) {}
 
+      // Identical to the last poll — skip the import so callers don't
+      // tear down and re-render the page for data that hasn't changed.
+      if (text === this._lastLoadedText) {
+        if (!this._dirty) FileSync.setStatus('saved');
+        return 'unchanged';
+      }
+
       const ok = this.importJSON(text);
-      if (ok === true) { if (!this._dirty) FileSync.setStatus('saved'); return 'loaded'; }
+      if (ok === true) { this._lastLoadedText = text; if (!this._dirty) FileSync.setStatus('saved'); return 'loaded'; }
       if (ok === 'corrupt') return 'corrupt';
       return 'offline';
 

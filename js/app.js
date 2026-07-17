@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '3.9.0';
+const APP_VERSION = '3.9.3';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────
@@ -659,7 +659,12 @@ const APP = {
   },
 
   refreshCurrentTab() {
+    // Re-renders wipe and rebuild the tab, which resets window scroll to
+    // the top. Background refreshes and post-action re-renders must not
+    // yank the user away from where they were — preserve scroll.
+    const sx = window.scrollX, sy = window.scrollY;
     this._renderTab(this._currentTab);
+    window.scrollTo(sx, sy);
   },
 
   // ── PATCH NOTES ───────────────────────────────────────────

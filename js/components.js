@@ -2191,7 +2191,7 @@ const Components = {
     const npc = STORE.getNpc(npcId);
     if (!npc) return;
     const seasons = ['spring','summer','autumn','winter'];
-    Modal.open(`
+    const html = `
       <div style="min-width:min(420px,90vw);">
         <div class="page-title" style="font-size:1rem;margin-bottom:16px;">Add Life Event — ${esc(npc.name)}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
@@ -2217,9 +2217,11 @@ const Components = {
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="Components.saveNewLifeEvent('${npcId}')">Save</button>
-          <button class="btn btn-ghost"   onclick="Modal.close()">Cancel</button>
+          <button class="btn btn-ghost"   onclick="Components.openNpcCard('${npcId}')">Cancel</button>
         </div>
-      </div>`);
+      </div>`;
+    // Same layering rule as editSoloEvent — follow the card's layer.
+    if (CardPopup.isOpen()) CardPopup.open(html); else Modal.open(html);
   },
 
   saveNewLifeEvent(npcId) {
@@ -2239,7 +2241,7 @@ const Components = {
     const ev = npc.soloEvents.find(e => e.id === eventId);
     if (!ev) return;
     const seasons = ['spring','summer','autumn','winter'];
-    Modal.open(`
+    const html = `
       <div style="min-width:min(480px,90vw);">
         <div class="page-title" style="font-size:1rem;margin-bottom:16px;">Edit Life Event</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
@@ -2250,6 +2252,7 @@ const Components = {
           <div class="detail-field">
             <div class="detail-label">Season</div>
             <select class="edit-input" id="sev-season">
+              <option value="" ${!ev.season?'selected':''}>—</option>
               ${seasons.map(s => `<option value="${s}" ${ev.season===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
             </select>
           </div>
@@ -2263,24 +2266,33 @@ const Components = {
           <textarea class="edit-input" id="sev-mech" rows="2" style="resize:vertical;">${esc(ev.mechDesc||'')}</textarea>
         </div>
         <div class="detail-field mb-8">
+          <div class="detail-label">Narrative</div>
+          <textarea class="edit-input" id="sev-flavor" rows="4" placeholder="The story as the chronicler tells it…" style="resize:vertical;">${esc(ev.flavorText||'')}</textarea>
+        </div>
+        <div class="detail-field mb-8">
           <div class="detail-label">Notes</div>
           <textarea class="edit-input" id="sev-notes" rows="3" placeholder="Personal notes about this event…" style="resize:vertical;">${esc(ev.userNotes||'')}</textarea>
         </div>
         <div class="btn-row">
           <button class="btn btn-primary"  onclick="Components.saveSoloEventEdit('${npcId}','${eventId}')">Save</button>
-          <button class="btn btn-ghost"    onclick="Modal.close()">Cancel</button>
+          <button class="btn btn-ghost"    onclick="Components.openNpcCard('${npcId}')">Cancel</button>
           <button class="btn btn-danger"   style="margin-left:auto;" onclick="Components.deleteSoloEvent('${npcId}','${eventId}')">Delete</button>
         </div>
-      </div>`);
+      </div>`;
+    // Open in whichever layer the NPC card is in. Opening a Modal while
+    // the card sits in CardPopup puts the form UNDER the popup overlay
+    // (z-modal < z-modal-top) — invisible or spread across two layers.
+    if (CardPopup.isOpen()) CardPopup.open(html); else Modal.open(html);
   },
 
   saveSoloEventEdit(npcId, eventId) {
     const year    = parseInt(document.getElementById('sev-year')?.value, 10) || STORE.year;
-    const season  = document.getElementById('sev-season')?.value || 'summer';
+    const season  = document.getElementById('sev-season')?.value || '';
     const title   = document.getElementById('sev-title')?.value?.trim() || '';
     const mechDesc= document.getElementById('sev-mech')?.value?.trim() || '';
+    const flavorText = document.getElementById('sev-flavor')?.value?.trim() || null;
     const userNotes = document.getElementById('sev-notes')?.value?.trim() || '';
-    STORE.updateSoloEvent(npcId, eventId, { year, season, title, mechDesc, userNotes });
+    STORE.updateSoloEvent(npcId, eventId, { year, season, title, mechDesc, flavorText, userNotes });
     Toast.success('Event updated.');
     this.openNpcCard(npcId);
   },

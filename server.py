@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.9.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.9.3'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -5016,6 +5016,8 @@ def api_mcp_add_event(npc_id):
                 'text': f'{npc_name} — {title}',
                 'cat':  'personal',
                 'ts':   int(time.time() * 1000),
+                'sourceEventId': event['id'],
+                'auto': True,
             })
 
         _rotate_backup(save_path)

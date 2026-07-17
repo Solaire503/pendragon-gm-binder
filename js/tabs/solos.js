@@ -76,6 +76,11 @@ const TabSolos = {
                 <div class="npc-search-results" id="solosKnightSearch-results" style="display:none;"></div>
               </div>
               ${pillsHtml ? `<div class="solos-knight-pills">${pillsHtml}</div>` : ''}
+              <div class="solos-staging-actions">
+                <button class="btn btn-ghost" onclick="TabSolos._addRandomKnight(true)" title="Add a random knight who has a living spouse">🎲 Random Wed</button>
+                <button class="btn btn-ghost" onclick="TabSolos._addRandomKnight(false)" title="Add a random knight with no living spouse">🎲 Random Unwed</button>
+                ${this._knightIds.length ? `<button class="btn btn-ghost" onclick="TabSolos._clearAllKnights()">✕ Clear All Selected</button>` : ''}
+              </div>
               ${typeof EventStaging !== 'undefined' && EventStaging.count() > 0 ? `
                 <div class="solos-staging-actions">
                   <button class="btn btn-ghost solos-load-staged-btn" onclick="TabSolos._loadStaged()">
@@ -213,6 +218,36 @@ const TabSolos = {
 
   _removeKnight(id) {
     this._knightIds = this._knightIds.filter(x => x !== id);
+    this.render();
+  },
+
+  _clearAllKnights() {
+    if (!this._knightIds.length) return;
+    this._knightIds = [];
+    this.render();
+  },
+
+  // Wed = has a Spouse relationship to a living NPC (same convention as
+  // the childbirth flag). Widowed or betrothed knights count as unwed.
+  _isWedKnight(npc) {
+    return STORE.getRelationships(npc.id).some(r => {
+      if (r.type !== 'Spouse') return false;
+      const otherId = r.sourceId === npc.id ? r.targetId : r.sourceId;
+      return STORE.living.some(n => n.id === otherId);
+    });
+  },
+
+  _addRandomKnight(wed) {
+    const pool = this._getKnights().filter(n =>
+      !this._knightIds.includes(n.id) && this._isWedKnight(n) === wed);
+    if (!pool.length) {
+      Toast.info(`No ${wed ? 'wed' : 'unwed'} knights left to add`);
+      return;
+    }
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    this._knightIds.push(pick.id);
+    this._wed = wed ? 'wed' : 'unwed';
+    Toast.success(`Added ${pick.name} — Status set to ${wed ? 'Wed' : 'Unwed'}`);
     this.render();
   },
 
@@ -1900,7 +1935,18 @@ const TabSolos = {
     if (!card) return;
     const el = document.getElementById(`solos-card-${cardId}`);
     if (!el) return;
+    const before = el.getBoundingClientRect();
     el.outerHTML = this._renderCard(card);
+    // Flavor text arriving for a card above the current view grows that
+    // card and shoves the reading position down the page — compensate by
+    // the height difference so the view holds still.
+    if (before.top < 0) {
+      const newEl = document.getElementById(`solos-card-${cardId}`);
+      if (newEl) {
+        const delta = newEl.getBoundingClientRect().height - before.height;
+        if (delta) window.scrollBy(0, delta);
+      }
+    }
   },
 
   // ── RESET ALL ─────────────────────────────────────────────

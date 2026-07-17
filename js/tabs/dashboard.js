@@ -406,9 +406,14 @@ const TabDashboard = {
         attentionItems.push({ icon:'⚠', text:'No Heir designated for your manor', urgent:false });
       damaged.filter(d=>d.yearRepaired && d.yearRepaired <= year).forEach(d =>
         attentionItems.push({ icon:'🔨', text:`Overdue repair: ${esc(d.description||d.type)} (${d.repairCost||0} L)`, urgent:true }));
-      // Vassal manors needing a knight enfeoffed — no linked NPC, or the knight has died
+      // Vassal manors needing a knight enfeoffed — no linked NPC, or the knight has died.
+      // The NPC Manors registry is where succession actually happens, so when it has
+      // an unambiguous entry for this vassal manor, its holder wins over the ledger's
+      // knightId — otherwise a recorded succession leaves a stale death alert here.
       (manor.vassals || []).forEach(v => {
-        const knight = v.knightId ? [...STORE.living, ...STORE.dead].find(n => n.id === v.knightId) : null;
+        const reg = STORE.npcManorForVassalName(v.manorName);
+        const knightId = reg ? (reg.holderId || '') : (v.knightId || '');
+        const knight = knightId ? [...STORE.living, ...STORE.dead].find(n => n.id === knightId) : null;
         const knightDead = knight && (knight.status === 'Dead' || STORE.dead.some(d => d.id === knight.id));
         if (!knight)
           attentionItems.push({ icon:'🏰', text:`${esc(v.manorName || 'A vassal manor')} has no knight enfeoffed — an NPC must be granted the manor`, urgent:true });

@@ -276,6 +276,7 @@ const TabNpcManors = {
     m.faction  = document.getElementById('em-faction')?.value?.trim() || '';
     m.holderId = newHolderId;
     m.notes    = document.getElementById('em-notes')?.value?.trim() || '';
+    STORE.syncVassalKnight(m);
 
     const npc = newHolderId ? STORE.getNpc(newHolderId) : null;
     if (holderChanged && npc && !this._isOfAge(npc)) {
@@ -341,6 +342,7 @@ const TabNpcManors = {
     m.holderId = holderId;
     m.yearGranted = yearGranted;
     m.status = status;
+    STORE.syncVassalKnight(m);
     this._addChronicleEntry(holderId, m.name, status, yearGranted);
     STORE.save();
     Toast.success(`${esc(npc?.name || 'NPC')} assigned to ${esc(m.name)}`);
@@ -406,6 +408,7 @@ const TabNpcManors = {
     m.holderId = holderId;
     m.yearGranted = year;
     m.notes = notes;
+    STORE.syncVassalKnight(m);
 
     if (ofAge === 'yes') {
       if (holder) holder.came_of_age = true;
@@ -491,6 +494,7 @@ const TabNpcManors = {
       m.status = 'Escheated';
       m.yearGranted = year;
       m.notes = notes;
+      STORE.syncVassalKnight(m);
       this._writeChronicle(year, `${m.name} escheated to the liege after ${prevName}'s death`);
       STORE.save();
       Toast.success(`${esc(m.name)} escheated`);
@@ -514,6 +518,7 @@ const TabNpcManors = {
     m.status = 'Granted';
     m.yearGranted = year;
     m.notes = notes;
+    STORE.syncVassalKnight(m);
     const heirRole = heir?.role || 'holder';
     this._writeChronicle(year, `${heir?.name || 'Unknown'} inherited ${m.name} after ${prevName}'s death, becoming ${heirRole} of ${m.name}`);
     STORE.save();
@@ -583,6 +588,7 @@ const TabNpcManors = {
     m.status = 'Granted';
     m.yearGranted = year;
     m.notes = notes;
+    STORE.syncVassalKnight(m);
 
     if (ofAge === 'yes') {
       if (heir) heir.came_of_age = true;
@@ -723,6 +729,7 @@ const TabNpcManors = {
       m.status = 'Escheated';
       m.yearGranted = year;
       if (notes) m.notes = notes;
+      STORE.syncVassalKnight(m);
       this._writeChronicle(year, `${prevName} abdicated ${m.name} (${reason}); manor reverted to the liege`);
       STORE.save();
       Toast.success(`${esc(m.name)} reverted to liege`);
@@ -750,6 +757,7 @@ const TabNpcManors = {
     m.trusteeId = '';
     m.yearGranted = year;
     if (notes) m.notes = notes;
+    STORE.syncVassalKnight(m);
     this._writeChronicle(year, `${prevName} abdicated ${m.name} (${reason}); ${heirName} succeeded as ${heirRole} of ${m.name}`);
     STORE.save();
     Toast.success(`${esc(heirName)} succeeds at ${esc(m.name)}`);
