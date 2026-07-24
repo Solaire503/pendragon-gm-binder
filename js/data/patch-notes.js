@@ -18,8 +18,8 @@ const FEATURES = [
     icon: '🖋',
     items: [
       'You can edit any NPC in your own household — open their card and use the Edit button.',
-      'Editable fields: name, pronoun, notes, passions & traits, skills, and stats. Role changes, deaths, and household moves remain with the GM.',
-      'Your household members\' notes, passions, skills, and stats are now visible to you on their cards.',
+      'Editable fields: name, pronoun, passions & traits, skills, and stats. Notes, role changes, deaths, and household moves remain with the GM.',
+      'Your household members\' passions, skills, and stats are visible to you on their cards. Notes are visible on every NPC.',
       'Every edit is saved to the shared binder and the GM is notified of who changed what.',
     ],
   },
@@ -411,6 +411,27 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '3.10.0',
+    date:    '2026-07-23',
+    sections: [
+      {
+        heading: 'NPC Notes — Now Visible to Everyone',
+        items: [
+          'The Notes section on NPC cards is now visible to all players on every NPC — it was always meant to be general background, and now it actually is. Players can read it but not edit it; writing notes stays with the GM.',
+          'Household editing unchanged otherwise: you can still edit your own household members\' name, pronoun, passions & traits, skills, and stats.',
+        ],
+      },
+      {
+        heading: 'GM Notes — A Truly Private Field (GM only)',
+        items: [
+          'Every NPC now has a separate 🔒 GM Notes field that never leaves the GM\'s view — not visible to players, not even for NPCs in their own household, and never sent to their browser at all.',
+          'Edit it from the NPC Edit form; it appears on the card in crimson beneath the public Notes.',
+          'Claude can read and write GM Notes through the MCP bridge, so secrets recorded during prep stay secret.',
+        ],
+      },
+    ],
+  },
   {
     version: '3.9.3',
     date:    '2026-07-17',

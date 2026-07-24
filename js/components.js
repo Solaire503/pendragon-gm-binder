@@ -793,6 +793,7 @@ function buildNpcCardHtml(npc, opts = {}) {
       ${ageFlagHtml}
       ${pageWarningHtml}
       ${npc.notes    ? `<div class="detail-block"><div class="detail-label">Notes</div><div class="detail-value atm-rendered">${AtMention.render(npc.notes)}</div></div>` : ''}
+      ${isGM() && npc.gm_notes ? `<div class="detail-block" style="border-left:3px solid var(--crimson-mid);"><div class="detail-label" style="color:var(--crimson-mid);">🔒 GM Notes</div><div class="detail-value atm-rendered">${AtMention.render(npc.gm_notes)}</div></div>` : ''}
       ${canEditHouseholdNpc(npc) && npc.passions ? `<div class="detail-block"><div class="detail-label">Passions &amp; Traits</div><div class="detail-value atm-rendered">${AtMention.render(npc.passions)}</div></div>` : ''}
       ${canEditHouseholdNpc(npc) && npc.skills   ? `<div class="detail-block"><div class="detail-label">Skills</div><div class="detail-value atm-rendered">${AtMention.render(npc.skills)}</div></div>` : ''}
       ${canEditHouseholdNpc(npc) && npc.stats    ? `<div class="detail-block"><div class="detail-label">Stats</div><div class="detail-value atm-rendered">${AtMention.render(npc.stats)}</div></div>` : ''}
@@ -945,8 +946,12 @@ function buildNpcEditHtml(npc, isNew = false) {
         </div>
       </div>
       <div class="detail-field mt-8 mb-8">
-        <div class="detail-label">Notes</div>
+        <div class="detail-label">Notes <span style="font-weight:400;font-style:italic;text-transform:none;letter-spacing:0;">— visible to all players</span></div>
         <textarea class="edit-input edit-textarea" id="ef-notes">${esc(npc.notes || '')}</textarea>
+      </div>
+      <div class="detail-field mb-8">
+        <div class="detail-label" style="color:var(--crimson-mid);">🔒 GM Notes <span style="font-weight:400;font-style:italic;text-transform:none;letter-spacing:0;">— only you can see this</span></div>
+        <textarea class="edit-input edit-textarea" id="ef-gm-notes">${esc(npc.gm_notes || '')}</textarea>
       </div>
       <div class="detail-field mb-8">
         <div class="detail-label">Passions &amp; Traits</div>
@@ -1292,7 +1297,7 @@ const Components = {
     }});
   },
 
-  // ── Player household edit (name/pronoun/notes/passions/skills/stats) ──
+  // ── Player household edit (name/pronoun/passions/skills/stats) ──
   // Saves via PATCH /api/npc/<id> — server enforces the household check and
   // field allowlist, and notifies the GM of every player edit.
   openPlayerEditNpc(id) {
@@ -1308,10 +1313,6 @@ const Components = {
       <div class="detail-field mb-8">
         <div class="detail-label">Pronoun</div>
         <input class="edit-input" id="pef-pronoun" value="${esc(npc.pronoun || '')}" placeholder="She/her">
-      </div>
-      <div class="detail-field mb-8">
-        <div class="detail-label">Notes</div>
-        <textarea class="edit-input edit-textarea" id="pef-notes">${esc(npc.notes || '')}</textarea>
       </div>
       <div class="detail-field mb-8">
         <div class="detail-label">Passions &amp; Traits</div>
@@ -1337,7 +1338,6 @@ const Components = {
     const body = {
       name:     g('pef-name')?.value?.trim() || '',
       pronoun:  g('pef-pronoun')?.value?.trim() || '',
-      notes:    g('pef-notes')?.value ?? '',
       passions: g('pef-passions')?.value ?? '',
       skills:   g('pef-skills')?.value ?? '',
       stats:    g('pef-stats')?.value ?? '',
@@ -1541,6 +1541,7 @@ const Components = {
       eligibility:  g('ef-eligibility')?.value || '',
       dowry:        g('ef-dowry')?.value?.trim() || '',
       notes:        g('ef-notes')?.value?.trim() || '',
+      gm_notes:     g('ef-gm-notes')?.value?.trim() || '',
       passions:     g('ef-passions')?.value?.trim() || '',
       skills:       g('ef-skills')?.value?.trim() || '',
       stats:        g('ef-stats')?.value?.trim() || '',
@@ -2048,6 +2049,7 @@ const Components = {
       eligibility:  g('ef-eligibility')?.value || '',
       dowry:        g('ef-dowry')?.value?.trim() || '',
       notes:        g('ef-notes')?.value?.trim() || '',
+      gm_notes:     g('ef-gm-notes')?.value?.trim() || '',
       passions:     g('ef-passions')?.value?.trim() || '',
       skills:       g('ef-skills')?.value?.trim() || '',
       stats:        g('ef-stats')?.value?.trim() || '',
@@ -2094,7 +2096,7 @@ const Components = {
       status: 'Alive', role: '', name: '', glory: 0,
       year_born: null, year_died: null, age: null,
       pronoun: 'He/him', household: '', manor: '',
-      eligibility: 'No', dowry: '', notes: '',
+      eligibility: 'No', dowry: '', notes: '', gm_notes: '',
       passions: '', skills: '', stats: '',
       statblock_template: '',
       blessed: false, blessed_note: '', fate_touched: false,

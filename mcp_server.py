@@ -149,7 +149,8 @@ def get_arc(arc_id: str) -> dict:
 @mcp.tool(
     description=(
         "Search or list NPCs. Returns id, name, role, household, status, "
-        "year_born, year_died, pronoun, manor, faction, glory, and notes for each. "
+        "year_born, year_died, pronoun, manor, faction, glory, notes, and "
+        "gm_notes (the GM's private notes, never visible to players) for each. "
         "Pass a search string to filter by name (case-insensitive partial match), "
         "or omit to list all. Use when an arc references an NPC you need detail on."
     )
@@ -225,6 +226,8 @@ def get_prep(prep_id: str) -> dict:
         "Common fields: role (e.g. 'Knight', 'Baron', 'Peasant'), status "
         "('Alive'/'Dead'), year_born, pronoun ('He/him', 'She/her'), "
         "manor, household, faction, glory, notes. "
+        "Use gm_notes for the GM's private notes — that field is never shown "
+        "to players; the plain notes field is visible to everyone. "
         "The NPC ID is auto-generated."
     )
 )
@@ -239,12 +242,14 @@ def create_npc(
     faction: str = "",
     glory: int = 0,
     notes: str = "",
+    gm_notes: str = "",
     eligibility: str = "",
 ) -> dict:
     body = {
         "name": name, "role": role, "status": status, "pronoun": pronoun,
         "manor": manor, "household": household, "faction": faction,
-        "glory": glory, "notes": notes, "eligibility": eligibility,
+        "glory": glory, "notes": notes, "gm_notes": gm_notes,
+        "eligibility": eligibility,
     }
     if year_born is not None:
         body["year_born"] = year_born
@@ -259,10 +264,12 @@ def create_npc(
         "If status changes to 'Dead', the NPC automatically moves to the dead list "
         "(and vice versa back to living). "
         "Updatable fields: name, role, household, status, year_born, year_died, "
-        "pronoun, manor, faction, glory, notes, eligibility, dowry, passions, "
-        "skills, stats, con, blessed, blessed_note, barren, fate_touched, "
+        "pronoun, manor, faction, glory, notes, gm_notes, eligibility, dowry, "
+        "passions, skills, stats, con, blessed, blessed_note, barren, fate_touched, "
         "out_of_story, out_of_story_note, round_table, statblock_template, "
-        "and training fields (page_placed, page_court, training_path, etc)."
+        "and training fields (page_placed, page_court, training_path, etc). "
+        "PRIVACY: notes is visible to all players; gm_notes is the GM's private "
+        "notes field and is never shown to players — put secrets there."
     )
 )
 def update_npc(
@@ -278,6 +285,7 @@ def update_npc(
     faction: str | None = None,
     glory: int | None = None,
     notes: str | None = None,
+    gm_notes: str | None = None,
     eligibility: str | None = None,
     dowry: str | None = None,
     passions: str | None = None,
@@ -305,7 +313,7 @@ def update_npc(
         "name": name, "role": role, "status": status, "year_born": year_born,
         "year_died": year_died, "pronoun": pronoun, "manor": manor,
         "household": household, "faction": faction, "glory": glory,
-        "notes": notes, "eligibility": eligibility, "dowry": dowry,
+        "notes": notes, "gm_notes": gm_notes, "eligibility": eligibility, "dowry": dowry,
         "passions": passions, "skills": skills, "stats": stats, "con": con,
         "blessed": blessed, "blessed_note": blessed_note, "barren": barren,
         "fate_touched": fate_touched, "out_of_story": out_of_story,

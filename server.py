@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.9.3'  # keep in sync with js/app.js
+APP_VERSION  = '3.10.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -1123,9 +1123,11 @@ def api_player_load():
         data = path.read_text(encoding='utf-8')
         binder = json.loads(data)
         # Strip GM-only fields from every NPC before sending to players —
-        # except NPCs in the player's own household, whose notes/skills/
-        # passions/stats stay visible (and editable, see /api/npc PATCH).
-        _GM_NPC_FIELDS = {'stats', 'passions', 'skills', 'notes', 'statblock_template'}
+        # except NPCs in the player's own household, whose skills/passions/
+        # stats stay visible (and editable, see /api/npc PATCH).
+        # `notes` is readable by everyone; `gm_notes` never leaves the GM view,
+        # not even for household members.
+        _GM_NPC_FIELDS = {'stats', 'passions', 'skills', 'gm_notes', 'statblock_template'}
         user_hh = (session.get('household') or '').lower()
 
         def _strip(npc):
@@ -1133,6 +1135,7 @@ def api_player_load():
                 return
             if user_hh and (npc.get('household') or '').lower() == user_hh:
                 npc.pop('statblock_template', None)
+                npc.pop('gm_notes', None)
                 return
             for f in _GM_NPC_FIELDS:
                 npc.pop(f, None)
@@ -3696,7 +3699,7 @@ def _push_notification(username: str, notif_type: str, text: str, link: str = ''
 
 # ── PLAYER NPC EDIT (household-scoped) ────────────────────────────────────────
 
-_PLAYER_NPC_UPDATABLE = ('name', 'pronoun', 'notes', 'passions', 'skills', 'stats')
+_PLAYER_NPC_UPDATABLE = ('name', 'pronoun', 'passions', 'skills', 'stats')
 
 
 @app.route('/api/npc/<npc_id>', methods=['PATCH'])
@@ -3731,7 +3734,7 @@ def api_npc_household_update(npc_id):
             val = body[field]
             if not isinstance(val, str):
                 return jsonify({'error': f'{field} must be a string'}), 422
-            limit = 5000 if field in ('notes', 'passions', 'skills', 'stats') else 200
+            limit = 5000 if field in ('passions', 'skills', 'stats') else 200
             val = val.strip()[:limit]
             if field == 'name' and not val:
                 return jsonify({'error': 'Name cannot be empty'}), 422
@@ -3748,7 +3751,7 @@ def api_npc_household_update(npc_id):
                 _push_notification(u['username'], 'npc_edit', text, npc_id)
     if changed:
         log.info('NPC %s edited by %s (%s)', npc_id, session['username'], ', '.join(changed))
-    resp_npc = {k: v for k, v in npc.items() if is_gm or k != 'statblock_template'}
+    resp_npc = {k: v for k, v in npc.items() if is_gm or k not in ('statblock_template', 'gm_notes')}
     return jsonify({'ok': True, 'changed': changed, 'npc': resp_npc})
 
 
@@ -4073,8 +4076,13 @@ _REL_CLOSENESS = {
     'Aunt/Uncle': 9, 'Niece/Nephew': 10, 'Vassal': 11,
 }
 
-def _safe_npc(npc: dict) -> dict:
-    return {k: npc.get(k) for k in _BOT_NPC_FIELDS}
+def _safe_npc(npc: dict, include_gm: bool = False) -> dict:
+    """Bot/MCP-facing NPC view. The Discord bot serves players, so gm_notes
+    only appears when include_gm=True (the MCP endpoints, which are GM-tier)."""
+    out = {k: npc.get(k) for k in _BOT_NPC_FIELDS}
+    if include_gm:
+        out['gm_notes'] = npc.get('gm_notes')
+    return out
 
 def _npc_relationships(npc_id: str, all_npcs: list, all_rels: list, limit: int = 4) -> list:
     """Return up to `limit` relationships for an NPC, sorted by closeness."""
@@ -4605,7 +4613,7 @@ def api_mcp_npcs():
     if binder is None:
         return jsonify({'error': 'Save file not found'}), 503
     search = request.args.get('search', '').lower()
-    npcs = [_safe_npc(n) for n in _all_npcs(binder)]
+    npcs = [_safe_npc(n, include_gm=True) for n in _all_npcs(binder)]
     if search:
         npcs = [n for n in npcs if search in (n.get('name') or '').lower()]
     return jsonify({'npcs': npcs})
@@ -4621,7 +4629,7 @@ def api_mcp_npc(name_or_id):
     needle = name_or_id.lower()
     for npc in all_npcs:
         if (npc.get('id') or '').lower() == needle or (npc.get('name') or '').lower() == needle:
-            result = _safe_npc(npc)
+            result = _safe_npc(npc, include_gm=True)
             result['relationships'] = _npc_relationships(npc.get('id', ''), all_npcs, all_rels)
             return jsonify(result)
     return jsonify({'error': 'NPC not found'}), 404
@@ -4670,7 +4678,7 @@ def api_mcp_binder_summary():
 
 _MCP_NPC_UPDATABLE = (
     'name', 'role', 'household', 'status', 'year_born', 'year_died',
-    'pronoun', 'manor', 'faction', 'glory', 'notes', 'eligibility', 'dowry',
+    'pronoun', 'manor', 'faction', 'glory', 'notes', 'gm_notes', 'eligibility', 'dowry',
     'passions', 'skills', 'stats', 'con', 'blessed', 'blessed_note',
     'barren', 'fate_touched', 'out_of_story', 'out_of_story_note',
     'round_table', 'statblock_template',
@@ -4724,6 +4732,7 @@ def api_mcp_create_npc():
             'faction': str(data.get('faction', ''))[:100],
             'glory': data.get('glory', 0),
             'notes': str(data.get('notes', ''))[:10000],
+            'gm_notes': str(data.get('gm_notes', ''))[:10000],
             'eligibility': str(data.get('eligibility', ''))[:200],
             'dowry': str(data.get('dowry', ''))[:200],
             'passions': str(data.get('passions', ''))[:4000],
@@ -4756,7 +4765,7 @@ def api_mcp_create_npc():
         _write_json(save_path, binder)
 
     log.info('[MCP] Created NPC %s: %s', npc_id, npc['name'])
-    return jsonify({'ok': True, 'id': npc_id, 'npc': _safe_npc(npc)}), 201
+    return jsonify({'ok': True, 'id': npc_id, 'npc': _safe_npc(npc, include_gm=True)}), 201
 
 
 @app.route('/api/mcp/npc/<npc_id>', methods=['PATCH'])
@@ -4797,6 +4806,7 @@ def api_mcp_update_npc(npc_id):
         _STR_LIMITS = {
             'name': 200, 'role': 100, 'household': 100, 'status': 50,
             'pronoun': 50, 'manor': 200, 'faction': 100, 'notes': 5000,
+            'gm_notes': 5000,
             'eligibility': 100, 'dowry': 200, 'passions': 3000,
             'skills': 3000, 'stats': 3000, 'blessed_note': 500,
             'out_of_story_note': 500, 'statblock_template': 100,
@@ -4834,7 +4844,7 @@ def api_mcp_update_npc(npc_id):
         _write_json(save_path, binder)
 
     log.info('[MCP] Updated NPC %s: %s', npc_id, ', '.join(changed))
-    return jsonify({'ok': True, 'id': npc_id, 'changed': changed, 'npc': _safe_npc(npc)})
+    return jsonify({'ok': True, 'id': npc_id, 'changed': changed, 'npc': _safe_npc(npc, include_gm=True)})
 
 
 _VALID_REL_TYPES = {
