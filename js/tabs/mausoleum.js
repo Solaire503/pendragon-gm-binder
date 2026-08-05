@@ -20,7 +20,7 @@ const TabMausoleum = {
     const deadCount = STORE.dead.length;
 
     panel.innerHTML = `
-      <div class="mausoleum-layout">
+      <div class="mausoleum-layout" id="mausoleumScroll">
         <div class="mausoleum-header">
           <div class="page-title">${this._subTab === 'oos' ? '🌫 Out of Story' : '🕯 The Mausoleum'}</div>
           <div class="mausoleum-epitaph">${this._subTab === 'oos'

@@ -8,9 +8,15 @@ const TabDashboard = {
     const panel = document.getElementById('tab-dashboard');
     if (!panel) return;
 
+    // Widget actions (task toggles, pin loads) re-render the whole
+    // dashboard directly, bypassing APP.refreshCurrentTab's scroll
+    // preservation — so preserve the scroller position here too.
+    const prevScroll = document.getElementById('dashboardScroll')?.scrollTop || 0;
+
     const user = window.__USER__;
     if (user && user.role === 'player') {
       this._renderPlayerDashboard(panel, user);
+      this._restoreScroll(prevScroll);
       return;
     }
 
@@ -133,7 +139,7 @@ const TabDashboard = {
     }).join('');
 
     panel.innerHTML = `
-      <div class="dashboard-layout">
+      <div class="dashboard-layout" id="dashboardScroll">
 
         <div class="dashboard-full">
           <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:20px;">
@@ -229,6 +235,13 @@ const TabDashboard = {
         ${typeof Multiplayer !== 'undefined' ? Multiplayer.gmBroadcastHtml() : ''}
 
       </div>`;
+    this._restoreScroll(prevScroll);
+  },
+
+  _restoreScroll(top) {
+    if (!top) return;
+    const el = document.getElementById('dashboardScroll');
+    if (el) el.scrollTop = top;
   },
 
   // ── PERSONS OF INTEREST WIDGET ────────────────────────────
@@ -569,7 +582,7 @@ const TabDashboard = {
       </div>` : '';
 
     panel.innerHTML = `
-      <div style="height:100%;overflow-y:auto;padding:24px;background:var(--vellum);">
+      <div id="dashboardScroll" style="height:100%;overflow-y:auto;padding:24px;background:var(--vellum);">
 
         <!-- WELCOME HEADER -->
         <div style="margin-bottom:24px;padding:20px 24px;background:linear-gradient(135deg,${col}28 0%,transparent 100%);
@@ -585,7 +598,7 @@ const TabDashboard = {
         </div>
 
         <!-- CARDS GRID -->
-        <div class="dashboard-layout">
+        <div class="dashboard-layout" id="dashboardCards">
           ${attentionHtml}
           ${typeof TasksManager !== 'undefined' ? TasksManager.buildDashboardWidget() : ''}
           ${manorHtml}

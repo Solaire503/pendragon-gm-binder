@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '3.10.0';
+const APP_VERSION = '3.11.1';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────
@@ -662,9 +662,19 @@ const APP = {
     // Re-renders wipe and rebuild the tab, which resets window scroll to
     // the top. Background refreshes and post-action re-renders must not
     // yank the user away from where they were — preserve scroll.
+    // Some tabs scroll inside an inner container (e.g. #manorContent on
+    // the manors tab) rather than the window, so capture those too.
     const sx = window.scrollX, sy = window.scrollY;
+    const inner = [];
+    document.querySelectorAll('[id]').forEach(el => {
+      if (el.scrollTop > 0 || el.scrollLeft > 0) inner.push([el.id, el.scrollTop, el.scrollLeft]);
+    });
     this._renderTab(this._currentTab);
     window.scrollTo(sx, sy);
+    inner.forEach(([id, top, left]) => {
+      const el = document.getElementById(id);
+      if (el) { el.scrollTop = top; el.scrollLeft = left; }
+    });
   },
 
   // ── PATCH NOTES ───────────────────────────────────────────

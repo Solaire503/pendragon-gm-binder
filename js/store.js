@@ -991,7 +991,12 @@ const STORE = {
       } else {
         FileSync.setStatus('error');
         console.warn('File save failed:', res.status);
-        Toast.error(`Save failed (${res.status}) — data not written to disk`);
+        if (res.status === 401) {
+          // 401 = session died (24h lifetime, or signed in on another device)
+          Toast.error('Your login session has expired — refresh the page and sign in again. This change was NOT saved.');
+        } else {
+          Toast.error(`Save failed (${res.status}) — data not written to disk`);
+        }
       }
     } catch(e) {
       FileSync.setStatus('offline');

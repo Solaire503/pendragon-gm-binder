@@ -412,6 +412,55 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.11.1',
+    date:    '2026-08-05',
+    sections: [
+      {
+        heading: 'Security & Privacy',
+        items: [
+          'The GM\'s AI prep bridge now requires a private access address. It previously answered anyone who knew the hostname, which meant GM-only notes could be read and campaign records changed from outside the group. Closed, verified, and the old address now returns nothing.',
+          'Tightened which files the Binder will hand out. Stray backup copies of the campaign save had been sitting somewhere the app would serve them to any signed-in account, bypassing the usual GM-only filtering — those copies have been moved and the rule now covers backup and export files of every kind.',
+          'Access credentials are no longer written into the server log, and the log files themselves are now readable only by the server account.',
+          'File permissions on the application folder tightened so that only the server account can read or modify it.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '3.11.0',
+    date:    '2026-07-30',
+    sections: [
+      {
+        heading: 'Manors — Record Year Quality of Life',
+        items: [
+          'Fixed the manors page snapping to the top during background refreshes — the manors tab scrolls inside its own panel, which the scroll-preservation fix from v3.9.2 didn\'t cover. Your place is now kept through refreshes and after saving damage, improvements, and edits.',
+          'New improvements can now be added right from the Record New Year panel (＋ Improvement next to Build Cost). The build cost is folded into the year\'s Build Cost automatically.',
+          'Improvements have a third category: Enhancement (gold), alongside Improvement (green) and Fortification (blue).',
+          'Weather is shared: once any manor\'s year is recorded with a Weather misfortune factor, opening Record New Year on the other manors pre-fills that value automatically (weather hits everyone equally). A note shows which manor it carried from.',
+          'Improvements can now be marked ⚠ Damaged — a damaged improvement stops contributing its fixed income, maintenance, and DV bonus until marked ✓ Repaired. Damaged improvements show in their own crimson group on the Improvements tab and stay visible (with a badge) on the Overview.',
+          'New Conflict resolution helper: pick a conflict type (Bandits/Raided/Pillaged/Plundered) and a panel appears showing the fate dice to roll, a Siege-success checkbox (−manor DV), and Sword/Battle/Valorous Knightly Presence checkboxes (−1 each). Enter the rolled result and the Conflict misfortune factor fills in automatically (minimum 0), alongside the Property Damage roll modifier (+0/+5/+10 base, reduced the same way). Bandits are exempt from reductions per the Book of the Manor.',
+          'Book of the Manor reference drawers at the bottom of the Record New Year panel: Manorial Luck, Benefit, Calamity, Conflict Results, Property Destruction, and the Care rules — with the current campaign-period column highlighted automatically based on the year. Open drawers stay open through refreshes.',
+          'Family Expenses and Lifestyle now carry forward from the manor\'s most recent recorded year when you open Record New Year (misfortune factors deliberately don\'t — those come from each year\'s rolls).',
+        ],
+      },
+      {
+        heading: 'Winter — Remarried Widows',
+        items: [
+          'Fixed childbirth rolls skipping widows who remarried — the old Spouse link to the deceased partner was blocking them. The Binder now always looks for a living spouse first: remarried women are back in Roll All and show their new spouse instead of "† widowed".',
+          'Same fix applied to winter survival categories: a widow of a Player Knight now rolls on the Women table (as the rules intend) instead of still counting as married to the PK.',
+        ],
+      },
+      {
+        heading: 'Manors — Editing Past Years',
+        items: [
+          'The Edit Past Year form now keeps itemized Misc Income / Misc Expense lines instead of collapsing them into single totals — and you can add, edit, or remove line items on any recorded year.',
+          'Totals recalculate live as you edit: Total In, Total Out, Net, and Treasury After all update automatically, so adding a 10 L expense actually changes the final outcome now.',
+          'When an edit changes a year\'s treasury, the Binder offers to carry the difference forward through every later recorded year, keeping the whole ledger consistent.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.10.0',
     date:    '2026-07-23',
     sections: [

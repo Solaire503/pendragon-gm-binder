@@ -8,6 +8,8 @@ Usage:
     /home/solaire503/pendragon/mcp-venv/bin/python /home/solaire503/pendragon/mcp_server.py
 """
 
+import hmac
+import logging
 import os
 from pathlib import Path
 
@@ -35,6 +37,7 @@ def _load_secrets() -> dict:
 
 SECRETS = _load_secrets()
 MCP_KEY = SECRETS.get("MCP_KEY", "")
+MCP_PUBLIC_TOKEN = SECRETS.get("MCP_PUBLIC_TOKEN", "")
 BINDER_URL = os.environ.get("BINDER_URL", "http://localhost:8765")
 
 HEADERS = {"Authorization": f"Bearer {MCP_KEY}"}
@@ -810,11 +813,85 @@ def delete_prep(prep_id: str) -> dict:
 
 # ── Entry Point ──────────────────────────────────────────────────────────────
 
+class RedactToken(logging.Filter):
+    """Keep the secret URL segment out of the log file.
+
+    uvicorn's access log prints the raw request line, so every successful call
+    would otherwise write the token to /var/log/pendragon-mcp.log in plaintext —
+    turning a readable log into a full-access credential.
+    """
+
+    def __init__(self, token: str):
+        super().__init__()
+        self.token = token
+
+    def filter(self, record):
+        if isinstance(record.msg, str) and self.token in record.msg:
+            record.msg = record.msg.replace(self.token, "<token>")
+        if record.args:
+            record.args = tuple(
+                a.replace(self.token, "<token>") if isinstance(a, str) else a
+                for a in record.args
+            )
+        return True
+
+
+class SecretPathGate:
+    """Require a secret URL segment before the MCP app is reachable.
+
+    The tunnel publishes this server to the open internet, and the tools it
+    exposes carry GM privileges (including gm_notes and deletes), so an
+    unauthenticated /mcp is a full read/write hole. Everything that does not
+    present the token gets a flat 404 — no hint that a real endpoint is here.
+    """
+
+    def __init__(self, app, token: str):
+        self.app = app
+        self.token = token
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "lifespan":
+            return await self.app(scope, receive, send)
+
+        path = scope.get("path", "")
+        head, _, rest = path.lstrip("/").partition("/")
+        if hmac.compare_digest(head, self.token):
+            inner = "/" + rest
+            scope = dict(scope)
+            scope["path"] = inner
+            scope["raw_path"] = inner.encode()
+            return await self.app(scope, receive, send)
+
+        await send({
+            "type": "http.response.start",
+            "status": 404,
+            "headers": [(b"content-type", b"text/plain")],
+        })
+        await send({"type": "http.response.body", "body": b"Not Found"})
+
+
 if __name__ == "__main__":
     import sys
     if "--http" in sys.argv:
+        port = 8766
+        for i, a in enumerate(sys.argv):
+            if a == "--port" and i + 1 < len(sys.argv):
+                port = int(sys.argv[i + 1])
+
+        if not MCP_PUBLIC_TOKEN:
+            sys.exit(
+                "MCP_PUBLIC_TOKEN missing from secrets.env — refusing to start an "
+                "unauthenticated server on a publicly tunnelled port."
+            )
+
+        import uvicorn
+
+        _redact = RedactToken(MCP_PUBLIC_TOKEN)
+        for _name in ("uvicorn.access", "uvicorn.error", "uvicorn", ""):
+            logging.getLogger(_name).addFilter(_redact)
+
         mcp.settings.host = "127.0.0.1"
-        mcp.settings.port = 8766
+        mcp.settings.port = port
         mcp.settings.transport_security = TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=[
@@ -823,6 +900,10 @@ if __name__ == "__main__":
                 "mcp.pendragon-binder.com",
             ],
         )
-        mcp.run(transport="streamable-http")
+        uvicorn.run(
+            SecretPathGate(mcp.streamable_http_app(), MCP_PUBLIC_TOKEN),
+            host="127.0.0.1",
+            port=port,
+        )
     else:
         mcp.run(transport="stdio")

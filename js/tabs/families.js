@@ -25,7 +25,7 @@ const TabFamilies = {
 
     panel.innerHTML = `
       <div class="families-layout">
-        <div class="family-nav">${navHtml}</div>
+        <div class="family-nav" id="familyNav">${navHtml}</div>
         <div class="family-body" id="familyBody"></div>
       </div>`;
 

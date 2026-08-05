@@ -7,7 +7,7 @@ key.pem
 
 # ===== Live runtime state =====
 # Campaign save data — tracked separately via auto-backup (planned post-Linux migration)
-binder-save.json
+binder-save*
 battle-state.json
 config.json
 # Phase 2 broadcast/presence/submissions runtime files

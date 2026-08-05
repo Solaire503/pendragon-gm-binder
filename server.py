@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.10.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.11.1'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -65,8 +65,22 @@ BLOCKED_FILES = {
     'cert.pem.bak', 'key.pem.bak',
     'config.json', '.env', 'server.py',
 }
-# Any file whose name ends with one of these suffixes is also blocked
-BLOCKED_SUFFIXES = ('.pem', '.pem.bak', '.key', '.py', '.json')
+# Any file whose name ends with one of these suffixes is also blocked.
+# Editor/backup suffixes matter as much as the originals: "binder-save.json.bak"
+# does not end in ".json", so without them a stray copy of the save file is
+# served in full to any logged-in player, bypassing the _safe_npc GM filtering.
+BLOCKED_SUFFIXES = (
+    '.pem', '.pem.bak', '.key', '.py', '.json',
+    '.bak', '.backup', '.old', '.orig', '.save', '.copy',
+    '.tmp', '.temp', '.swp', '.swo', '~',
+    '.csv', '.md', '.log', '.env', '.ini', '.conf', '.cfg',
+    '.service', '.sh', '.db', '.sqlite', '.sqlite3', '.zip', '.tar', '.gz',
+)
+# Data files that must never be served whatever suffix someone appends to them.
+BLOCKED_STEMS = (
+    'binder-save', 'users', 'secrets', 'battle-state',
+    'comments', 'submissions', 'broadcast_tasks',
+)
 
 # ── SECRETS ──────────────────────────────────────────────────────────────────
 
@@ -968,6 +982,8 @@ def static_files(filename):
     if any(p in BLOCKED_FILES or p.startswith('.') for p in parts):
         return jsonify({'error': 'Forbidden'}), 403
     if any(p.lower().endswith(BLOCKED_SUFFIXES) for p in parts):
+        return jsonify({'error': 'Forbidden'}), 403
+    if any(p.lower().startswith(BLOCKED_STEMS) for p in parts):
         return jsonify({'error': 'Forbidden'}), 403
     # Block the backups directory entirely — contains full campaign save history.
     if parts and parts[0] == 'backups':
@@ -4855,6 +4871,13 @@ _VALID_REL_TYPES = {
     'Squire', 'Former Squire', 'Page', 'Vassal', 'Ward', 'Guardian', 'Other',
 }
 
+# Types with no direction — A→B and B→A describe the same relationship.
+# Mirrors the client: everything NOT in components.js REL_DIRECTED.
+_SYMMETRIC_REL_TYPES = {
+    'Spouse', 'Betrothed', 'Lover', 'Former Spouse',
+    'Sibling', 'Half-Sibling', 'Cousin', 'Sworn Brother/Sister', 'Other',
+}
+
 
 @app.route('/api/mcp/relationship', methods=['POST'])
 def api_mcp_add_relationship():
@@ -4891,6 +4914,12 @@ def api_mcp_add_relationship():
         for r in rels:
             if r.get('sourceId') == source_id and r.get('targetId') == target_id and r.get('type') == rel_type:
                 return jsonify({'error': 'Relationship already exists'}), 409
+            # Symmetric types (Spouse, Sibling, …) are one relationship
+            # regardless of direction — the reverse entry is the same fact.
+            if (rel_type in _SYMMETRIC_REL_TYPES
+                    and r.get('sourceId') == target_id and r.get('targetId') == source_id
+                    and r.get('type') == rel_type):
+                return jsonify({'error': 'Relationship already exists (reverse direction — symmetric types need only one entry)'}), 409
 
         rel = {
             'id': 'rel-' + str(uuid.uuid4()),

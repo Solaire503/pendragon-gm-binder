@@ -1474,6 +1474,7 @@ html.is-player .player-readonly-banner {
   border-left: 3px solid var(--verdigris);
 }
 .improvement-item.fortification { border-left-color: var(--cobalt); }
+.improvement-item.enhancement   { border-left-color: var(--gold); }
 .improvement-name {
   font-family: var(--font-heading);
   font-size: 0.8rem;

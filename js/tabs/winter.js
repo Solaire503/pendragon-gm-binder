@@ -51,7 +51,7 @@ const TabWinter = {
               onclick="TabWinter.switchSubTab('solos')">📖 Yearly &amp; Solo Events</button>
           </nav>
         </div>
-        <div class="winter-body">
+        <div class="winter-body" id="winterBody">
           <div id="winterActiveSection"></div>
         </div>
       </div>`;
@@ -293,7 +293,8 @@ const TabWinter = {
           .filter(r => r.type === 'Spouse' || r.type === 'Betrothed');
         const marriedToPK = spouseRels.some(r => {
           const spId = r.sourceId === npc.id ? r.targetId : r.sourceId;
-          const sp   = STORE.getNpc(spId);
+          if (!STORE.living.some(l => l.id === spId)) return false; // widowed — dead spouse doesn't count
+          const sp = STORE.getNpc(spId);
           return sp && (sp.role || '').toLowerCase().includes('player');
         });
         if (!marriedToPK) return 'Women';
@@ -574,19 +575,13 @@ const TabWinter = {
     const effCon  = Math.max(1, baseCon + userMod + autoMod);
     const forn    = this._fornicationFlags.has(n.id);
 
-    // Spouse tag
-    const spouseRels = STORE.getRelationships(n.id).filter(r => r.type==='Spouse'||r.type==='Betrothed');
+    // Spouse tag — prefer a living spouse (remarried widows have both)
+    const ls = this._livingSpouse(n.id);
     let spouseTag = `<span class="birth-spouse-tag unmarried">no spouse</span>`;
-    if (spouseRels.length) {
-      const rel  = spouseRels[0];
-      const spId = rel.sourceId === n.id ? rel.targetId : rel.sourceId;
-      const sp   = STORE.getNpc(spId);
-      if (sp) {
-        const alive = STORE.living.some(l => l.id === spId);
-        spouseTag = alive
-          ? `<span class="birth-spouse-tag">♥ ${esc(sp.name)}</span>`
-          : `<span class="birth-spouse-tag unmarried" title="${esc(sp.name)} is deceased">† widowed</span>`;
-      }
+    if (ls) {
+      spouseTag = ls.alive
+        ? `<span class="birth-spouse-tag">♥ ${esc(ls.spouse.name)}</span>`
+        : `<span class="birth-spouse-tag unmarried" title="${esc(ls.spouse.name)} is deceased">† widowed</span>`;
     }
 
     // Auto mod tags
@@ -679,6 +674,22 @@ const TabWinter = {
     }).sort((a, b) => (a.household||'').localeCompare(b.household||'') || a.name.localeCompare(b.name));
   },
 
+  // A widowed NPC who remarries keeps the old Spouse relationship to the
+  // dead partner alongside the new one — always prefer a living spouse
+  // before concluding someone is widowed.
+  _livingSpouse(npcId) {
+    const rels = STORE.getRelationships(npcId).filter(r => r.type==='Spouse'||r.type==='Betrothed');
+    let dead = null;
+    for (const r of rels) {
+      const spId = r.sourceId === npcId ? r.targetId : r.sourceId;
+      const sp = STORE.getNpc(spId);
+      if (!sp) continue;
+      if (STORE.living.some(l => l.id === spId)) return { spouse: sp, alive: true };
+      if (!dead) dead = sp;
+    }
+    return dead ? { spouse: dead, alive: false } : null;
+  },
+
   _calcAutoMods(npc) {
     let mod = 0;
     if (this._didBirthLastYear(npc)) mod -= 10;
@@ -763,12 +774,11 @@ const TabWinter = {
     this._getBirthEligible().forEach(n => {
       if (n.barren) return;
       if (this._birthResults[n.id]) return;
-      // Roll All: married women with a living spouse only
-      const spouseRels = STORE.getRelationships(n.id).filter(r => r.type==='Spouse'||r.type==='Betrothed');
-      if (!spouseRels.length) return;
-      const rel = spouseRels[0];
-      const spId = rel.sourceId===n.id ? rel.targetId : rel.sourceId;
-      if (!STORE.living.some(l => l.id === spId)) return;  // spouse dead/missing
+      // Roll All: married women with a living spouse only. Checked via
+      // _livingSpouse so a remarried widow's old link to the dead partner
+      // doesn't block her.
+      const ls = this._livingSpouse(n.id);
+      if (!ls || !ls.alive) return;
       this._birthResults[n.id] = this._rollConception(n, false);
     });
     this._birthRolled = true;

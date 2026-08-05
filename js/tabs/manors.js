@@ -19,6 +19,11 @@ const HARVEST_TABLE = {
 
 const LIFESTYLE_COST = { Impoverished:0, Poor:2, Normal:4, Rich:8, Extravagant:18 };
 
+// Conflict fate dice & Property Destruction roll modifiers (Book of the Manor).
+// Bandits have no PD modifier and are not reduced by Presence/Fortifications.
+const CONFLICT_FATE_DICE = { Bandits: '1d6−1', Raided: '1d6+1', Pillaged: '1d6+6', Plundered: '2d6+6' };
+const CONFLICT_PD_MOD    = { Raided: 0, Pillaged: 5, Plundered: 10 };
+
 const HORSE_WAR    = ['Hobby','Charger (Small)','Charger (Normal)','Destrier','Fairy Horse'];
 const HORSE_RIDING = ['Jennet','Rouncey (Inferior)','Rouncy (Small)','Rouncy (Normal)','Rouncy (Large)','Courser','Dales/Irish/Cambrian Pony'];
 const HORSE_WORK   = ['Cart Horse','Cob','Nag','Sumpter','Sumpter (Strong)','Hackney','Donkey','Mule'];
@@ -35,6 +40,7 @@ const TabManors = {
   _recordOpen:   false,    // inline record-year panel open
   _recordingKey: null,     // which manor is being recorded
   _workingEntry: null,     // in-progress year data for inline form
+  _refOpen: new Set(),     // which Book of the Manor reference drawers are expanded
 
   render() {
     this._captureRecordForm();
@@ -164,6 +170,11 @@ const TabManors = {
     const m   = STORE.getManor(key);
     if (!m) return;
 
+    // Rebuilding #manorContent resets its scroll — keep the position when
+    // re-rendering the same manor + section (post-save refreshes, polls).
+    const sameView   = this._lastView === `${key}|${this._section}`;
+    const keepScroll = sameView ? (document.getElementById('manorContent')?.scrollTop || 0) : 0;
+
     const hh   = STORE.getHousehold(key);
     const col  = hh ? hh.colour : '#5a5040';
     const icon = hh ? hh.icon  : '🏰';
@@ -192,6 +203,12 @@ const TabManors = {
         ${content}
       </div>`;
 
+    this._lastView = `${key}|${this._section}`;
+    if (keepScroll) {
+      const c = document.getElementById('manorContent');
+      if (c) c.scrollTop = keepScroll;
+    }
+
     // Wire up inline record form listeners after render
     if (this._section === 'overview' && this._recordOpen && this._recordingKey === this._current) {
       setTimeout(() => {
@@ -204,7 +221,8 @@ const TabManors = {
   // ── OVERVIEW ───────────────────────────────────────────────
   _renderOverview(m, key, col, readOnly = false) {
     const treasury  = STORE.manorTreasury(key);
-    const activeImpr = (m.improvements||[]).filter(i=>i.status==='active');
+    const activeImpr  = (m.improvements||[]).filter(i=>i.status==='active');
+    const damagedImpr = (m.improvements||[]).filter(i=>i.status==='damaged');
     const dvImpr     = activeImpr.reduce((s,i) => s+(i.dvMod||0), 0);
     const dv         = (m.dvBase || 0) + dvImpr;
     const damaged    = (m.propertyDamage||[]).filter(d=>d.status==='damaged');
@@ -305,12 +323,12 @@ const TabManors = {
       </div>` : '';
 
     // ── Improvements quick list ───────────────────────────
-    const imprHtml = activeImpr.length ? `
-      <div class="section-title mt-16">Active Improvements (${activeImpr.length}${dv?' · DV +'+dv:''})</div>
+    const imprHtml = (activeImpr.length || damagedImpr.length) ? `
+      <div class="section-title mt-16">Active Improvements (${activeImpr.length}${dv?' · DV +'+dv:''}${damagedImpr.length?` · <span style="color:var(--crimson-mid);">${damagedImpr.length} damaged</span>`:''})</div>
       <div class="improvement-list">
-        ${activeImpr.map(i=>`
-          <div class="improvement-item ${i.cat==='fortification'?'fortification':''}">
-            <div style="flex:1;"><div class="improvement-name">${esc(i.name)}</div><div class="improvement-note">${esc(i.notes||'')}</div></div>
+        ${activeImpr.concat(damagedImpr).map(i=>`
+          <div class="improvement-item ${i.cat==='fortification'?'fortification':i.cat==='enhancement'?'enhancement':''}"${i.status==='damaged'?' style="opacity:0.75;"':''}>
+            <div style="flex:1;"><div class="improvement-name">${esc(i.name)}${i.status==='damaged'?' <span style="font-family:var(--font-heading);font-size:0.48rem;letter-spacing:0.1em;text-transform:uppercase;padding:1px 6px;border-radius:10px;background:rgba(122,28,28,0.15);color:var(--crimson-mid);" title="Damaged — not contributing income, maintenance, or DV">damaged</span>':''}</div><div class="improvement-note">${esc(i.notes||'')}</div></div>
             <div style="text-align:right;flex-shrink:0;">
               <div class="improvement-meta">Built ${i.yearBuilt}</div>
               <div class="improvement-meta">Maint: ${i.maintenance} L/yr${i.dvMod?' · DV +'+i.dvMod:''}</div>
@@ -716,24 +734,42 @@ const TabManors = {
     const activeI    = (m.improvements||[]).filter(i=>i.status==='active');
     const autoMaint  = activeI.reduce((s,i)=>s+(i.maintenance||0),0);
     const autoIncome = activeI.reduce((s,i)=>s+(i.income||0),0);
+    // Carry forward Family and Lifestyle from the most recent recorded year
+    // (misfortune factors deliberately do NOT carry — they're re-derived
+    // from each year's rolls).
+    const prevEntry  = (m.history||[]).reduce((best,h)=>(!best||h.year>best.year)?h:best, null);
     this._workingEntry = {
       year: STORE.year,
       stewardResult: null, fateResult: null, tiebreaker: null,
       luck: 'No Result', luckSeason: '—',
       conflict: 'No Result', conflictSeason: '—',
+      conflictRoll: null, siegeSuccess: false,
+      presSword: false, presBattle: false, presValorous: false,
       harvestOutcome: null, harvestIncome: 0,
-      lifestyle: m.lifestyle || 'Normal',
+      lifestyle: prevEntry?.lifestyle || m.lifestyle || 'Normal',
       improvMaint: autoMaint, improvIncome: autoIncome,
       prevTreasury: lastTreas,
       stewardIndustry: 0, discretionary: 0, extraManorial: 0,
-      family: 0, improvBuild: 0,
-      fateWeather: 0, fateConflict: 0, fateCommoners: 0, fatePresence: 0, fateMisc: 0,
+      family: prevEntry?.family ?? 0, improvBuild: 0,
+      fateWeather: this._sharedWeatherFor(key, STORE.year)?.value || 0,
+      fateConflict: 0, fateCommoners: 0, fatePresence: 0, fateMisc: 0,
       hatred: m.hatred ?? 0, care: m.care ?? 0,
       notes: '', notes2: '',
       miscIncomeItems: [], miscExpItems: [],
     };
     this._persistRecord();
     this._renderManor();
+  },
+
+  // Weather (3d6+5) is rolled once per year and hits every manor equally —
+  // find this year's weather factor from any other manor already recorded.
+  _sharedWeatherFor(key, year) {
+    for (const k2 of STORE.manorKeys()) {
+      if (k2 === key) continue;
+      const e = (STORE.getManor(k2)?.history || []).find(h => h.year === year);
+      if (e && e.fateWeather) return { value: e.fateWeather, source: k2 };
+    }
+    return null;
   },
 
   _overwriteRecord(key, year) {
@@ -792,6 +828,56 @@ const TabManors = {
     wp.notes2         = g('ry-notes2')?.value?.trim() || '';
     wp.miscIncomeItems = this._readMiscItems('ry-misc-income-list');
     wp.miscExpItems    = this._readMiscItems('ry-misc-exp-list');
+    if (g('ry-conflict-roll')) {
+      const cr = parseFloat(g('ry-conflict-roll').value);
+      wp.conflictRoll = isNaN(cr) ? null : cr;
+      wp.siegeSuccess = g('ry-siege')?.checked || false;
+      wp.presSword    = g('ry-pres-sword')?.checked || false;
+      wp.presBattle   = g('ry-pres-battle')?.checked || false;
+      wp.presValorous = g('ry-pres-valorous')?.checked || false;
+    }
+  },
+
+  // Conflict resolution helper: Steve's house rule — Siege success removes
+  // the manor's full DV, and each Knightly Presence success (Sword, Battle,
+  // Valorous) removes 1, from both the conflict fate impact and the
+  // Property Destruction roll modifier, to a minimum of 0. Bandits are
+  // exempt per Book of the Manor.
+  _updateConflictHelper(key, m) {
+    const g  = id => document.getElementById(id);
+    const wp = this._workingEntry;
+    if (!wp || !g('ry-conflict-roll')) return;
+    const cr = parseFloat(g('ry-conflict-roll').value);
+    wp.conflictRoll = isNaN(cr) ? null : cr;
+    wp.siegeSuccess = g('ry-siege')?.checked || false;
+    wp.presSword    = g('ry-pres-sword')?.checked || false;
+    wp.presBattle   = g('ry-pres-battle')?.checked || false;
+    wp.presValorous = g('ry-pres-valorous')?.checked || false;
+
+    const isBandits = wp.conflict === 'Bandits';
+    const activeI   = (m.improvements||[]).filter(i=>i.status==='active');
+    const dvTotal   = (m.dvBase||0) + activeI.reduce((s,i)=>s+(i.dvMod||0),0);
+    const presCount = [wp.presSword, wp.presBattle, wp.presValorous].filter(Boolean).length;
+    const reduction = isBandits ? 0 : (wp.siegeSuccess ? dvTotal : 0) + presCount;
+
+    const parts = [];
+    if (wp.conflictRoll != null) {
+      const fate = Math.max(0, Math.round((wp.conflictRoll - reduction) * 10) / 10);
+      wp.fateConflict = fate;
+      const fEl = g('ry-fate-conflict');
+      if (fEl) fEl.value = fate;
+      parts.push(`Conflict → Misfortune: ${wp.conflictRoll}${reduction ? ` − ${reduction}` : ''} = <strong style="color:var(--crimson-mid);">+${fate}</strong> (auto-filled below)`);
+    } else if (reduction) {
+      parts.push(`−${reduction} ready — enter the rolled result to apply`);
+    }
+    const pdBase = CONFLICT_PD_MOD[wp.conflict];
+    if (pdBase !== undefined) {
+      const pd = Math.max(0, pdBase - reduction);
+      parts.push(`Property Damage roll: <strong>1d20 +${pd}</strong>${reduction ? ` <span style="opacity:0.6;">(+${pdBase} base − ${reduction}, min 0)</span>` : ''}`);
+    }
+    const sEl = g('ry-conflict-summary');
+    if (sEl) sEl.innerHTML = parts.join(' &nbsp;·&nbsp; ') ||
+      `Enter the rolled ${CONFLICT_FATE_DICE[wp.conflict]||''} result above`;
   },
 
   _persistRecord() {
@@ -918,8 +1004,25 @@ const TabManors = {
      'ry-hatred','ry-care','ry-year'].forEach(id => {
       g(id)?.addEventListener('input', upd);
     });
-    ['ry-lifestyle','ry-luck','ry-luck-season','ry-conflict','ry-conflict-season'].forEach(id => {
+    ['ry-lifestyle','ry-luck','ry-luck-season','ry-conflict-season'].forEach(id => {
       g(id)?.addEventListener('change', upd);
+    });
+    // Conflict type change shows/hides the resolution helper — re-render
+    g('ry-conflict')?.addEventListener('change', () => {
+      this._captureRecordForm();
+      this._persistRecord();
+      this._renderManor();
+    });
+    // Conflict resolution helper fields
+    const conflictUpd = () => {
+      this._updateConflictHelper(key, m);
+      this._updateRecordCalcs(key, m);
+      this._captureRecordForm();
+      this._persistRecord();
+    };
+    g('ry-conflict-roll')?.addEventListener('input', conflictUpd);
+    ['ry-siege','ry-pres-sword','ry-pres-battle','ry-pres-valorous'].forEach(id => {
+      g(id)?.addEventListener('change', conflictUpd);
     });
     ['ry-notes','ry-notes2'].forEach(id => {
       g(id)?.addEventListener('input', upd);
@@ -927,6 +1030,14 @@ const TabManors = {
     ['ry-misc-income-list','ry-misc-exp-list'].forEach(id => {
       g(id)?.addEventListener('input', upd);
     });
+    // Remember which reference drawers are open across re-renders
+    document.querySelectorAll('.manor-ref-drawer').forEach(d => {
+      d.addEventListener('toggle', () => {
+        if (d.open) this._refOpen.add(d.dataset.ref);
+        else this._refOpen.delete(d.dataset.ref);
+      });
+    });
+    this._updateConflictHelper(key, m);
     this._updateRecordCalcs(key, m);
   },
 
@@ -950,6 +1061,34 @@ const TabManors = {
     const autoMaint   = activeImprovements.reduce((s,i)=>s+(i.maintenance||0),0);
     const autoIncome  = activeImprovements.reduce((s,i)=>s+(i.income||0),0);
     const diceNotes   = activeImprovements.filter(i=>i.incomeNote).map(i=>`${i.name}: ${i.incomeNote}`).join(', ');
+    const dvTotal     = (m.dvBase||0) + activeImprovements.reduce((s,i)=>s+(i.dvMod||0),0);
+
+    // Conflict resolution helper — shown once a conflict type is chosen
+    const conflictHelper = (wp.conflict && wp.conflict !== 'No Result') ? (() => {
+      const isBandits = wp.conflict === 'Bandits';
+      const cb = (id, label, checked, disabled) =>
+        `<label style="display:flex;align-items:center;gap:4px;font-size:0.78rem;white-space:nowrap;cursor:${disabled?'not-allowed':'pointer'};${disabled?'opacity:0.4;':''}"><input type="checkbox" id="${id}"${checked?' checked':''}${disabled?' disabled':''}>${label}</label>`;
+      return `
+      <div style="background:var(--vellum-deep);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+          <div class="section-title" style="margin-bottom:0;">Conflict — ${wp.conflict}</div>
+          <span style="font-size:0.72rem;color:var(--ink-soft);">Fate roll: <strong>${CONFLICT_FATE_DICE[wp.conflict]||''}</strong></span>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+          <div class="detail-field" style="width:110px;">
+            <div class="detail-label">Rolled Result</div>
+            <input class="edit-input" id="ry-conflict-roll" type="number" min="0" value="${wp.conflictRoll ?? ''}" placeholder="${CONFLICT_FATE_DICE[wp.conflict]||''}">
+          </div>
+          ${(dvTotal > 0 ? cb('ry-siege', `Fortifications — Siege success (−${dvTotal} DV)`, wp.siegeSuccess, isBandits) : '') +
+            `<span style="font-size:0.72rem;color:var(--ink-soft);${isBandits?'opacity:0.4;':''}">Knightly Presence:</span>` +
+            cb('ry-pres-sword', 'Sword (−1)', wp.presSword, isBandits) +
+            cb('ry-pres-battle', 'Battle (−1)', wp.presBattle, isBandits) +
+            cb('ry-pres-valorous', 'Valorous (−1)', wp.presValorous, isBandits)}
+          ${isBandits ? '<span style="font-size:0.72rem;color:var(--ink-soft);font-style:italic;">Bandits are not reduced by Presence or Fortifications (BotM)</span>' : ''}
+        </div>
+        <div id="ry-conflict-summary" style="margin-top:8px;font-size:0.78rem;color:var(--ink-soft);"></div>
+      </div>`;
+    })() : '';
 
     return `
     <div style="background:var(--vellum-mid);border:1px solid var(--vellum-deep);border-radius:var(--radius);padding:16px 18px;margin-top:6px;">
@@ -977,6 +1116,8 @@ const TabManors = {
           <select class="edit-input edit-select" id="ry-conflict-season">${conflictSznOpts}</select>
         </div>
       </div>
+
+      ${conflictHelper}
 
       <!-- Stewardship test -->
       <div class="section-title mb-8">Stewardship Test</div>
@@ -1065,7 +1206,10 @@ const TabManors = {
             <input class="edit-input" id="ry-family" type="number" value="${wp.family||0}" min="0" step="0.5">
           </div>
           <div class="detail-field mb-6">
-            <div class="detail-label">Build Cost (L)</div>
+            <div class="detail-label" style="display:flex;justify-content:space-between;align-items:center;">
+              Build Cost (L)
+              <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="TabManors.openAddImprovement('${esc(key)}')">＋ Improvement</button>
+            </div>
             <input class="edit-input" id="ry-impr-build" type="number" value="${wp.improvBuild||0}" min="0" step="0.5">
           </div>
           <div class="detail-field mb-6">
@@ -1088,10 +1232,12 @@ const TabManors = {
       </div>
 
       <!-- Misfortune factors -->
-      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
         <div class="section-title" style="margin-bottom:0;">Misfortune Factors</div>
         <span style="font-size:0.72rem;color:var(--ink-soft);">Total Misfortune Score: <strong id="ry-misfortune-total" style="color:var(--crimson-mid);">0</strong></span>
         <span style="font-size:0.68rem;color:var(--ink-soft);opacity:0.7;">Roll Misfortune die against this score</span>
+        ${(() => { const sw = this._sharedWeatherFor(key, wp.year || STORE.year); return sw
+          ? `<span style="font-size:0.68rem;color:var(--verdigris-mid);">Weather ${sw.value>0?'+':''}${sw.value} carried from ${esc(sw.source)}</span>` : ''; })()}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         ${['weather','conflict','commoners','presence','misc'].map(f=>{
@@ -1157,6 +1303,11 @@ const TabManors = {
         </div>
       </div>
 
+      <!-- Book of the Manor reference drawers -->
+      <div style="margin-bottom:14px;">
+        ${typeof ManorRef !== 'undefined' ? ManorRef.html(wp.year || STORE.year, this._refOpen) : ''}
+      </div>
+
       <div class="btn-row">
         <button class="btn btn-primary" onclick="TabManors._saveHistoryInline('${esc(key)}')">Save Year</button>
         <button class="btn btn-ghost"   onclick="TabManors.toggleRecord('${esc(key)}')">Cancel</button>
@@ -1207,6 +1358,11 @@ const TabManors = {
       luckSeason:     g('ry-luck-season')?.value    || '—',
       conflict:       g('ry-conflict')?.value        || 'No Result',
       conflictSeason: g('ry-conflict-season')?.value|| '—',
+      conflictRoll:   wp.conflictRoll ?? null,
+      siegeSuccess:   !!wp.siegeSuccess,
+      presSword:      !!wp.presSword,
+      presBattle:     !!wp.presBattle,
+      presValorous:   !!wp.presValorous,
       harvestOutcome: wp.harvestOutcome              || 'Regular',
       harvestIncome,  stewardIndustry, improvIncome, discretionary, extraManorial, vassalIncome,
       miscIncomeItems,
@@ -1252,9 +1408,19 @@ const TabManors = {
     const resultOpts   = ['—','Critical','Success','Failure','Fumble'];
     const tbOpts       = ['—','win','lose'];
     const lifestyleOpts= ['Impoverished','Poor','Normal','Rich','Extravagant'];
-    const miscInTotal  = this._sumMiscItems(h.miscIncomeItems, h.miscIncome);
-    const miscExpTotal = this._sumMiscItems(h.miscExpItems,    h.miscExp);
     const fate = (f) => h[`fate${f.charAt(0).toUpperCase()+f.slice(1)}`] || 0;
+
+    // Itemized misc lines — a legacy single total becomes one editable row
+    const miscRow = (item) => `
+      <div class="misc-item-row" style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+        <input type="number" class="edit-input" data-misc-amount="true" placeholder="L" style="width:64px;flex-shrink:0;" min="0" step="0.5" value="${item.amount||''}">
+        <input type="text" class="edit-input" data-misc-note="true" placeholder="Note…" style="flex:1;" value="${esc(item.note||'')}">
+        <button class="btn btn-ghost" style="padding:2px 7px;font-size:0.68rem;flex-shrink:0;" onclick="event.preventDefault();const p=this.closest('.misc-item-row').parentElement;this.closest('.misc-item-row').remove();p?.dispatchEvent(new Event('input',{bubbles:true}))">✕</button>
+      </div>`;
+    const seedItems = (items, legacy) =>
+      (Array.isArray(items) && items.length) ? items : (legacy ? [{ amount: legacy, note: '' }] : []);
+    const miscInRows  = seedItems(h.miscIncomeItems, h.miscIncome).map(miscRow).join('');
+    const miscExpRows = seedItems(h.miscExpItems,    h.miscExp).map(miscRow).join('');
 
     Modal.open(`
       <div style="min-width:560px;">
@@ -1280,20 +1446,38 @@ const TabManors = {
             <div class="detail-field mb-6"><div class="detail-label">Improvement Income (L)</div><input class="edit-input" id="hy-impr-income" type="number" value="${h.improvIncome||0}"></div>
             <div class="detail-field mb-6"><div class="detail-label">Discretionary (L)</div><input class="edit-input" id="hy-discretionary" type="number" value="${h.discretionary||0}"></div>
             <div class="detail-field mb-6"><div class="detail-label">Extra-Manorial (L)</div><input class="edit-input" id="hy-extra-manorial" type="number" value="${h.extraManorial||0}"></div>
-            <div class="detail-field mb-6"><div class="detail-label">Misc Income (L)</div><input class="edit-input" id="hy-misc-income-edit" type="number" value="${miscInTotal}"></div>
+            ${h.vassalIncome ? `<div class="detail-field mb-6"><div class="detail-label" style="display:flex;justify-content:space-between;">Vassal Income <span style="color:var(--verdigris-mid);">${h.vassalIncome} L (auto)</span></div></div>` : ''}
+            <div class="detail-field mb-6">
+              <div class="detail-label" style="display:flex;justify-content:space-between;align-items:center;">
+                Misc Income
+                <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="event.preventDefault();TabManors._addMiscItem('hy-misc-income-list')">＋ Add</button>
+              </div>
+              <div id="hy-misc-income-list">${miscInRows}</div>
+            </div>
             <div class="section-title mb-8 mt-10">Expenses</div>
             <div class="detail-field mb-6"><div class="detail-label">Lifestyle</div><select class="edit-input edit-select" id="hy-lifestyle">${sel(lifestyleOpts,h.lifestyle||'Normal')}</select></div>
             <div class="detail-field mb-6"><div class="detail-label">Lifestyle Cost (L)</div><input class="edit-input" id="hy-lifestyle-cost" type="number" value="${h.lifestyleCost||4}"></div>
             <div class="detail-field mb-6"><div class="detail-label">Impr. Maint. (L)</div><input class="edit-input" id="hy-impr-maint" type="number" value="${h.improvMaint||0}"></div>
             <div class="detail-field mb-6"><div class="detail-label">Family (L)</div><input class="edit-input" id="hy-family" type="number" value="${h.family||0}"></div>
             <div class="detail-field mb-6"><div class="detail-label">Build Cost (L)</div><input class="edit-input" id="hy-impr-build" type="number" value="${h.improvBuild||0}"></div>
-            <div class="detail-field mb-6"><div class="detail-label">Misc Expenses (L)</div><input class="edit-input" id="hy-misc-exp-edit" type="number" value="${miscExpTotal}"></div>
+            <div class="detail-field mb-6">
+              <div class="detail-label" style="display:flex;justify-content:space-between;align-items:center;">
+                Misc Expenses
+                <button class="btn btn-ghost" style="font-size:0.6rem;padding:1px 6px;" onclick="event.preventDefault();TabManors._addMiscItem('hy-misc-exp-list')">＋ Add</button>
+              </div>
+              <div id="hy-misc-exp-list">${miscExpRows}</div>
+            </div>
           </div>
 
           <div>
             <div class="section-title mb-8">Treasury</div>
             <div class="detail-field mb-6"><div class="detail-label">Prev. Treasury (L)</div><input class="edit-input" id="hy-prev-treasury" type="number" value="${h.prevTreasury||0}"></div>
-            <div class="detail-field mb-6"><div class="detail-label">Treasury After (L)</div><input class="edit-input" id="hy-treasury" type="number" value="${h.treasury||0}"></div>
+            <div style="border-top:1px solid var(--vellum-deep);padding-top:6px;margin-bottom:8px;font-family:var(--font-heading);font-size:0.78rem;">
+              <div style="display:flex;justify-content:space-between;"><span style="color:var(--ink-soft);">Total In</span><span id="hy-total-in" style="color:var(--verdigris-mid);">—</span></div>
+              <div style="display:flex;justify-content:space-between;"><span style="color:var(--ink-soft);">Total Out</span><span id="hy-total-out" style="color:var(--crimson-mid);">—</span></div>
+              <div style="display:flex;justify-content:space-between;"><span style="color:var(--ink-soft);">Net</span><span id="hy-net">—</span></div>
+            </div>
+            <div class="detail-field mb-6"><div class="detail-label">Treasury After (L) <span style="opacity:0.5;">(recalculates as you edit)</span></div><input class="edit-input" id="hy-treasury" type="number" value="${h.treasury||0}"></div>
             <div class="section-title mb-8 mt-10">Hatred / Care</div>
             <div class="detail-field mb-6"><div class="detail-label">Hatred</div><input class="edit-input" id="hy-hatred" type="number" value="${m.hatred??0}"></div>
             <div class="detail-field mb-6"><div class="detail-label">Care</div><input class="edit-input" id="hy-care" type="number" value="${m.care??0}"></div>
@@ -1312,6 +1496,55 @@ const TabManors = {
           <button class="btn btn-ghost"   onclick="Modal.close()">Cancel</button>
         </div>
       </div>`, { wide: true });
+
+    setTimeout(() => this._initEditHistoryCalcs(key, year), 0);
+  },
+
+  // Live recalculation for the Edit Past Year modal. Totals always update;
+  // the Treasury After field is only overwritten once the GM edits
+  // something, so opening a year and closing it changes nothing.
+  _initEditHistoryCalcs(key, year) {
+    const g = id => document.getElementById(id);
+    const upd = () => this._updateEditHistoryCalcs(key, year, true);
+    ['hy-harvest-income','hy-steward-industry','hy-impr-income','hy-discretionary','hy-extra-manorial',
+     'hy-lifestyle-cost','hy-impr-maint','hy-family','hy-impr-build','hy-prev-treasury'].forEach(id => {
+      g(id)?.addEventListener('input', upd);
+    });
+    g('hy-lifestyle')?.addEventListener('change', () => {
+      const c = g('hy-lifestyle-cost');
+      if (c) c.value = LIFESTYLE_COST[g('hy-lifestyle').value] ?? 4;
+      upd();
+    });
+    ['hy-misc-income-list','hy-misc-exp-list'].forEach(id => {
+      g(id)?.addEventListener('input', upd);
+    });
+    this._updateEditHistoryCalcs(key, year, false);
+  },
+
+  _updateEditHistoryCalcs(key, year, writeTreasury) {
+    const g = id => document.getElementById(id);
+    if (!g('hy-total-in')) return;
+    const m = STORE.getManor(key);
+    const entry = m?.history?.find(e => e.year === year);
+    const vassalIncome = entry?.vassalIncome || 0;
+    const n = id => parseFloat(g(id)?.value) || 0;
+    const miscIn  = this._readMiscItems('hy-misc-income-list').reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+    const miscOut = this._readMiscItems('hy-misc-exp-list').reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+    const totalIn  = n('hy-harvest-income') + n('hy-steward-industry') + n('hy-impr-income')
+                   + n('hy-discretionary') + n('hy-extra-manorial') + miscIn + vassalIncome;
+    const totalOut = n('hy-lifestyle-cost') + n('hy-impr-maint') + n('hy-family')
+                   + n('hy-impr-build') + miscOut;
+    const net  = Math.round((totalIn - totalOut) * 10) / 10;
+    const newT = Math.round((n('hy-prev-treasury') + net) * 10) / 10;
+    g('hy-total-in').textContent  = totalIn + ' L';
+    g('hy-total-out').textContent = totalOut + ' L';
+    const netEl = g('hy-net');
+    netEl.textContent = (net >= 0 ? '+' : '') + net + ' L';
+    netEl.style.color = net >= 0 ? 'var(--verdigris-mid)' : 'var(--crimson-mid)';
+    if (writeTreasury) {
+      const tEl = g('hy-treasury');
+      if (tEl) tEl.value = newT;
+    }
   },
 
   _saveEditHistory(key, year) {
@@ -1326,6 +1559,8 @@ const TabManors = {
     if (!isNaN(newHatred)) m.hatred = newHatred;
     if (!isNaN(newCare))   m.care   = newCare;
 
+    const oldTreasury = entry.treasury || 0;
+
     Object.assign(entry, {
       luck:           g('hy-luck')?.value             || 'No Result',
       luckSeason:     g('hy-luck-season')?.value      || '—',
@@ -1337,13 +1572,13 @@ const TabManors = {
       improvIncome:   parseFloat(g('hy-impr-income')?.value)        || 0,
       discretionary:  parseFloat(g('hy-discretionary')?.value)      || 0,
       extraManorial:  parseFloat(g('hy-extra-manorial')?.value)     || 0,
-      miscIncome:     parseFloat(g('hy-misc-income-edit')?.value)   || 0,
+      miscIncomeItems: this._readMiscItems('hy-misc-income-list'),
       lifestyle:      g('hy-lifestyle')?.value         || 'Normal',
       lifestyleCost:  parseFloat(g('hy-lifestyle-cost')?.value)     || 4,
       improvMaint:    parseFloat(g('hy-impr-maint')?.value)         || 0,
       family:         parseFloat(g('hy-family')?.value)             || 0,
       improvBuild:    parseFloat(g('hy-impr-build')?.value)         || 0,
-      miscExp:        parseFloat(g('hy-misc-exp-edit')?.value)      || 0,
+      miscExpItems:   this._readMiscItems('hy-misc-exp-list'),
       prevTreasury:   parseFloat(g('hy-prev-treasury')?.value)      || 0,
       treasury:       parseFloat(g('hy-treasury')?.value)           || 0,
       fateWeather:    parseFloat(g('hy-fate-weather')?.value)       || 0,
@@ -1357,9 +1592,24 @@ const TabManors = {
       notes:          g('hy-notes')?.value?.trim()     || '',
       notes2:         g('hy-notes2')?.value?.trim()    || '',
     });
-    // Clear itemized arrays — edit modal uses legacy totals
-    delete entry.miscIncomeItems;
-    delete entry.miscExpItems;
+    // Itemized lines are now the canonical form — drop the legacy totals
+    // so displays don't fall back to stale numbers.
+    delete entry.miscIncome;
+    delete entry.miscExp;
+
+    // If the treasury changed, offer to carry the difference forward so
+    // every later recorded year stays consistent.
+    const delta = Math.round(((entry.treasury || 0) - oldTreasury) * 10) / 10;
+    const later = (m.history || []).filter(e => e.year > year).sort((a, b) => a.year - b.year);
+    if (delta && later.length &&
+        confirm(`Treasury for ${year} AD changed by ${delta > 0 ? '+' : ''}${delta} L.\n` +
+                `Carry this forward through the ${later.length} later recorded year${later.length !== 1 ? 's' : ''} ` +
+                `(${later[0].year}–${later[later.length - 1].year} AD)?`)) {
+      later.forEach(e => {
+        e.prevTreasury = Math.round(((e.prevTreasury || 0) + delta) * 10) / 10;
+        e.treasury     = Math.round(((e.treasury     || 0) + delta) * 10) / 10;
+      });
+    }
 
     STORE.save();
     Toast.success(`${year} AD updated`);
@@ -1802,15 +2052,27 @@ const TabManors = {
 
   // ── IMPROVEMENTS SECTION ───────────────────────────────────
   _renderImprovementsSection(m, key) {
-    const all    = m.improvements || [];
-    const active = all.filter(i=>i.status==='active');
-    const inactive = all.filter(i=>i.status!=='active');
+    const all      = m.improvements || [];
+    const active   = all.filter(i=>i.status==='active');
+    const damaged  = all.filter(i=>i.status==='damaged');
+    const inactive = all.filter(i=>i.status!=='active' && i.status!=='damaged');
+
+    // Status buttons: active → Damaged/Deactivate; damaged → Repaired/Deactivate;
+    // inactive → Restore.
+    const statusBtns = (i) => {
+      const btn = (label, status) =>
+        `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors._setImprovementStatus('${esc(key)}',${i.id},'${status}')">${label}</button>`;
+      if (i.status === 'active')  return btn('⚠ Damaged', 'damaged') + btn('Deactivate', 'inactive');
+      if (i.status === 'damaged') return btn('✓ Repaired', 'active') + btn('Deactivate', 'inactive');
+      return btn('Restore', 'active');
+    };
 
     const renderList = (arr) => arr.map(i=>`
-      <div class="improvement-item ${i.cat==='fortification'?'fortification':''}">
+      <div class="improvement-item ${i.cat==='fortification'?'fortification':i.cat==='enhancement'?'enhancement':''}">
         <div style="flex:1;">
           <div class="improvement-name">${i.name}
-            <span style="margin-left:6px;font-family:var(--font-heading);font-size:0.48rem;letter-spacing:0.1em;text-transform:uppercase;padding:1px 6px;border-radius:10px;background:${i.cat==='fortification'?'rgba(30,58,95,0.15)':'rgba(45,90,74,0.15)'};color:${i.cat==='fortification'?'var(--cobalt-mid)':'var(--verdigris-mid)'};">${i.cat}</span>
+            <span style="margin-left:6px;font-family:var(--font-heading);font-size:0.48rem;letter-spacing:0.1em;text-transform:uppercase;padding:1px 6px;border-radius:10px;background:${i.cat==='fortification'?'rgba(30,58,95,0.15)':i.cat==='enhancement'?'rgba(148,108,26,0.15)':'rgba(45,90,74,0.15)'};color:${i.cat==='fortification'?'var(--cobalt-mid)':i.cat==='enhancement'?'var(--gold-text)':'var(--verdigris-mid)'};">${i.cat}</span>
+            ${i.status==='damaged'?'<span style="margin-left:4px;font-family:var(--font-heading);font-size:0.48rem;letter-spacing:0.1em;text-transform:uppercase;padding:1px 6px;border-radius:10px;background:rgba(122,28,28,0.15);color:var(--crimson-mid);">damaged</span>':''}
           </div>
           <div class="improvement-note">${i.notes||''}</div>
         </div>
@@ -1822,15 +2084,17 @@ const TabManors = {
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-self:center;margin-left:8px;">
           <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors.openEditImprovement('${esc(key)}',${i.id})">Edit</button>
-          <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.5rem;" onclick="TabManors._toggleImprovementStatus('${esc(key)}',${i.id},'${i.status}')">
-            ${i.status==='active'?'Deactivate':'Restore'}
-          </button>
+          ${statusBtns(i)}
         </div>
       </div>`).join('');
 
     return `
       <div class="section-title">Active Improvements (${active.length})</div>
       ${active.length ? `<div class="improvement-list">${renderList(active)}</div>` : '<div class="text-muted italic" style="font-size:0.85rem;margin-bottom:12px;">None yet</div>'}
+
+      ${damaged.length ? `
+        <div class="section-title mt-16" style="color:var(--crimson-mid);">Damaged (${damaged.length}) <span style="text-transform:none;letter-spacing:0;font-size:0.62rem;opacity:0.7;">— not contributing income, maintenance, or DV until repaired</span></div>
+        <div class="improvement-list" style="opacity:0.85;">${renderList(damaged)}</div>` : ''}
 
       ${inactive.length ? `
         <div class="section-title mt-16" style="opacity:0.55;">Inactive / Destroyed (${inactive.length})</div>
@@ -1841,11 +2105,11 @@ const TabManors = {
       </div>`;
   },
 
-  _toggleImprovementStatus(key, imprId, currentStatus) {
+  _setImprovementStatus(key, imprId, status) {
     const m = STORE.getManor(key);
     const i = m?.improvements?.find(x => x.id === imprId || x.id === String(imprId));
     if (!i) return;
-    i.status = currentStatus === 'active' ? 'inactive' : 'active';
+    i.status = status;
     STORE.save();
     this._renderManor();
   },
@@ -2355,7 +2619,7 @@ const TabManors = {
         <div class="npc-detail-grid">
           <div class="detail-field"><div class="detail-label">Name</div><input class="edit-input" id="ai-name" placeholder="Apiary, Mill, Tower…"></div>
           <div class="detail-field"><div class="detail-label">Category</div>
-            <select class="edit-input edit-select" id="ai-cat"><option value="improvement">Improvement</option><option value="fortification">Fortification</option></select>
+            <select class="edit-input edit-select" id="ai-cat"><option value="improvement">Improvement</option><option value="fortification">Fortification</option><option value="enhancement">Enhancement</option></select>
           </div>
           <div class="detail-field"><div class="detail-label">Year Built</div><input class="edit-input" id="ai-year" type="number" value="${STORE.year}"></div>
           <div class="detail-field"><div class="detail-label">Build Cost (L)</div><input class="edit-input" id="ai-cost" type="number" value="0"></div>
@@ -2383,7 +2647,7 @@ const TabManors = {
     const m = STORE.getManor(key);
     if (!m) return;
     if (!m.improvements) m.improvements = [];
-    m.improvements.push({
+    const impr = {
       id:          Date.now(),
       name,
       cat:         g('ai-cat')?.value || 'improvement',
@@ -2397,11 +2661,29 @@ const TabManors = {
       dvMod:       parseInt(g('ai-dv')?.value, 10)||0,
       dvNote:      g('ai-dv-note')?.value?.trim()||'',
       notes:       g('ai-notes')?.value?.trim()||'',
-    });
+    };
+    m.improvements.push(impr);
     STORE.save();
-    Toast.success('Improvement added');
     Modal.close();
-    this._renderManor();
+    // Added mid-recording: fold the build cost into the year's Build Cost
+    // field instead of re-rendering (which would disturb the open form).
+    if (this._recordOpen && this._recordingKey === key && this._workingEntry) {
+      this._captureRecordForm();
+      const wp = this._workingEntry;
+      if (impr.buildCost) {
+        wp.improvBuild = Math.round(((wp.improvBuild || 0) + impr.buildCost) * 10) / 10;
+        const el = document.getElementById('ry-impr-build');
+        if (el) el.value = wp.improvBuild;
+      }
+      this._updateRecordCalcs(key, m);
+      this._persistRecord();
+      Toast.success(impr.buildCost
+        ? `Improvement added — ${impr.buildCost} L added to Build Cost`
+        : 'Improvement added');
+    } else {
+      Toast.success('Improvement added');
+      this._renderManor();
+    }
   },
 
   // ── EDIT IMPROVEMENT ───────────────────────────────────────
@@ -2409,7 +2691,7 @@ const TabManors = {
     const m = STORE.getManor(key);
     const i = m?.improvements?.find(x => x.id === imprId || x.id === String(imprId));
     if (!i) return;
-    const catOpts = ['improvement','fortification'].map(v=>`<option${v===i.cat?' selected':''}>${v}</option>`).join('');
+    const catOpts = ['improvement','fortification','enhancement'].map(v=>`<option${v===i.cat?' selected':''}>${v}</option>`).join('');
     Modal.open(`
       <div style="min-width:420px;">
         <div class="page-title" style="font-size:1rem;margin-bottom:14px;">Edit Improvement — ${esc(key)}</div>
