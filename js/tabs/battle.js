@@ -87,7 +87,7 @@ const TabBattle = {
         this._renderEmpty(panel);
       }
 
-      if (!isGM()) this._startPlayerPoll();
+      this._startBattlePoll();
     } catch (err) {
       Toast.show('Battle render error: ' + err.message, 'error');
       if (panel) panel.innerHTML = `<p style="padding:2rem;color:var(--crimson-mid)">Battle render error: ${esc(String(err.message))}</p>`;
@@ -912,6 +912,7 @@ const TabBattle = {
       return `<div class="bp-opp ${down ? 'bp-opp-down' : ''}">
         <span class="bp-opp-name">${esc(e.label || e.type)}</span>
         <span class="bp-opp-weapon">${esc(e.weapon || '')}</span>
+        ${e.knockedDown && !down ? '<span class="bp-opp-kd">⬇ Knocked Down</span>' : ''}
         <span class="bp-opp-status">${esc(est)}</span>
       </div>`;
     }).join('');
@@ -1074,9 +1075,10 @@ const TabBattle = {
   _playerPollTimer: null,
   _renderedState: null,
 
-  _startPlayerPoll() {
+  _startBattlePoll() {
     if (this._playerPollTimer) return;
-    this._playerPollTimer = setInterval(() => this._playerPollTick(), 3000);
+    this._playerPollTimer = setInterval(
+      () => isGM() ? this._gmPollTick() : this._playerPollTick(), 3000);
   },
 
   async _playerPollTick() {
@@ -1095,6 +1097,34 @@ const TabBattle = {
       this._battle = nb;
       const panel = document.getElementById('tab-battle');
       if (panel && panel.querySelector('.battle-player')) this._renderPlayerView(panel);
+    } catch (e) { /* silent */ }
+  },
+
+  /* GM poll: picks up player-made changes (morale, postures, passions, kills)
+     without clobbering whatever the GM is doing — skips while a modal is open,
+     a battle input is focused, or a foe drag is in progress. */
+  async _gmPollTick() {
+    if (!isGM() || document.hidden) return;
+    if (typeof APP === 'undefined' || APP._currentTab !== 'battle') return;
+    if (this._renderedState !== 'active') return;
+    if (this._dragActive) return;
+    if (typeof Modal !== 'undefined' && Modal.isOpen()) return;
+    if (typeof CardPopup !== 'undefined' && CardPopup.isOpen()) return;
+    const panel = document.getElementById('tab-battle');
+    if (!panel || !panel.querySelector('.battle-console')) return;
+    const ae = document.activeElement;
+    if (ae && panel.contains(ae) && ae.matches('input, textarea, select')) return;
+    try {
+      const res = await API.get('/api/battle/state');
+      if (!res.ok) return;
+      const nb = res.data.battle;
+      const nstate = nb ? nb.state : 'empty';
+      if (nstate !== this._renderedState) { await this.render(); return; }
+      if (JSON.stringify(nb) === JSON.stringify(this._battle)) return;
+      this._battle = nb;
+      const scrollY = window.scrollY;
+      this._renderBattleConsole(panel);
+      window.scrollTo(0, scrollY);
     } catch (e) { /* silent */ }
   },
 
@@ -1136,6 +1166,11 @@ const TabBattle = {
       <div class="battle-header-bar">
         <h2 class="battle-header-name">${esc(b.name)}</h2>
         <span class="battle-header-round">Round ${b.currentRound} / ${b.maxRounds}</span>
+        <span class="battle-header-intensity" title="Battle Intensity (Table 6.1) — PKs roll vs this to choose their encounter">
+          Intensity
+          <input type="number" class="bc-morale-input" value="${b.intensity ?? 0}"
+            onchange="TabBattle._saveIntensity(+this.value)">
+        </span>
         <span class="battle-header-cmdr">${esc(fc.name || '—')} vs ${esc(ec.name || '—')}</span>
         <span class="bc-conroi-cmd${cmdrDown ? ' bc-cmd-down' : ''}"
           title="${cmdrDown ? 'The conroi commander is down — designate a new one' : 'Conroi commander (may adjust morale)'}">
@@ -1147,6 +1182,12 @@ const TabBattle = {
           ${cmdrDown ? '<span class="bc-cmd-down-badge">DOWN</span>' : ''}
         </span>
       </div>`;
+  },
+
+  async _saveIntensity(value) {
+    const res = await API.patch('/api/battle/intensity', { intensity: value });
+    if (!res.ok) { Toast.show(res.error || 'Failed to save intensity', 'error'); return; }
+    this._battle.intensity = res.data.intensity;
   },
 
   async _swapConroiCommander(pid) {
@@ -1271,8 +1312,8 @@ const TabBattle = {
       ? `<span class="bc-passion-badge" title="${esc(p.passion.name)}">${esc(p.passion.result)} (Rd${p.passion.round})</span>`
       : `<button class="btn-icon" onclick="TabBattle._showInvokePassion('${esc(p.participantId)}')" title="Invoke Passion" style="font-size:0.7rem">+P</button>`;
 
-    const activeEnemies = (p.enemies || []).filter(e => e.status === 'active' || e.status === 'major_wound');
-    const downedEnemies = (p.enemies || []).filter(e => e.status !== 'active' && e.status !== 'major_wound');
+    const activeEnemies = (p.enemies || []).filter(e => e.status === 'active');
+    const downedEnemies = (p.enemies || []).filter(e => e.status !== 'active');
 
     let body = '';
     if (expanded) {
@@ -1376,12 +1417,11 @@ const TabBattle = {
   _renderEnemyRow(e, pid) {
     const pct = e.maxHp > 0 ? Math.round((e.hp / e.maxHp) * 100) : 0;
     const hpColor = pct > 50 ? 'var(--verdigris)' : pct > 25 ? 'var(--gold)' : 'var(--crimson-mid)';
-    const mwFlag = e.status === 'major_wound' ? '<span class="bc-mw-flag">MW</span>' : '';
     return `
       <div class="bc-enemy-row" draggable="true"
         ondragstart="TabBattle._onEnemyDragStart(event, '${esc(e.enemyId)}', '${esc(pid)}')">
-        <span class="bc-enemy-label">${esc(e.label || e.type)} ${mwFlag}</span>
-        <span class="bc-enemy-weapon">${esc(e.weapon)}</span>
+        <span class="bc-enemy-label">${esc(e.label || e.type)}${e.knockedDown ? ' <span class="bc-kd-flag">KD</span>' : ''}</span>
+        ${this._renderEnemyWeapon(e)}
         <div class="bc-enemy-hp">
           <div class="bc-hp-track"><div class="bc-hp-fill" style="width:${pct}%;background:${hpColor}"></div></div>
           <input type="number" class="bc-hp-input" value="${e.hp}" title="Current HP"
@@ -1391,9 +1431,9 @@ const TabBattle = {
             onchange="TabBattle._adjustEnemyHP('${esc(e.enemyId)}', +this.value); this.value=''">
         </div>
         <div class="bc-enemy-actions">
-          ${e.status === 'major_wound'
-            ? `<button class="bc-action-btn undo" onclick="TabBattle._undoEnemy('${esc(e.enemyId)}')" title="Remove Major Wound">↩</button>`
-            : `<button class="bc-action-btn mw" onclick="TabBattle._setEnemyStatus('${esc(e.enemyId)}', 'major_wound')" title="Major Wound">MW</button>`}
+          <button class="bc-action-btn kd ${e.knockedDown ? 'on' : ''}" onclick="TabBattle._toggleKnockdown('${esc(e.enemyId)}', ${e.knockedDown ? 'false' : 'true'})"
+            title="${e.knockedDown ? 'Back on their feet' : 'Knocked Down — flags the foe for you and the players'}">KD</button>
+          <button class="bc-action-btn mw" onclick="TabBattle._setEnemyStatus('${esc(e.enemyId)}', 'major_wound')" title="Major Wound — out of the fight, counts as a kill">MW</button>
           <button class="bc-action-btn" onclick="TabBattle._setEnemyStatus('${esc(e.enemyId)}', 'dead')" title="Dead">Dead</button>
           <button class="bc-action-btn" onclick="TabBattle._setEnemyStatus('${esc(e.enemyId)}', 'captured')" title="Captured">Cap</button>
           <button class="bc-action-btn" onclick="TabBattle._setEnemyStatus('${esc(e.enemyId)}', 'fled')" title="Fled">Fled</button>
@@ -1402,13 +1442,53 @@ const TabBattle = {
       </div>`;
   },
 
+  /* Weapon picker: foe cards list options like 'Axe / Spear / Sword' — the GM
+     picks what this particular foe is wielding; players see it via polling. */
+  _renderEnemyWeapon(e) {
+    const foe = (this._battle.foes || []).find(f => f.foeId === e.foeId);
+    const full = ((foe && foe.weapon) || '').trim();
+    const opts = full.split('/').map(w => w.trim()).filter(Boolean);
+    if (opts.length < 2) return `<span class="bc-enemy-weapon">${esc(e.weapon)}</span>`;
+    const cur = e.weapon || '';
+    const isSpecific = opts.includes(cur);
+    return `
+      <select class="bc-enemy-weapon-select" onclick="event.stopPropagation()"
+        onchange="TabBattle._setEnemyWeapon('${esc(e.enemyId)}', this.value)"
+        title="Weapon this foe is wielding — players see your pick">
+        <option value="${esc(full)}" ${isSpecific ? '' : 'selected'}>${esc(full)}</option>
+        ${opts.map(w => `<option value="${esc(w)}" ${cur === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}
+      </select>`;
+  },
+
+  async _toggleKnockdown(eid, knockedDown) {
+    const res = await API.patch('/api/battle/enemy/' + eid + '/knockdown', { knockedDown });
+    if (!res.ok) { Toast.show(res.error || 'Failed', 'error'); return; }
+    for (const p of this._battle.participants) {
+      const e = (p.enemies || []).find(x => x.enemyId === eid);
+      if (e) { e.knockedDown = res.data.enemy.knockedDown; break; }
+    }
+    const panel = document.getElementById('tab-battle');
+    if (panel) this._renderBattleConsole(panel);
+  },
+
+  async _setEnemyWeapon(eid, weapon) {
+    const res = await API.patch('/api/battle/enemy/' + eid + '/weapon', { weapon });
+    if (!res.ok) { Toast.show(res.error || 'Failed to set weapon', 'error'); return; }
+    for (const p of this._battle.participants) {
+      const e = (p.enemies || []).find(x => x.enemyId === eid);
+      if (e) { e.weapon = res.data.enemy.weapon; break; }
+    }
+  },
+
   _renderDownedEnemies(enemies) {
     const items = enemies.map(e => {
-      const statusClass = e.status === 'dead' ? 'dead' : e.status === 'captured' ? 'captured' : 'fled';
+      const statusClass = e.status === 'dead' ? 'dead' : e.status === 'captured' ? 'captured'
+        : e.status === 'major_wound' ? 'mw' : 'fled';
+      const statusLabel = e.status === 'major_wound' ? 'maj. wound' : e.status;
       return `
         <div class="bc-downed-item">
           <span>${esc(e.label || e.type)}</span>
-          <span class="bc-downed-status ${statusClass}">${e.status}</span>
+          <span class="bc-downed-status ${statusClass}">${statusLabel}</span>
           <button class="btn-icon" onclick="TabBattle._undoEnemy('${esc(e.enemyId)}')" title="Undo" style="font-size:0.7rem;margin-left:auto">↩</button>
         </div>`;
     }).join('');
@@ -1896,7 +1976,9 @@ const TabBattle = {
   },
 
   async _endBattle() {
-    if (!confirm('End the battle? This will move to the finalization screen.')) return;
+    const rd = this._battle.currentRound;
+    if (!confirm('End the battle?\n\nThis will finalize the current round (Round ' + rd +
+      ') — everything recorded this round is counted — and move to the finalization screen.')) return;
     const res = await API.post('/api/battle/finalize');
     if (!res.ok) { Toast.show(res.error || 'Failed', 'error'); return; }
     this._battle = res.data.battle;
@@ -1917,9 +1999,10 @@ const TabBattle = {
   _onEnemyDragStart(ev, eid, srcPid) {
     ev.dataTransfer.setData('text/plain', JSON.stringify({ eid, srcPid }));
     ev.dataTransfer.effectAllowed = 'move';
+    this._dragActive = true;
     const el = ev.currentTarget;
     el.style.opacity = '0.5';
-    el.addEventListener('dragend', () => { el.style.opacity = ''; }, { once: true });
+    el.addEventListener('dragend', () => { el.style.opacity = ''; this._dragActive = false; }, { once: true });
   },
 
   _onPKDragOver(ev) {
@@ -2048,7 +2131,7 @@ const TabBattle = {
           <div style="font-size:1.6rem;margin-bottom:6px;">⚔</div>
           <h2 style="font-family:var(--font-heading);font-size:1.4rem;letter-spacing:0.12em;color:var(--gold-text);margin:0 0 6px 0;">${esc(b.name)}</h2>
           <div style="font-size:0.8rem;color:var(--ink-soft);">
-            ${b.location ? esc(b.location) + ' · ' : ''}${esc(sizeLabel)} · Round ${b.currentRound}/${b.maxRounds}
+            ${b.location ? esc(b.location) + ' · ' : ''}${esc(sizeLabel)} · ${(b.rounds || []).length} ${(b.rounds || []).length === 1 ? 'round' : 'rounds'} fought
           </div>
         </div>
 

@@ -634,6 +634,12 @@ html.is-player .player-readonly-banner {
   text-transform: uppercase; color: var(--ink-mid);
 }
 .battle-header-cmdr { font-size: 0.75rem; color: var(--ink-mid); }
+.battle-header-intensity {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-heading); font-size: 0.75rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-mid);
+}
+.battle-header-intensity .bc-morale-input { width: 42px; }
 
 /* Conroi commander swap (header) */
 .bc-conroi-cmd { display: inline-flex; align-items: center; gap: 6px; }
@@ -736,6 +742,11 @@ html.is-player .player-readonly-banner {
 .bc-enemy-row:last-child { border-bottom: none; }
 .bc-enemy-label { font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
 .bc-enemy-weapon { font-size: 0.7rem; color: var(--ink-mid); }
+.bc-enemy-weapon-select {
+  font-size: 0.7rem; padding: 1px 2px; max-width: 130px;
+  border: 1px solid var(--vellum-deep); border-radius: 3px;
+  background: var(--vellum); color: var(--ink-mid);
+}
 .bc-enemy-hp { display: flex; align-items: center; gap: 3px; margin-left: auto; flex-shrink: 0; }
 .bc-hp-track {
   width: 60px; height: 8px; background: var(--vellum-deep); border-radius: 4px; overflow: hidden;
@@ -770,6 +781,8 @@ html.is-player .player-readonly-banner {
 .bc-enemy-row[draggable="true"]:active { cursor: grabbing; }
 .bc-pk-card.bc-drop-target { outline: 2px dashed var(--verdigris); outline-offset: -2px; background: rgba(0,128,128,0.06); }
 .bc-mw-flag { font-size: 0.55rem; font-weight: 700; color: var(--gold-text); background: rgba(184,134,11,0.12); padding: 1px 4px; border-radius: 2px; }
+.bc-kd-flag { font-size: 0.55rem; font-weight: 700; color: var(--crimson-mid); background: rgba(139,30,30,0.12); padding: 1px 4px; border-radius: 2px; }
+.bc-action-btn.kd.on { background: var(--crimson-mid); border-color: var(--crimson-mid); color: #fff; }
 
 /* Downed enemies */
 .bc-downed { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--vellum-deep); }
@@ -782,6 +795,7 @@ html.is-player .player-readonly-banner {
 .bc-downed-status.dead { background: rgba(139,30,30,0.12); color: var(--crimson-mid); }
 .bc-downed-status.captured { background: rgba(45,90,74,0.12); color: var(--verdigris-mid); }
 .bc-downed-status.fled { background: rgba(184,134,11,0.12); color: var(--gold-text); }
+.bc-downed-status.mw { background: rgba(192,120,32,0.12); color: #c07820; }
 
 /* Bulk assign */
 .bc-bulk-row {
@@ -3816,6 +3830,7 @@ html.is-player .player-readonly-banner {
 .bp-opp-name { font-weight: 600; color: var(--ink); }
 .bp-opp-weapon { color: var(--ink-soft); font-size: 0.75rem; flex: 1; }
 .bp-opp-status { font-size: 0.75rem; font-weight: 600; color: #208060; white-space: nowrap; }
+.bp-opp-kd { font-size: 0.7rem; font-weight: 700; color: var(--crimson-mid); background: rgba(139,30,30,0.1); padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
 .bp-opp-down .bp-opp-name { text-decoration: line-through; opacity: 0.6; }
 .bp-opp-down .bp-opp-status { color: #c03030; }
 .bp-kills-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 6px; }

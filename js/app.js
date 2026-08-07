@@ -2,7 +2,7 @@
    APP.JS — Init, routing, global wiring
 ══════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '3.11.1';
+const APP_VERSION = '3.12.0';
 
 
 // ── FILE SYNC STATUS INDICATOR ────────────────────────────────

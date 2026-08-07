@@ -177,6 +177,7 @@ const FEATURES = [
       '/feast and /justice — AI-generated dark ages feast dishes and manor justice events.',
       '/speak <message> — address Caliburn, the sword of Britain, directly. He has opinions.',
       '/bugreport — submit a bug report for the GM\'s Binder. Opens a form with Summary and Details fields. Creates a GitHub issue automatically and notifies the GM.',
+      '/patchnotes — the GM can preview and announce the latest patch notes directly in a Discord channel. Posts a formatted embed with a confirm step — never automatic.',
     ],
   },
   {
@@ -411,6 +412,29 @@ const FEATURES = [
 // ── PATCH NOTES ───────────────────────────────────────────────
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
+  {
+    version: '3.12.0',
+    date:    '2026-08-07',
+    sections: [
+      {
+        heading: 'Battle Tracker',
+        items: [
+          'The GM console now updates live — morale changes made by the conroi commander, postures, passions, and kills recorded by players appear within a few seconds instead of waiting for the GM to click something.',
+          'Battle Intensity is now shown (and editable) in the GM console header during the battle.',
+          'A foe marked with a Major Wound now moves to the Downed list alongside slain and captured foes — it still counts as a kill for the knight, per the 6e rules. Use the undo arrow if it was marked in error.',
+          'Ending the battle now finalizes the current round automatically, so nothing recorded in the final round is lost — and the confirmation says so. Battles no longer over-count their rounds in the Chronicle.',
+          'Foes with a choice of weapons (Saxon Warriors, Foot Soldiers, and the like) now have a weapon dropdown on their row in the GM console. The GM picks what each foe is actually wielding and every player sees it on their opponent list within seconds.',
+          'New KD (Knocked Down) toggle on each foe — tick it when a foe is sent sprawling and a red badge shows for the GM and players; tick again when they regain their feet. Separate from Major Wound, which takes a foe out of the fight.',
+        ],
+      },
+      {
+        heading: 'Caliburn',
+        items: [
+          '/patchnotes — the GM can now preview and announce the latest patch notes directly in a Discord channel. Ephemeral preview with an Announce button; never posted automatically.',
+        ],
+      },
+    ],
+  },
   {
     version: '3.11.1',
     date:    '2026-08-05',

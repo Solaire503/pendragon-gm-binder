@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.11.1'  # keep in sync with js/app.js
+APP_VERSION  = '3.12.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -3017,6 +3017,7 @@ def api_battle_assign_enemy(pid):
         'kv': float(body.get('kv', foe['kv'] if foe else 0)),
         'glory': int(body.get('glory', foe['glory'] if foe else 0)),
         'status': 'active',
+        'knockedDown': False,
     }
     p['enemies'].append(enemy)
     _save_active_battle(battle)
@@ -3044,6 +3045,45 @@ def api_battle_enemy_hp(eid):
             enemy['hp'] = max(0, min(enemy['maxHp'], enemy['hp'] + delta))
     except (ValueError, TypeError):
         return jsonify({'error': 'Invalid HP value'}), 422
+    _save_active_battle(battle)
+    return jsonify({'enemy': enemy})
+
+
+@app.route('/api/battle/enemy/<eid>/weapon', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_enemy_weapon(eid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    p, enemy = _find_enemy(battle, eid)
+    if not enemy:
+        return jsonify({'error': 'Enemy not found'}), 404
+    body = request.get_json(silent=True) or {}
+    weapon = str(body.get('weapon', '')).strip()[:60]
+    if not weapon:
+        return jsonify({'error': 'Weapon required'}), 422
+    enemy['weapon'] = weapon
+    _save_active_battle(battle)
+    return jsonify({'enemy': enemy})
+
+
+@app.route('/api/battle/enemy/<eid>/knockdown', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_enemy_knockdown(eid):
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    p, enemy = _find_enemy(battle, eid)
+    if not enemy:
+        return jsonify({'error': 'Enemy not found'}), 404
+    body = request.get_json(silent=True) or {}
+    enemy['knockedDown'] = bool(body.get('knockedDown'))
     _save_active_battle(battle)
     return jsonify({'enemy': enemy})
 
@@ -3195,6 +3235,24 @@ def api_battle_max_rounds():
     return jsonify({'maxRounds': battle['maxRounds']})
 
 
+@app.route('/api/battle/intensity', methods=['PATCH'])
+@gm_required
+@_with_battle_lock
+def api_battle_intensity():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] not in ('setup', 'active'):
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    try:
+        battle['intensity'] = max(0, int(body.get('intensity', 0)))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Intensity must be a number'}), 422
+    _save_active_battle(battle)
+    return jsonify({'intensity': battle['intensity']})
+
+
 @app.route('/api/battle/conroi-commander', methods=['PATCH'])
 @gm_required
 @_with_battle_lock
@@ -3216,18 +3274,8 @@ def api_battle_conroi_commander():
     return jsonify({'battle': battle})
 
 
-@app.route('/api/battle/round/end', methods=['POST'])
-@gm_required
-@_with_battle_lock
-def api_battle_round_end():
-    err = _csrf_check()
-    if err: return err
-    battle = _get_active_battle()
-    if not battle or battle['state'] != 'active':
-        return jsonify({'error': 'No active battle in progress'}), 404
-    body = request.get_json(silent=True) or {}
-    if 'round' in body and body['round'] != battle['currentRound']:
-        return jsonify({'error': 'Round already ended'}), 409
+def _fold_current_round(battle):
+    """Snapshot the in-progress round into battle['rounds'] and reset per-round state."""
     snapshot = {
         'participants': copy.deepcopy(battle['participants']),
         'morale': copy.deepcopy(battle['morale']),
@@ -3253,6 +3301,44 @@ def api_battle_round_end():
         p['enemies'] = []
     battle['encounter'] = {'text': '', 'foeId': None, 'retired': False}
     battle['roundNotes'] = ''
+    return round_entry
+
+
+def _round_has_activity(battle):
+    """True if anything has been recorded in the current (unsnapshotted) round."""
+    enc = battle.get('encounter') or {}
+    if enc.get('foeId') or (enc.get('text') or '').strip() or enc.get('retired'):
+        return True
+    if (battle.get('roundNotes') or '').strip():
+        return True
+    morale = battle.get('morale') or {}
+    if morale.get('current') != battle.get('moraleAtRoundStart', morale.get('current')):
+        return True
+    cur = battle.get('currentRound')
+    for p in battle.get('participants', []):
+        if p.get('posture') or p.get('enemies'):
+            return True
+        if any(k.get('round') == cur for k in p.get('killLedger', [])):
+            return True
+        passion = p.get('passion')
+        if passion and passion.get('round') == cur:
+            return True
+    return False
+
+
+@app.route('/api/battle/round/end', methods=['POST'])
+@gm_required
+@_with_battle_lock
+def api_battle_round_end():
+    err = _csrf_check()
+    if err: return err
+    battle = _get_active_battle()
+    if not battle or battle['state'] != 'active':
+        return jsonify({'error': 'No active battle in progress'}), 404
+    body = request.get_json(silent=True) or {}
+    if 'round' in body and body['round'] != battle['currentRound']:
+        return jsonify({'error': 'Round already ended'}), 409
+    round_entry = _fold_current_round(battle)
     _rotate_battle_backup()
     _save_active_battle(battle)
     log.info('Battle round %d ended: %s', round_entry['round'], battle['id'])
@@ -3294,10 +3380,14 @@ def api_battle_finalize():
     battle = _get_active_battle()
     if not battle or battle['state'] != 'active':
         return jsonify({'error': 'No active battle in progress'}), 404
+    # Fold the in-progress round into the record so nothing from it is lost —
+    # unless it's untouched (e.g. GM already clicked End Round first).
+    if _round_has_activity(battle):
+        _fold_current_round(battle)
     battle['state'] = 'finalizing'
     _rotate_battle_backup()
     _save_active_battle(battle)
-    log.info('Battle ended: %s (round %d/%d)', battle['name'], battle['currentRound'], battle['maxRounds'])
+    log.info('Battle ended: %s (%d rounds fought)', battle['name'], len(battle.get('rounds', [])))
     return jsonify({'battle': battle})
 
 
@@ -3483,7 +3573,7 @@ def api_battle_commit():
             'name': battle['name'], 'location': battle.get('location', ''),
             'size': battle.get('size', ''), 'outcome': outcome,
             'gmNarrative': gm_narrative,
-            'rounds': battle.get('currentRound', 0),
+            'rounds': len(battle.get('rounds', []) or []),
             'maxRounds': battle.get('maxRounds', 0),
             'friendlyCommander': battle.get('friendlyCommander'),
             'enemyCommander': battle.get('enemyCommander'),
@@ -4183,6 +4273,149 @@ def api_bot_chronicle():
     recent_years = [k for _, k in sorted(numeric_keys, reverse=True)[:3]]
     entries = [{'year': int(y), 'entries': chronicle[y]} for y in recent_years]
     return jsonify({'chronicle': entries})
+
+def _parse_patch_notes_js():
+    """Parse the PATCH_NOTES array from the JS data file into Python."""
+    path = BASE_DIR / 'js' / 'data' / 'patch-notes.js'
+    if not path.exists():
+        return []
+    text = path.read_text(encoding='utf-8')
+    marker = 'const PATCH_NOTES = ['
+    idx = text.find(marker)
+    if idx < 0:
+        return []
+    idx += len(marker) - 1
+
+    depth = 0
+    end = idx
+    in_sq = False
+    esc = False
+    for i in range(idx, len(text)):
+        c = text[i]
+        if esc:
+            esc = False
+            continue
+        if c == '\\':
+            esc = True
+            continue
+        if c == "'":
+            in_sq = not in_sq
+            continue
+        if in_sq:
+            continue
+        if c == '[':
+            depth += 1
+        elif c == ']':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    raw = text[idx:end]
+
+    # Strip line comments
+    cleaned = []
+    i = 0
+    in_sq = False
+    esc = False
+    while i < len(raw):
+        c = raw[i]
+        if esc:
+            cleaned.append(c)
+            esc = False
+            i += 1
+            continue
+        if c == '\\' and in_sq:
+            cleaned.append(c)
+            esc = True
+            i += 1
+            continue
+        if c == "'":
+            in_sq = not in_sq
+            cleaned.append(c)
+            i += 1
+            continue
+        if not in_sq and c == '/' and i + 1 < len(raw) and raw[i + 1] == '/':
+            while i < len(raw) and raw[i] != '\n':
+                i += 1
+            continue
+        cleaned.append(c)
+        i += 1
+    raw = ''.join(cleaned)
+
+    # Convert single-quoted strings to double-quoted
+    out = []
+    i = 0
+    while i < len(raw):
+        c = raw[i]
+        if c == "'":
+            out.append('"')
+            i += 1
+            while i < len(raw) and raw[i] != "'":
+                if raw[i] == '\\' and i + 1 < len(raw) and raw[i + 1] == "'":
+                    out.append("'")
+                    i += 2
+                elif raw[i] == '"':
+                    out.append('\\"')
+                    i += 1
+                elif raw[i] == '\\':
+                    out.append(raw[i:i + 2])
+                    i += 2
+                else:
+                    out.append(raw[i])
+                    i += 1
+            out.append('"')
+            i += 1
+        else:
+            out.append(c)
+            i += 1
+    json_text = ''.join(out)
+
+    # Quote bare object keys (outside strings)
+    final = []
+    i = 0
+    while i < len(json_text):
+        c = json_text[i]
+        if c == '"':
+            j = i + 1
+            while j < len(json_text):
+                if json_text[j] == '\\':
+                    j += 2
+                    continue
+                if json_text[j] == '"':
+                    break
+                j += 1
+            final.append(json_text[i:j + 1])
+            i = j + 1
+        else:
+            m = re.match(r'([a-zA-Z_]\w*)\s*:', json_text[i:])
+            if m:
+                final.append(f'"{m.group(1)}":')
+                i += m.end()
+            else:
+                final.append(c)
+                i += 1
+    json_text = ''.join(final)
+
+    json_text = re.sub(r',(\s*[\]\}])', r'\1', json_text)
+    try:
+        return json.loads(json_text)
+    except json.JSONDecodeError as e:
+        log.error("Failed to parse patch-notes.js: %s", e)
+        return []
+
+@app.route('/api/bot/patch-notes')
+@bot_required
+def api_bot_patch_notes():
+    version = request.args.get('version', '')
+    notes = _parse_patch_notes_js()
+    if not notes:
+        return jsonify({'error': 'No patch notes available'}), 404
+    if version:
+        for entry in notes:
+            if entry.get('version') == version:
+                return jsonify(entry)
+        return jsonify({'error': f'Version {version} not found'}), 404
+    return jsonify(notes[0])
 
 # ── STORY ARCS & SESSION PREP ────────────────────────────────────────────────
 
