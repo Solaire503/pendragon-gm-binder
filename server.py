@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.12.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.13.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -3805,7 +3805,10 @@ def _push_notification(username: str, notif_type: str, text: str, link: str = ''
 
 # ── PLAYER NPC EDIT (household-scoped) ────────────────────────────────────────
 
-_PLAYER_NPC_UPDATABLE = ('name', 'pronoun', 'passions', 'skills', 'stats')
+_PLAYER_NPC_UPDATABLE = ('name', 'pronoun', 'passions', 'skills', 'stats',
+                         'role', 'page_type', 'page_court', 'training_path',
+                         'training_where', 'training_npc_id')
+_PLAYER_NPC_UPDATABLE_BOOL = ('page_placed', 'came_of_age')
 
 
 @app.route('/api/npc/<npc_id>', methods=['PATCH'])
@@ -3845,6 +3848,13 @@ def api_npc_household_update(npc_id):
             if field == 'name' and not val:
                 return jsonify({'error': 'Name cannot be empty'}), 422
             if (npc.get(field) or '') != val:
+                npc[field] = val
+                changed.append(field)
+        for field in _PLAYER_NPC_UPDATABLE_BOOL:
+            if field not in body:
+                continue
+            val = bool(body[field])
+            if npc.get(field) != val:
                 npc[field] = val
                 changed.append(field)
         if changed:

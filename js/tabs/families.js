@@ -105,7 +105,7 @@ const TabFamilies = {
     const manorHtml = manor ? `
       <div class="card mb-12" style="border-top:3px solid ${hh.colour};">
         <div class="section-title">Manor Holdings</div>
-        <div class="pk-stat"><span class="pk-stat-label">Knight</span><span class="pk-stat-value">${esc(manor.knight||'—')}</span></div>
+        <div class="pk-stat"><span class="pk-stat-label">Knight</span><span class="pk-stat-value">${esc(STORE.titledKnight(manor))}</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Base Harvest</span><span class="pk-stat-value">${manor.baseHarvest} L</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Treasury</span><span class="pk-stat-value">${STORE.manorTreasury(name)} L</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Improvements</span><span class="pk-stat-value">${(manor.improvements||[]).filter(i=>i.status==='active').length}</span></div>

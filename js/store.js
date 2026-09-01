@@ -423,6 +423,18 @@ const STORE = {
     return [...m.history].sort((a, b) => b.year - a.year)[0].treasury;
   },
 
+  titledKnight(keyOrManor) {
+    const m = typeof keyOrManor === 'string' ? this.getManor(keyOrManor) : keyOrManor;
+    if (!m) return '—';
+    const npc = m.lord_id ? this.getNpc(m.lord_id) : null;
+    if (!npc) return m.knight || '—';
+    const name = npc.name || '—';
+    if (name.startsWith('Sir ') || name.startsWith('Dame ')) return name;
+    const p = (npc.pronoun || '').toLowerCase();
+    const title = p.startsWith('she') ? 'Dame' : p.startsWith('they') ? '' : 'Sir';
+    return title ? `${title} ${name}` : name;
+  },
+
   addManorHistory(key, entry) {
     const m = this.getManor(key);
     if (!m) return;

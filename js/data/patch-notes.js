@@ -413,6 +413,34 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.13.0',
+    date:    '2026-09-01',
+    sections: [
+      {
+        heading: 'Household & Training',
+        items: [
+          'Players can now handle the training lifecycle for their own household: place a child as a page, assign a training path at 14, and confirm coming of age — the same buttons the GM sees, on your own people only. The GM is notified of each change.',
+          'A squire whose knight has died (or whose squire link was removed) now shows a "Training Knight Lost — Needs Reassignment" flag on their card, with a Reassign button. Squires training with a named household or court rather than a specific knight are not flagged.',
+          'Reassigning a squire to a new knight marks the old link as Former Squire automatically.',
+        ],
+      },
+      {
+        heading: 'Manors',
+        items: [
+          'Manor knights are now shown with their title — Sir or Dame — on the dashboard, family pages, and manor headers.',
+          'Property damage now records the year it was logged. It shows on the manor tab and dashboard, and can be edited on existing damage entries.',
+        ],
+      },
+      {
+        heading: 'Fixes',
+        items: [
+          'The NPC search picker now works reliably on touch screens — taps on a result no longer get swallowed.',
+          'The offline page has a "Clear Cache & Retry" button for when a stale cached version refuses to update.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.12.0',
     date:    '2026-08-07',
     sections: [

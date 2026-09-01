@@ -107,7 +107,7 @@ const TabManors = {
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <div><div class="detail-label">Lord</div><div style="font-size:0.82rem;margin-top:2px;">${esc(lordNpc ? lordNpc.name : m.knight || '—')}</div></div>
+            <div><div class="detail-label">Lord</div><div style="font-size:0.82rem;margin-top:2px;">${esc(STORE.titledKnight(m))}</div></div>
             <div><div class="detail-label">Treasury</div>
               <div style="font-size:0.82rem;margin-top:2px;color:${treasury>0?'var(--verdigris-mid)':treasury<0?'var(--crimson-mid)':'var(--ink)'};font-weight:600;">${treasury} L</div>
             </div>
@@ -195,7 +195,7 @@ const TabManors = {
         <div style="width:40px;height:40px;border-radius:var(--radius);background:${col}22;border:2px solid ${col};display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;">${icon}</div>
         <div>
           <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--ink);">${esc(key)} Manor</div>
-          <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ink-soft);opacity:0.55;">${esc(m.knight||'')} · ${m.player?'Player: '+esc(m.player):''}</div>
+          <div style="font-family:var(--font-heading);font-size:0.52rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ink-soft);opacity:0.55;">${esc(STORE.titledKnight(m))} · ${m.player?'Player: '+esc(m.player):''}</div>
         </div>
         <div style="margin-left:auto;display:flex;gap:6px;">${secBtns}</div>
       </div>
@@ -306,12 +306,14 @@ const TabManors = {
           const dueNow = d.yearRepaired && d.yearRepaired <= STORE.year;
           const fieldNote = d.type === 'Field' && d.numFields
             ? `<span style="font-family:var(--font-heading);font-size:0.68rem;color:var(--crimson-mid);margin-left:6px;">${d.numFields} field${d.numFields!==1?'s':''} (−${d.numFields} L/harvest)</span>` : '';
+          const appliedNote = d.yearApplied
+            ? `<span style="font-family:var(--font-heading);font-size:0.62rem;color:var(--ink-soft);opacity:0.6;margin-left:6px;">Applied ${d.yearApplied} AD</span>` : '';
           const repairNote = d.yearRepaired && !dueNow
             ? `<span style="font-family:var(--font-heading);font-size:0.62rem;color:var(--ink-soft);opacity:0.6;margin-left:6px;">Est. repair: ${d.yearRepaired} AD</span>` : '';
           return `
           <div class="damage-item${dueNow?' damage-item-due':''}">
             <span class="damage-status damaged">${d.type||'Damaged'}</span>
-            <span style="flex:1;">${esc(d.description)}${fieldNote}${repairNote}</span>
+            <span style="flex:1;">${esc(d.description)}${fieldNote}${appliedNote}${repairNote}</span>
             <span style="font-family:var(--font-heading);font-size:0.75rem;color:var(--crimson-mid);">${d.repairCost>0?d.repairCost+' L':''}</span>
             ${readOnly ? '' : dueNow
               ? `<button class="btn btn-verdigris" style="padding:2px 10px;font-size:0.5rem;" onclick="TabManors._markRepaired('${esc(key)}',${d.id})">✓ Repaired?</button>`
@@ -1270,7 +1272,7 @@ const TabManors = {
         ${(m.propertyDamage||[]).filter(d=>d.status==='damaged').length
           ? (m.propertyDamage||[]).filter(d=>d.status==='damaged').map(d =>
               `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--vellum-mid);">
-                <span><strong>${esc(d.type)}</strong> — ${esc(d.description)}${d.numFields ? ` (${d.numFields} field${d.numFields!==1?'s':''})` : ''}</span>
+                <span><strong>${esc(d.type)}</strong> — ${esc(d.description)}${d.numFields ? ` (${d.numFields} field${d.numFields!==1?'s':''})` : ''}${d.yearApplied ? ` <span style="font-size:0.72rem;opacity:0.6;">[${d.yearApplied}]</span>` : ''}</span>
                 <span style="white-space:nowrap;margin-left:8px;color:var(--crimson-mid);">${d.repairCost ? d.repairCost+' L' : ''}</span>
               </div>`
             ).join('')
@@ -2794,6 +2796,10 @@ const TabManors = {
         <div class="detail-field mb-8"><div class="detail-label">Description</div><input class="edit-input" id="ed-desc" value="${esc(d.description||'')}"></div>
         <div class="detail-field mb-8"><div class="detail-label">Repair Cost (L)</div><input class="edit-input" id="ed-cost" type="number" value="${d.repairCost||0}"></div>
         <div class="detail-field mb-8">
+          <div class="detail-label">Year Applied</div>
+          <input class="edit-input" id="ed-year-applied" type="number" value="${d.yearApplied||''}" placeholder="year this damage was logged">
+        </div>
+        <div class="detail-field mb-8">
           <div class="detail-label">Estimated Year Repaired</div>
           <input class="edit-input" id="ed-year-repaired" type="number" value="${d.yearRepaired||''}" placeholder="leave blank if unknown">
         </div>
@@ -2824,6 +2830,7 @@ const TabManors = {
     d.numFields   = type === 'Field' ? (parseInt(g('ed-num-fields')?.value, 10) || 1) : null;
     d.description = g('ed-desc')?.value?.trim() || d.description;
     d.repairCost  = parseFloat(g('ed-cost')?.value) || 0;
+    d.yearApplied = parseInt(g('ed-year-applied')?.value, 10) || null;
     d.yearRepaired= parseInt(g('ed-year-repaired')?.value, 10) || null;
     d.notes       = g('ed-notes')?.value?.trim() || '';
     STORE.save();
@@ -2857,6 +2864,7 @@ const TabManors = {
       repairCost:   parseFloat(g('ad-cost')?.value) || 0,
       numFields,
       yearRepaired,
+      yearApplied:  STORE.year,
       status: 'damaged',
     });
     STORE.save();
@@ -2878,7 +2886,7 @@ const TabManors = {
     container.innerHTML = damaged.length
       ? damaged.map(d =>
           `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--vellum-mid);">
-            <span><strong>${esc(d.type)}</strong> — ${esc(d.description)}${d.numFields ? ` (${d.numFields} field${d.numFields!==1?'s':''})` : ''}</span>
+            <span><strong>${esc(d.type)}</strong> — ${esc(d.description)}${d.numFields ? ` (${d.numFields} field${d.numFields!==1?'s':''})` : ''}${d.yearApplied ? ` <span style="font-size:0.72rem;opacity:0.6;">[${d.yearApplied}]</span>` : ''}</span>
             <span style="white-space:nowrap;margin-left:8px;color:var(--crimson-mid);">${d.repairCost ? d.repairCost+' L' : ''}</span>
           </div>`
         ).join('')

@@ -185,6 +185,7 @@
 
   <button class="btn-retry" onclick="retry()">⚔ Attempt to Reconnect</button>
   <div id="countdown"></div>
+  <button class="btn-retry" style="margin-top:10px;background:linear-gradient(180deg,#3a2e22 0%,#1a1410 100%);border-color:#4a3a28;font-size:.65rem;" onclick="clearAndRetry()">🔥 Clear Cache &amp; Retry</button>
 
   <div class="footer">Pendragon GM's Binder &nbsp;·&nbsp; v2.0</div>
 </div>
@@ -210,6 +211,17 @@
   function retry() {
     cd.textContent = 'Seeking the hall…';
     window.location.reload();
+  }
+
+  async function clearAndRetry() {
+    cd.textContent = 'Purging the old scrolls…';
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch(e) {}
+    window.location.replace('/');
   }
 
   updateCountdown();

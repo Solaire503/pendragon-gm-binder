@@ -634,6 +634,16 @@ function buildNpcCardHtml(npc, opts = {}) {
     const role = (npc.role || '').toLowerCase();
     if (calcAgeNow >= 7  && calcAgeNow < 14 && ['baby','infant',''].includes(role) && !npc.page_placed) return 'page';
     if (calcAgeNow >= 14 && ['page','oblate','druidic initiate'].includes(role)) return 'training';
+    if (role === 'squire') {
+      // Master = recorded training knight, else the other party of an active Squire relationship.
+      const relMaster = STORE.relationships.find(r =>
+        r.type === 'Squire' && (r.sourceId === npc.id || r.targetId === npc.id));
+      const masterId = npc.training_npc_id
+        || (relMaster ? (relMaster.sourceId === npc.id ? relMaster.targetId : relMaster.sourceId) : '');
+      const masterAlive = !!masterId && STORE.living.some(n => n.id === masterId);
+      const freeTextTraining = !masterId && !!(npc.training_where || '').trim();
+      if (!masterAlive && !freeTextTraining) return 'reassign';
+    }
     if (calcAgeNow >= 21 && role === 'squire')  return 'adult';
     if (calcAgeNow >= 18 && ['steward','priest','druid'].includes(role)) return 'adult';
     return null;
@@ -647,20 +657,27 @@ function buildNpcCardHtml(npc, opts = {}) {
     return null;
   })();
 
+  const canManageTraining = isGM() || (!isObserver() && npc.household && window.__USER__?.household && npc.household.toLowerCase() === window.__USER__.household.toLowerCase());
+
   const ageFlagHtml = ageFlag === 'page'
     ? `<div class="npc-age-flag npc-age-flag-amber">
          ⚑ Needs Page Placement — age ${calcAgeNow}
-         ${isGM() ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openPlacementModal('${npc.id}')">⚙ Place</button>` : ''}
+         ${canManageTraining ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openPlacementModal('${npc.id}')">⚙ Place</button>` : ''}
        </div>`
     : ageFlag === 'training'
     ? `<div class="npc-age-flag npc-age-flag-cobalt">
          ⚑ Needs Training Path — age ${calcAgeNow}
-         ${isGM() ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openTrainingPathModal('${npc.id}')">⚙ Assign</button>` : ''}
+         ${canManageTraining ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openTrainingPathModal('${npc.id}')">⚙ Assign</button>` : ''}
+       </div>`
+    : ageFlag === 'reassign'
+    ? `<div class="npc-age-flag npc-age-flag-amber">
+         ⚠ Training Knight Lost — Needs Reassignment
+         ${canManageTraining ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openTrainingPathModal('${npc.id}')">⚙ Reassign</button>` : ''}
        </div>`
     : ageFlag === 'adult'
     ? `<div class="npc-age-flag npc-age-flag-verdigris">
          ⚑ Came of Age — age ${calcAgeNow}
-         ${isGM() ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openComingOfAgeModal('${npc.id}')">⚙ Confirm</button>` : ''}
+         ${canManageTraining ? `<button class="btn btn-ghost" style="font-size:0.6rem;padding:2px 8px;margin-left:10px;" onclick="Components._openComingOfAgeModal('${npc.id}')">⚙ Confirm</button>` : ''}
        </div>`
     : npc.came_of_age
     ? `<div class="npc-age-flag npc-age-flag-done">✓ Came of Age${calcAgeNow ? ' (age ' + calcAgeNow + ')' : ''}</div>`
@@ -1101,7 +1118,7 @@ function initNpcSearch(textId, hiddenId, allNpcs) {
     showResults(filtered);
   });
 
-  results.addEventListener('mousedown', e => {
+  function selectItem(e) {
     const item = e.target.closest('.npc-search-item');
     if (!item) return;
     e.preventDefault();
@@ -1111,11 +1128,12 @@ function initNpcSearch(textId, hiddenId, allNpcs) {
     input.value   = npc.name + (npc.role ? ' (' + npc.role + ')' : '');
     results.style.display = 'none';
     hidden.dispatchEvent(new Event('change'));
-  });
+  }
+  results.addEventListener('pointerdown', selectItem);
+  results.addEventListener('mousedown', e => e.preventDefault());
 
   input.addEventListener('blur', () => {
-    // Short delay so mousedown on a result fires first
-    setTimeout(() => { results.style.display = 'none'; }, 150);
+    setTimeout(() => { results.style.display = 'none'; }, 400);
   });
   input.addEventListener('focus', () => {
     if (input.value.trim()) input.dispatchEvent(new Event('input'));
@@ -1793,7 +1811,9 @@ const Components = {
     const where = document.getElementById('placement-where')?.value?.trim();
     if (!type)  { Toast.error('Select a placement type'); return; }
     if (!where) { Toast.error('Enter a placement location'); return; }
-    STORE.updateNpc(id, { role: type, page_court: where, page_placed: true, page_type: type });
+    const placementChanges = { role: type, page_court: where, page_placed: true, page_type: type };
+    STORE.updateNpc(id, placementChanges);
+    if (!isGM()) API.patch(`/api/npc/${id}`, placementChanges);
     const npc = STORE.getNpc(id);
     Toast.success(`${npc.name} placed as ${type} at ${where}`);
     APP.refreshCurrentTab();
@@ -1883,6 +1903,11 @@ const Components = {
         const alreadyLinked = STORE.relationships.some(r =>
           (r.type === 'Squire' || r.type === 'Former Squire') && ((r.sourceId === npcId && r.targetId === id) || (r.sourceId === id && r.targetId === npcId))
         );
+        // Any other active Squire link (e.g. to a knight who has died) becomes Former Squire.
+        STORE.relationships.forEach(r => {
+          if (r.type === 'Squire' && (r.sourceId === id || r.targetId === id)
+              && r.sourceId !== npcId && r.targetId !== npcId) r.type = 'Former Squire';
+        });
         if (!alreadyLinked) STORE.addRelationship(npcId, id, 'Squire', '');
       } else {
         changes.training_npc_id = '';
@@ -1896,6 +1921,7 @@ const Components = {
     }
 
     STORE.updateNpc(id, changes);
+    if (!isGM()) API.patch(`/api/npc/${id}`, changes);
     Toast.success(`${npc.name} assigned to ${newRole} training`);
     APP.refreshCurrentTab();
     this.openNpcCard(id);
@@ -1950,6 +1976,7 @@ const Components = {
     }
 
     STORE.updateNpc(id, changes);
+    if (!isGM()) API.patch(`/api/npc/${id}`, changes);
     Toast.success(`${npc.name} has come of age`);
     APP.refreshCurrentTab();
     this.openNpcCard(id);

@@ -40,7 +40,7 @@ const TabDashboard = {
       const damage = (m.propertyDamage || []).filter(d => d.status === 'damaged').length;
 
       return `<div class="pk-card" style="border-top-color:${col};" role="button" tabindex="0" onclick="APP.switchTab('manors');TabManors.selectManor('${esc(key)}')">
-        <div class="pk-card-name">${esc(m.knight || key)}</div>
+        <div class="pk-card-name">${esc(STORE.titledKnight(m) || key)}</div>
         <div class="pk-card-player" style="color:${col}aa">${hh ? hh.icon : '◆'} ${m.player ? 'Player: ' + esc(m.player) : esc(key)}</div>
         <div class="pk-stat"><span class="pk-stat-label">Treasury</span><span class="pk-stat-value">${treasury} L</span></div>
         <div class="pk-stat"><span class="pk-stat-label">Harvest ${last ? last.year : year}</span><span class="pk-stat-value">${esc(harvest)}</span></div>
@@ -369,6 +369,7 @@ const TabDashboard = {
           <div style="font-family:var(--font-heading);font-size:0.58rem;color:var(--crimson-mid);">${d.type||'Damage'}${overdue?' · ⚠ REPAIR DUE':''}</div>
           <div style="font-size:0.8rem;color:var(--ink);margin-top:2px;">${d.description||''}</div>
           ${d.repairCost ? `<div style="font-size:0.72rem;color:var(--ink-soft);margin-top:1px;">Repair cost: ${d.repairCost} L${d.yearRepaired?' · Est. '+d.yearRepaired+' AD':''}</div>` : ''}
+          ${d.yearApplied ? `<div style="font-size:0.68rem;color:var(--ink-soft);opacity:0.7;margin-top:1px;">Applied ${d.yearApplied} AD</div>` : ''}
         </div>`;
       }).join('') : '';
 
