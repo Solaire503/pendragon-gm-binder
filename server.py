@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.13.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.13.1'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -983,7 +983,16 @@ def static_files(filename):
         return jsonify({'error': 'Forbidden'}), 403
     if any(p.lower().endswith(BLOCKED_SUFFIXES) for p in parts):
         return jsonify({'error': 'Forbidden'}), 403
-    if any(p.lower().startswith(BLOCKED_STEMS) for p in parts):
+    # The stem rule guards root-level data files (comments.json, users.json…)
+    # whatever suffix gets appended to them. It must not catch the app's own
+    # shipped assets: js/comments.js is the comment UI, not the comment data.
+    # Exempt only real frontend assets inside js/ and css/; every data file
+    # lives at the root, so the exemption never reaches one.
+    is_frontend_asset = (
+        len(parts) >= 2 and parts[0] in ('js', 'css')
+        and parts[-1].lower().endswith(('.js', '.css'))
+    )
+    if not is_frontend_asset and any(p.lower().startswith(BLOCKED_STEMS) for p in parts):
         return jsonify({'error': 'Forbidden'}), 403
     # Block the backups directory entirely — contains full campaign save history.
     if parts and parts[0] == 'backups':

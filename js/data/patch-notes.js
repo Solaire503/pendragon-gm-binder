@@ -413,6 +413,19 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.13.1',
+    date:    '2026-09-04',
+    sections: [
+      {
+        heading: 'Bug Fixes',
+        items: [
+          'NPC comments work again. Since 3.11.1 the security rule that keeps comments.json private was also blocking the comment script itself, so every card sat on "Loading comments…" forever. The rule now exempts the app\'s own scripts and styles; the data files stay locked down.',
+          'If comments ever fail to load, the card now shows a "Couldn\'t load comments" notice with a Retry button after 15 seconds instead of hanging.',
+        ],
+      },
+    ],
+  },
+  {
     version: '3.13.0',
     date:    '2026-09-01',
     sections: [

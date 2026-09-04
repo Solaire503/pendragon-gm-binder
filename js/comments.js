@@ -6,6 +6,8 @@ const Comments = {
   _cache:      {},   // npcId → array of comment objects
   _loading:    {},   // npcId → boolean
   _cacheTime:  {},   // npcId → timestamp of last successful fetch (ms)
+  _error:      {},   // npcId → error string from the last failed fetch
+  LOAD_TIMEOUT_MS: 15000,
 
   // ── BUILD HTML (sync — returns placeholder if not cached yet) ──
   buildHtml(npcId) {
@@ -45,7 +47,14 @@ const Comments = {
       : '<div class="text-muted" style="font-style:italic;padding:4px 0;font-size:0.85rem;">No comments yet.</div>';
 
     const showForm = !(typeof isObserver !== 'undefined' && isObserver());
+    const errorHtml = this._error[npcId]
+      ? `<div class="text-muted" style="font-size:0.8rem;padding:6px 0;margin-bottom:8px;border-bottom:1px dotted var(--vellum-deep);">
+          Couldn't load comments (${esc(this._error[npcId])}).
+          <button class="btn btn-ghost" style="font-size:0.75rem;padding:1px 8px;margin-left:6px;" onclick="Comments.retry('${esc(npcId)}')">Retry</button>
+        </div>`
+      : '';
     return `<div id="comments-${esc(npcId)}" class="comments-section">
+      ${errorHtml}
       ${showForm ? addFormHtml : ''}
       <div class="comments-list">${listHtml}</div>
     </div>`;
@@ -163,17 +172,48 @@ const Comments = {
   async loadForNpc(npcId) {
     if (this._loading[npcId]) return;
     this._loading[npcId] = true;
-    const res = await API.get(`/api/comments/${encodeURIComponent(npcId)}`);
+    let res;
+    try {
+      // A request that never settles (stalled connection, sleeping laptop,
+      // tunnel hiccup) must not leave the section on "Loading…" forever.
+      // Race the fetch against a timeout so we always fall through to a
+      // rendered state, and always clear the in-flight flag so a later
+      // card open can retry.
+      res = await Promise.race([
+        API.get(`/api/comments/${encodeURIComponent(npcId)}`),
+        new Promise(resolve => setTimeout(
+          () => resolve({ ok: false, data: null, status: 0, error: 'Timed out' }),
+          this.LOAD_TIMEOUT_MS,
+        )),
+      ]);
+    } catch (e) {
+      res = { ok: false, data: null, status: 0, error: (e && e.message) || 'Error' };
+    } finally {
+      this._loading[npcId] = false;
+    }
     if (res.ok) {
       this._cache[npcId] = Array.isArray(res.data?.comments) ? res.data.comments : [];
       this._cacheTime[npcId] = Date.now();
-    } else if (!this._cache[npcId]) {
-      // Keep existing cache if available rather than showing nothing
-      this._cache[npcId] = [];
+      delete this._error[npcId];
+    } else {
+      // Remember the failure so the section shows a Retry instead of a
+      // misleading "No comments yet". Keep any previously loaded comments.
+      this._error[npcId] = res.error || 'Could not load comments';
+      if (!this._cache[npcId]) this._cache[npcId] = [];
+      // Leave _cacheTime unset/old so the next card open refetches.
     }
-    this._loading[npcId] = false;
     // Replace placeholder in DOM if present
     this.refresh(npcId);
+  },
+
+  // Manual retry from the error banner.
+  retry(npcId) {
+    delete this._error[npcId];
+    delete this._cache[npcId];
+    delete this._cacheTime[npcId];
+    const el = document.getElementById(`comments-${npcId}`);
+    if (el) el.innerHTML = '<div class="text-muted" style="font-style:italic;padding:8px 0;">Loading comments…</div>';
+    this.loadForNpc(npcId);
   },
 
   // ── REFRESH (replace section in DOM) ────────────────────────
