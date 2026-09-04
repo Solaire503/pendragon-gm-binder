@@ -112,7 +112,7 @@ const TabMausoleum = {
         </div>
         <div class="dead-dates">${esc(n.role||'—')} · ${born} – ${died}${lived}</div>
         ${notePrev ? `<div class="dead-notes">${esc(notePrev)}</div>` : ''}
-        ${n.glory ? `<div style="margin-top:6px;font-family:var(--font-heading);font-size:0.6rem;color:var(--gold-text);">${n.glory.toLocaleString()} glory</div>` : ''}
+        ${npcGloryText(n) ? `<div style="margin-top:6px;font-family:var(--font-heading);font-size:0.6rem;color:var(--gold-text);">${npcGloryText(n)}</div>` : ''}
       </div>`;
     }).join('');
   },
@@ -205,7 +205,7 @@ const TabMausoleum = {
     entries.forEach((e, i) => {
       bodyH += 28 + 22;                               // name + dates line
       if (e.noteLines.length) bodyH += e.noteLines.length * 20 + 6;
-      if (e.n.glory) bodyH += 18;
+      if (npcGloryText(e.n)) bodyH += 18;
       if (i < entries.length - 1) bodyH += ENTRY_GAP; // divider gap
     });
 
@@ -260,7 +260,7 @@ const TabMausoleum = {
 
       // Left accent bar
       ctx.fillStyle = accentCol;
-      const barH = 24 + 20 + (noteLines.length ? noteLines.length * 20 + 6 : 0) + (n.glory ? 18 : 0);
+      const barH = 24 + 20 + (noteLines.length ? noteLines.length * 20 + 6 : 0) + (npcGloryText(n) ? 18 : 0);
       ctx.fillRect(PAD - 10, cy - 2, 4, barH + 4);
 
       // Name
@@ -300,10 +300,10 @@ const TabMausoleum = {
       }
 
       // Glory
-      if (n.glory) {
+      if (npcGloryText(n)) {
         ctx.font = '11px sans-serif';
         ctx.fillStyle = '#8a7020';
-        ctx.fillText(`✦ ${n.glory.toLocaleString()} glory`, PAD, cy + 12);
+        ctx.fillText(`✦ ${npcGloryText(n)}`, PAD, cy + 12);
         cy += 18;
       }
 

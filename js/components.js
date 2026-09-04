@@ -425,6 +425,57 @@ function roleColour(role) {
   return '#5a5040';
 }
 
+// NPC Glory is a nonnegative integer, "N/A", or a renown category name.
+// Existing numeric scores (including zero) require no migration.
+const NPC_RENOWN = [
+  ['Non-knight', '0–999'], ['Unproven', '1,000–2,999'],
+  ['Veteran', '3,000–3,999'], ['Respected', '4,000–5,999'],
+  ['Notable', '6,000–7,999'], ['Renowned', '8,000–11,999'],
+  ['Illustrious', '12,000–15,999'], ['Extraordinary', '16,000–31,999'],
+  ['Legendary', '32,000+'],
+];
+function npcGloryMode(value) {
+  if (NPC_RENOWN.some(([name]) => name === value)) return 'renown';
+  if (!['number', 'string'].includes(typeof value) || (typeof value === 'string' && !value.trim()) || value === 'N/A') return 'na';
+  return Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? 'exact' : 'na';
+}
+function npcGloryText(npc) {
+  const mode = npcGloryMode(npc.glory);
+  if (mode === 'na') return 'N/A';
+  if (mode === 'exact') return Number(npc.glory).toLocaleString() + ' Glory';
+  const [name, range] = NPC_RENOWN.find(([name]) => name === npc.glory);
+  return `${name} · ${range} Glory`;
+}
+function npcGloryEditor(npc) {
+  const mode = npcGloryMode(npc.glory);
+  return `<select class="edit-input edit-select" id="ef-glory-mode" aria-label="Glory tracking" onchange="syncNpcGloryEditor()">
+    <option value="na" ${mode === 'na' ? 'selected' : ''}>N/A</option>
+    <option value="renown" ${mode === 'renown' ? 'selected' : ''}>Renown</option>
+    <option value="exact" ${mode === 'exact' ? 'selected' : ''}>Exact score</option>
+  </select>
+  <select class="edit-input edit-select" id="ef-glory-renown" aria-label="Renown category" ${mode !== 'renown' ? 'hidden' : ''}>
+    ${NPC_RENOWN.map(([name, range]) => `<option value="${name}" ${npc.glory === name ? 'selected' : ''}>${name} · ${range}</option>`).join('')}
+  </select>
+  <input class="edit-input" id="ef-glory" aria-label="Exact Glory score" type="number" min="0" max="9007199254740991" step="1" value="${mode === 'exact' ? Number(npc.glory) : ''}" ${mode !== 'exact' ? 'hidden' : ''}>`;
+}
+function syncNpcGloryEditor() {
+  const mode = document.getElementById('ef-glory-mode').value;
+  document.getElementById('ef-glory').hidden = mode !== 'exact';
+  document.getElementById('ef-glory-renown').hidden = mode !== 'renown';
+}
+function readNpcGloryEditor() {
+  const mode = document.getElementById('ef-glory-mode').value;
+  if (mode === 'na') return 'N/A';
+  if (mode === 'renown') return document.getElementById('ef-glory-renown').value;
+  const input = document.getElementById('ef-glory');
+  if (!input.value.trim() || !input.checkValidity() || npcGloryMode(input.value) !== 'exact') {
+    Toast.error('Enter a whole Glory score of zero or more.');
+    input.focus();
+    return null;
+  }
+  return Number(input.value);
+}
+
 // ── NPC CARD HTML (for modal) ─────────────────────────────────
 function buildNpcCardHtml(npc, opts = {}) {
   const col = npc.household ? hhColour(npc.household) : roleColour(npc.role);
@@ -433,8 +484,7 @@ function buildNpcCardHtml(npc, opts = {}) {
     ? (npc.year_died ? npc.year_died - npc.year_born : STORE.year - npc.year_born)
     : null;
   const age = calcAge !== null ? `${calcAge} yrs` : (npc.age ? `${npc.age} yrs` : '—');
-  const gloryNum = Number(npc.glory);
-  const glory = (Number.isFinite(gloryNum) && gloryNum > 0) ? gloryNum.toLocaleString() + ' gl.' : '';
+  const glory = npcGloryText(npc);
 
   // Find linked manor
   const manorKey = npc.manor ? STORE.manorKeys().find(k => npc.manor.toLowerCase().includes(k.toLowerCase())) : null;
@@ -922,7 +972,7 @@ function buildNpcEditHtml(npc, isNew = false) {
         </div>
         <div class="detail-field">
           <div class="detail-label">Glory</div>
-          <input class="edit-input" id="ef-glory" type="number" value="${npc.glory || 0}">
+          ${npcGloryEditor(npc)}
         </div>
         <div class="detail-field">
           <div class="detail-label">Year Born</div>
@@ -1383,7 +1433,7 @@ const Components = {
       '  "year_born": 465,',
       '  "household": "Household name",',
       '  "faction": "salisbury",',
-      '  "glory": 0,',
+      '  "glory": "N/A",',
       '  "eligibility": "No",',
       '  "dowry": "",',
       '  "notes": "Background, appearance, personality...",',
@@ -1394,6 +1444,7 @@ const Components = {
       '}',
       '```',
       '',
+      'Glory: a nonnegative whole number, "N/A", or one of: Non-knight, Unproven, Veteran, Respected, Notable, Renowned, Illustrious, Extraordinary, Legendary.',
       'Pronoun values: He/him · She/her · They/them',
       'Role values: King · Warlord · Player Knight · Knight · Lady · Esquire · Squire · Page · Baron · Priest · Druid · Steward · Merchant · Baby · Other',
       'Eligibility values: No · Yes · Widowed · Betrothed · Kinda?',
@@ -1490,7 +1541,7 @@ const Components = {
       name:           String(data.name).trim(),
       pronoun,
       role:           String(data.role || data.class || data.occupation || '').trim(),
-      glory:          parseInt(data.glory, 10) || 0,
+      glory:          npcGloryMode(data.glory) === 'exact' ? Number(data.glory) : (npcGloryMode(data.glory) === 'renown' ? data.glory : 'N/A'),
       year_born:      resolvedYear,
       year_died:      null,
       age:            resolvedYear ? null : ageVal,
@@ -1546,11 +1597,13 @@ const Components = {
     const npc = STORE.getNpc(id);
     if (!npc) return;
     const g = id => document.getElementById(id);
+    const glory = readNpcGloryEditor();
+    if (glory === null) return;
     const changes = {
       name:         g('ef-name')?.value?.trim() || npc.name,
       role:         g('ef-role')?.value || npc.role,
       pronoun:      g('ef-pronoun')?.value || npc.pronoun,
-      glory:        parseInt(g('ef-glory')?.value, 10) || 0,
+      glory,
       year_born:    parseInt(g('ef-year-born')?.value, 10) || null,
       age:          parseInt(g('ef-age')?.value, 10) || null,
       household:    g('ef-household')?.value || '',
@@ -2062,12 +2115,14 @@ const Components = {
     const g = id => document.getElementById(id);
     const name = g('ef-name')?.value?.trim();
     if (!name) { Toast.error('Name is required'); return; }
+    const glory = readNpcGloryEditor();
+    if (glory === null) return;
     const npc = {
       status:       'Alive',
       name,
       role:         g('ef-role')?.value || '',
       pronoun:      g('ef-pronoun')?.value || '',
-      glory:        parseInt(g('ef-glory')?.value, 10) || 0,
+      glory,
       year_born:    parseInt(g('ef-year-born')?.value, 10) || null,
       age:          parseInt(g('ef-age')?.value, 10) || null,
       household:    g('ef-household')?.value || '',
@@ -2120,7 +2175,7 @@ const Components = {
 
   openAddNpc() {
     const template = {
-      status: 'Alive', role: '', name: '', glory: 0,
+      status: 'Alive', role: '', name: '', glory: 'N/A',
       year_born: null, year_died: null, age: null,
       pronoun: 'He/him', household: '', manor: '',
       eligibility: 'No', dowry: '', notes: '', gm_notes: '',
@@ -2550,7 +2605,7 @@ const HoverCard = {
     }
 
     // Glory
-    const glory = npc.glory && npc.glory !== 0 ? npc.glory.toLocaleString() : null;
+    const glory = npcGloryText(npc);
 
     // Notes preview
     const notes = npc.notes ? esc(npc.notes.slice(0, 90)) + (npc.notes.length > 90 ? '…' : '') : null;

@@ -352,7 +352,7 @@ const TabManors = {
             <div class="family-member-item" role="button" tabindex="0" onclick="Components.openNpcCard('${n.id}')">
               <span class="family-member-role" style="background:${roleColour(n.role)};padding:2px 7px;border-radius:10px;font-family:var(--font-heading);font-size:0.48rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--vellum);">${n.role||'?'}</span>
               <span class="family-member-name">${esc(n.name)}</span>
-              ${n.glory?`<span class="family-member-age">${n.glory.toLocaleString()} gl.</span>`:''}
+              ${npcGloryText(n)?`<span class="family-member-age">${npcGloryText(n)}</span>`:''}
             </div>`).join('')}
         </div>
       </div>` : '';

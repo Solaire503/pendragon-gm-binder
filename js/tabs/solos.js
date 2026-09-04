@@ -1912,10 +1912,12 @@ const TabSolos = {
       }, 0);
       if (total > 0) {
         const npc = STORE.getNpc(card.knightId);
-        if (npc) {
+        if (npc && npcGloryMode(npc.glory) === 'exact') {
           const newGlory = (parseInt(npc.glory, 10) || 0) + total;
           STORE.updateNpc(card.knightId, { glory: newGlory });
           Toast.show(`+${total} Glory added to ${npc.name}.`, 'success');
+        } else if (npc) {
+          Toast.show(`${total} Glory recorded in the Solo Chronicle. ${npc.name}'s renown is unchanged.`, 'info');
         }
       }
     }
@@ -2149,7 +2151,7 @@ const TabSolos = {
     const tt = this._ensureTooltip();
 
     const age     = npc.year_born ? (STORE.year - npc.year_born) + ' yrs' : null;
-    const glory   = npc.glory     ? `${Number(npc.glory).toLocaleString()} Glory` : null;
+    const glory   = npcGloryText(npc);
     const hh      = npc.household || null;
     const notes   = npc.notes     ? npc.notes.replace(/\n/g,' ').slice(0, 80) + (npc.notes.length > 80 ? '…' : '') : null;
     const rels    = STORE.getRelationships ? STORE.getRelationships(npc.id) : [];

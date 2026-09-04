@@ -108,6 +108,7 @@ arcs → prep → multiplayer → app
 
 - **Main save:** `binder-save.json` — NPCs in `living` (list) and `dead` (list), NOT an `npcs` dict
 - **Chronicle:** `STORE.chronicle` is singular; values are flat arrays, not objects with `.events`
+- **NPC Glory:** `glory` is a nonnegative integer (including zero), `"N/A"`, or a category name: Non-knight, Unproven, Veteran, Respected, Notable, Renowned, Illustrious, Extraordinary, Legendary. Use `npcGloryText(npc)` for display and `npcGloryMode(npc.glory)` before arithmetic. Categories never imply an exact score. Battle awards remain numeric.
 - **NPC fields:** `pronoun` (singular), `year_born` (not birth_year)
 - **IDs:** Chronicle/solo IDs use `crypto.randomUUID()`, not `Date.now()`. Vassal IDs use `Date.now() + random suffix`
 - **Manor DV:** Total DV = `m.dvBase` (manual) + sum of `improvement.dvMod` — not a single stored field
@@ -150,7 +151,7 @@ Battle Records work is tracked in storybloq (MCP). At session start, run `storyb
 
 ## Testing
 
-No test suite. Verify changes with:
+Focused Glory regression checks: `node tests/glory.test.cjs` and `.venv/bin/python -m unittest discover -s tests` (isolated temporary saves). Verify other changes with:
 - `python3 -m py_compile server.py` — syntax check backend
 - `node -c <file.js>` — syntax check frontend files
 - `curl` against running server for API endpoints

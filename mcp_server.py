@@ -229,6 +229,9 @@ def get_prep(prep_id: str) -> dict:
         "Common fields: role (e.g. 'Knight', 'Baron', 'Peasant'), status "
         "('Alive'/'Dead'), year_born, pronoun ('He/him', 'She/her'), "
         "manor, household, faction, glory, notes. "
+        "Glory accepts a nonnegative integer, N/A, or a renown category: "
+        "Non-knight, Unproven, Veteran, Respected, Notable, Renowned, "
+        "Illustrious, Extraordinary, Legendary. "
         "Use gm_notes for the GM's private notes — that field is never shown "
         "to players; the plain notes field is visible to everyone. "
         "The NPC ID is auto-generated."
@@ -243,7 +246,7 @@ def create_npc(
     manor: str = "",
     household: str = "",
     faction: str = "",
-    glory: int = 0,
+    glory: int | str = "N/A",
     notes: str = "",
     gm_notes: str = "",
     eligibility: str = "",
@@ -264,6 +267,8 @@ def create_npc(
         "Update an NPC's fields. PARTIAL UPDATE — only the fields you pass are "
         "changed; everything else stays as-is. Use for targeted edits like "
         "'add a note', 'change status to Dead', 'set glory to 1500'. "
+        "Glory also accepts N/A or a renown category: Non-knight, Unproven, "
+        "Veteran, Respected, Notable, Renowned, Illustrious, Extraordinary, Legendary. "
         "If status changes to 'Dead', the NPC automatically moves to the dead list "
         "(and vice versa back to living). "
         "Updatable fields: name, role, household, status, year_born, year_died, "
@@ -286,7 +291,7 @@ def update_npc(
     manor: str | None = None,
     household: str | None = None,
     faction: str | None = None,
-    glory: int | None = None,
+    glory: int | str | None = None,
     notes: str | None = None,
     gm_notes: str | None = None,
     eligibility: str | None = None,

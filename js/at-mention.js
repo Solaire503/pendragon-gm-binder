@@ -232,7 +232,7 @@ const AtMention = {
     const tt = this._ensureTooltip();
 
     const age   = npc.year_born ? `${STORE.year - npc.year_born} yrs` : null;
-    const glory = npc.glory     ? `${Number(npc.glory).toLocaleString()} Glory` : null;
+    const glory = npcGloryText(npc);
     const isDead = !!(STORE.dead || []).find(d => d.id === id);
 
     // Find spouse from relationships if available

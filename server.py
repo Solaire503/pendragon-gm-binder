@@ -43,7 +43,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.13.1'  # keep in sync with js/app.js
+APP_VERSION  = '3.14.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -4948,6 +4948,15 @@ def api_mcp_binder_summary():
 
 # ── MCP Write API — NPC & Chronicle mutations ───────────────────────────────
 
+_NPC_RENOWN = ('Non-knight', 'Unproven', 'Veteran', 'Respected', 'Notable',
+               'Renowned', 'Illustrious', 'Extraordinary', 'Legendary')
+
+
+def _valid_npc_glory(value):
+    return (isinstance(value, str) and value in ('N/A', *_NPC_RENOWN)) or (
+        type(value) is int and 0 <= value <= 9007199254740991)
+
+
 _MCP_NPC_UPDATABLE = (
     'name', 'role', 'household', 'status', 'year_born', 'year_died',
     'pronoun', 'manor', 'faction', 'glory', 'notes', 'gm_notes', 'eligibility', 'dowry',
@@ -4970,6 +4979,9 @@ def api_mcp_create_npc():
     name = data.get('name', '')
     if not isinstance(name, str) or not name.strip():
         return jsonify({'error': 'name is required'}), 400
+
+    if 'glory' in data and not _valid_npc_glory(data['glory']):
+        return jsonify({'error': 'Glory must be a nonnegative whole number, N/A, or a valid renown category'}), 400
 
     save_path = get_save_path()
     if not save_path or not save_path.exists():
@@ -5002,7 +5014,7 @@ def api_mcp_create_npc():
             'pronoun': str(data.get('pronoun', ''))[:40],
             'manor': str(data.get('manor', ''))[:200],
             'faction': str(data.get('faction', ''))[:100],
-            'glory': data.get('glory', 0),
+            'glory': data.get('glory', 'N/A'),
             'notes': str(data.get('notes', ''))[:10000],
             'gm_notes': str(data.get('gm_notes', ''))[:10000],
             'eligibility': str(data.get('eligibility', ''))[:200],
@@ -5047,6 +5059,9 @@ def api_mcp_update_npc(npc_id):
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict):
         return jsonify({'error': 'Invalid payload'}), 400
+
+    if 'glory' in data and not _valid_npc_glory(data['glory']):
+        return jsonify({'error': 'Glory must be a nonnegative whole number, N/A, or a valid renown category'}), 400
 
     save_path = get_save_path()
     if not save_path or not save_path.exists():

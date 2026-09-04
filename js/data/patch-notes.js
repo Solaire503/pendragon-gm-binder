@@ -413,6 +413,18 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.14.0',
+    date: '2026-09-04',
+    sections: [{
+      heading: 'NPC Glory & Renown',
+      items: [
+        'Character Glory can now be N/A, a renown category with its Glory range, or an exact score. Existing scores are preserved, including zero.',
+        'Renown appears across character cards, roster and household lists, mentions, and memorials. New characters default to N/A.',
+        'Solo adventure Glory still adds to exact scores. For N/A and renown, awards stay in the Solo Chronicle without changing the character’s category.',
+      ],
+    }],
+  },
+  {
     version: '3.13.1',
     date:    '2026-09-04',
     sections: [

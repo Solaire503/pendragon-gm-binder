@@ -239,7 +239,7 @@ const TabRoster = {
           <span class="npc-item-name" style="${rtStyle}">${esc(n.name)}${blessedBadge}${fateBadge}${rtBadge}</span>
           <span class="npc-item-role">${esc(n.role||'')}</span>
           ${ageDisplay}
-          ${n.glory ? `<span class="npc-item-glory">${n.glory.toLocaleString()}</span>` : ''}
+          ${npcGloryText(n) ? `<span class="npc-item-glory">${npcGloryText(n)}</span>` : ''}
         </div>
         ${subLine}
       </div>
