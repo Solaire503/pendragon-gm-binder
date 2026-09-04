@@ -781,10 +781,13 @@ def login():
         prefill = username
 
         if _is_rate_limited(ip):
+            log.warning('[Login] RATE-LIMITED user=%r ip=%s', username, ip)
             error = "Too many failed attempts. Please wait a few minutes."
         else:
             user = get_user(username)
             if user and user.get('password_hash') and check_password_hash(user['password_hash'], password):
+                log.info('[Login] OK user=%r ip=%s ua=%s', user['username'], ip,
+                         request.headers.get('User-Agent', '')[:80])
                 _clear_attempts(ip)
                 nonce = _secrets_mod.token_urlsafe(16)
                 session.clear()
@@ -808,6 +811,7 @@ def login():
                 return redirect(next_url)
             else:
                 _record_attempt(ip)
+                log.warning('[Login] FAILED user=%r known=%s ip=%s', username, bool(user), ip)
                 error = "Invalid username or passphrase."
 
     year = 498  # fallback; real year lives in the save file
