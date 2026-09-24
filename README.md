@@ -30,7 +30,7 @@ This is not a general-purpose VTT or a generic TTRPG tool. It was purpose-built 
 
 **Caliburn (Discord Bot):** A companion bot ([separate repo](https://github.com/Solaire503/caliburn-bot)) uses the Binder API for NPC lookups and campaign records alongside Pendragon dice commands, feast/justice events, bug reports, and GM-triggered patch-note announcements.
 
-**MCP Bridge:** An authenticated companion server exposes campaign lookups and targeted edits to NPCs, relationships, life events, Chronicle entries, story arcs, and session prep for connected AI tools.
+**MCP Bridge:** An authenticated companion server exposes campaign lookups and targeted edits to NPCs, relationships, life events, Chronicle entries, story arcs, session prep, and the player manors for connected AI tools. The manor tools include the Book of the Manor reference tables and a preview-then-commit flow for recording a ledger year with the GM.
 
 The in-app **Features Guide & Patch Notes** provides more detail. Its content lives in [js/data/patch-notes.js](js/data/patch-notes.js).
 
@@ -117,7 +117,7 @@ node tests/glory.test.cjs
 .venv/bin/python -m unittest discover -s tests
 ```
 
-The Python tests use a temporary server copy and temporary campaign data. They do not read or modify the live save. These checks cover Glory display/input handling, solo awards, and MCP API persistence and validation; they are not a comprehensive application test suite. Other changes rely on syntax checks, targeted API checks, and browser verification. There is no CI configured in this repository.
+The Python tests use a temporary server copy and temporary campaign data. They do not read or modify the live save. These checks cover Glory display/input handling, solo awards, MCP API persistence and validation, and the MCP manor ledger maths (replayed against real recorded years); they are not a comprehensive application test suite. Other changes rely on syntax checks, targeted API checks, and browser verification. There is no CI configured in this repository.
 
 This is an active personal project, not a supported product. App versions and changes are recorded in the in-app patch notes. Issues and PRs from curious Pendragon GMs are welcome, but response times will reflect the reality that this is a hobby project maintained by one person between sessions.
 

@@ -103,6 +103,15 @@ arcs → prep → multiplayer → app
 - `@login_required` — any authenticated user
 - `@gm_required` — GM role only
 - `@bot_required` — Caliburn bot Bearer token auth
+- `@mcp_required` / `_auth_gm_or_mcp()` / `_auth_gm_or_mcp_read()` — MCP bridge Bearer token (`MCP_KEY`) or GM session
+
+## MCP Bridge
+
+- `mcp_server.py` (FastMCP, own venv `mcp-venv/`) wraps the `/api/mcp/*`, `/api/arcs`, `/api/prep` routes as Claude tools. stdio for Claude Code, `--http` on port 8766 behind Cloudflare (`pendragon-mcp.service`). Restart it after adding tools.
+- Tools cover NPCs, relationships, life events, chronicles, arcs, session prep, and (v3.15.0) the player manors: `list_manors`, `get_manor`, `get_manor_year`, `get_manor_reference`, `record_manor_year` (dry-run by default), `update_manor_year`, `delete_manor_year`, `update_manor`, `add/update_manor_damage`, `add/update_manor_improvement`.
+- `record_manor_year` is the server-side mirror of `TabManors._saveHistoryInline` — keep the two in step when the form's maths changes (`_build_year_entry` in server.py).
+- `manor-ref.json` is GENERATED from `js/data/manor-tables.js` by `node scripts/gen-manor-ref.cjs`; rerun it after editing the tables. Served via `/api/mcp/manor-reference`.
+- Steve rolls every die by hand — no tool or endpoint may roll for him.
 
 ## Data Model
 
@@ -151,7 +160,7 @@ Battle Records work is tracked in storybloq (MCP). At session start, run `storyb
 
 ## Testing
 
-Focused Glory regression checks: `node tests/glory.test.cjs` and `.venv/bin/python -m unittest discover -s tests` (isolated temporary saves). Verify other changes with:
+Focused regression checks: `node tests/glory.test.cjs` and `.venv/bin/python -m unittest discover -s tests` (Glory + MCP manor API; isolated temporary saves — `tests/test_manors.py` replays real ledger years through the server to prove the maths matches the form). Verify other changes with:
 - `python3 -m py_compile server.py` — syntax check backend
 - `node -c <file.js>` — syntax check frontend files
 - `curl` against running server for API endpoints

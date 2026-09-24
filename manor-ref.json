@@ -1,0 +1,465 @@
+{
+ "luckPeriods": [
+  {
+   "label": "Uther, Anarchy & Boy King",
+   "from": 485,
+   "to": 518
+  },
+  {
+   "label": "Conquest & Romance",
+   "from": 519,
+   "to": 539
+  },
+  {
+   "label": "Tournament",
+   "from": 540,
+   "to": 553
+  },
+  {
+   "label": "Grail",
+   "from": 554,
+   "to": 557
+  },
+  {
+   "label": "Twilight",
+   "from": 558,
+   "to": 566
+  }
+ ],
+ "luckRows": [
+  {
+   "d6": 1,
+   "results": [
+    "Calamity",
+    "Calamity",
+    "Calamity",
+    "Calamity",
+    "Calamity"
+   ]
+  },
+  {
+   "d6": 2,
+   "results": [
+    "Calamity",
+    "Calamity",
+    "No result",
+    "Calamity",
+    "Calamity"
+   ]
+  },
+  {
+   "d6": 3,
+   "results": [
+    "Calamity",
+    "No result",
+    "No result",
+    "Calamity",
+    "No result"
+   ]
+  },
+  {
+   "d6": 4,
+   "results": [
+    "No result",
+    "No result",
+    "Benefit",
+    "No result",
+    "No result"
+   ]
+  },
+  {
+   "d6": 5,
+   "results": [
+    "No result",
+    "Benefit",
+    "Benefit",
+    "Benefit",
+    "No result"
+   ]
+  },
+  {
+   "d6": 6,
+   "results": [
+    "Benefit",
+    "Benefit",
+    "Benefit",
+    "Benefit",
+    "Benefit"
+   ]
+  }
+ ],
+ "benefit": [
+  {
+   "roll": "01–03",
+   "text": "Liege Lord visits and gives gift of £2. Add to Treasury."
+  },
+  {
+   "roll": "04",
+   "text": "Good hunting this year. Add +£1 to Treasury."
+  },
+  {
+   "roll": "05",
+   "text": "Steward has an insight. Critical Success to Stewardship roll this year!"
+  },
+  {
+   "roll": "06",
+   "text": "A wandering faerie blesses the land. −2 to Fate."
+  },
+  {
+   "roll": "07",
+   "text": "A magical bull wandered through, all cows had calves. +3 to Stewardship Skill."
+  },
+  {
+   "roll": "08",
+   "text": "The peasants were all healthy this year. −3 to Fate."
+  },
+  {
+   "roll": "09",
+   "text": "Great year for cabbage and turnips! +2 to Stewardship."
+  },
+  {
+   "roll": "10",
+   "text": "Great year for pigs! +5 to Stewardship."
+  },
+  {
+   "roll": "11",
+   "text": "Great year for cows! +4 to Stewardship."
+  },
+  {
+   "roll": "12",
+   "text": "Great year for sheep! +3 to Stewardship."
+  },
+  {
+   "roll": "13",
+   "text": "Wandering merchant offered half price on tapestries. Spend up to £4, and double it in Treasure value."
+  },
+  {
+   "roll": "14–15",
+   "text": "Excellent horse trained this year. You get a bonus horse. Roll 1d6: 01–03, add a Courser; 04–05, add a Charger; 06, add a Large Charger (stats same as Andalusian)."
+  },
+  {
+   "roll": "16",
+   "text": "Your Scarecrow really worked! All vermin scared away. −2 to Fate."
+  },
+  {
+   "roll": "17–18",
+   "text": "Builders owe you a favor. £2 free Improvements next year."
+  },
+  {
+   "roll": "19",
+   "text": "Builders owe you a favor. £5 free Improvements next year."
+  },
+  {
+   "roll": "20",
+   "text": "A new spring appeared near your fields. A Permanent −1 to Fate each year!"
+  }
+ ],
+ "calamity": [
+  {
+   "roll": "01–02",
+   "text": "Liege Lord Visits. Cost: £6. Subtract now from Treasure, or this will be an Expense."
+  },
+  {
+   "roll": "03",
+   "text": "Unusual dispute among your peasants. A Justice Event is required this year. Difficulty = 30 (!), success or failure doubles the normal result."
+  },
+  {
+   "roll": "04",
+   "text": "Bandit raid! +1d6−1 to Fate."
+  },
+  {
+   "roll": "05",
+   "text": "A hired steward died. The knight (or wife) must do the Stewardship."
+  },
+  {
+   "roll": "06",
+   "text": "A wandering faerie cursed the land. +12 to Fate."
+  },
+  {
+   "roll": "07",
+   "text": "Fabulous Animal raids! +6 to Fate. Go to the Property Destruction Table. Also roll 1d6: 01, Wyvern, Wyrm, or Hippogriffs; 02, Horde of Unseelie Faeries; 03, Gigantic Boar or Lion; 04, Huge Giant; 05–06, something unseen, unknown, and unthinkable."
+  },
+  {
+   "roll": "08",
+   "text": "Pestilence struck the manor! +5 to Fate."
+  },
+  {
+   "roll": "09–15",
+   "text": "Property destroyed. Roll on Table 6: Property Destruction."
+  },
+  {
+   "roll": "16",
+   "text": "Your most expensive Investment was destroyed in a fire!"
+  },
+  {
+   "roll": "17",
+   "text": "Disease struck the animals! +6 to Fate."
+  },
+  {
+   "roll": "18–19",
+   "text": "Member of retinue dies. Randomize and roll to determine who."
+  },
+  {
+   "roll": "20",
+   "text": "Horrifying disease on the grain! +10 to Fate."
+  }
+ ],
+ "conflictPeriods": [
+  {
+   "label": "King Uther",
+   "from": 481,
+   "to": 495
+  },
+  {
+   "label": "Anarchy",
+   "from": 496,
+   "to": 509
+  },
+  {
+   "label": "The Boy King",
+   "from": 510,
+   "to": 518
+  },
+  {
+   "label": "Conquest & Romance",
+   "from": 519,
+   "to": 539
+  },
+  {
+   "label": "Tournament",
+   "from": 540,
+   "to": 553
+  },
+  {
+   "label": "Grail Quest",
+   "from": 554,
+   "to": 557
+  },
+  {
+   "label": "Twilight",
+   "from": 558,
+   "to": 566
+  }
+ ],
+ "conflictRows": [
+  {
+   "d6": 1,
+   "results": [
+    "No result",
+    "No result",
+    "No Result",
+    "No result",
+    "No result",
+    "No result",
+    "No result"
+   ]
+  },
+  {
+   "d6": 2,
+   "results": [
+    "No result",
+    "Bandits",
+    "Bandits",
+    "No result",
+    "No result",
+    "Bandits",
+    "No result"
+   ]
+  },
+  {
+   "d6": 3,
+   "results": [
+    "Bandits",
+    "Raided",
+    "Bandits",
+    "Bandits",
+    "No result",
+    "Raided",
+    "Bandits"
+   ]
+  },
+  {
+   "d6": 4,
+   "results": [
+    "Bandits",
+    "Raided",
+    "Raided",
+    "Bandits",
+    "Bandits",
+    "Raided",
+    "Raided"
+   ]
+  },
+  {
+   "d6": 5,
+   "results": [
+    "Raided",
+    "Pillaged",
+    "Pillaged",
+    "Bandits",
+    "Bandits",
+    "Pillaged",
+    "Raided"
+   ]
+  },
+  {
+   "d6": 6,
+   "results": [
+    "Pillaged",
+    "Plundered",
+    "Pillaged",
+    "Raided",
+    "Raided",
+    "Plundered",
+    "Pillaged"
+   ]
+  }
+ ],
+ "conflictFate": [
+  {
+   "type": "Bandits",
+   "dice": "+1d6−1",
+   "pd": null
+  },
+  {
+   "type": "Raided",
+   "dice": "+1d6+1",
+   "pd": 0
+  },
+  {
+   "type": "Pillaged",
+   "dice": "+1d6+6",
+   "pd": 5
+  },
+  {
+   "type": "Plundered",
+   "dice": "+2d6+6",
+   "pd": 10
+  }
+ ],
+ "destruction": [
+  {
+   "roll": "01–05",
+   "text": "No permanent damage",
+   "hate": "None"
+  },
+  {
+   "roll": "06",
+   "text": "One random Investment*",
+   "hate": "None"
+  },
+  {
+   "roll": "07",
+   "text": "1d3 random Investments*",
+   "hate": "None"
+  },
+  {
+   "roll": "08",
+   "text": "1 random Enhancement*",
+   "hate": "None"
+  },
+  {
+   "roll": "09–10",
+   "text": "Mill",
+   "hate": "+2"
+  },
+  {
+   "roll": "11–12",
+   "text": "Cluster of Commoners' Houses",
+   "hate": "+1"
+  },
+  {
+   "roll": "13",
+   "text": "A field.†",
+   "hate": "+1"
+  },
+  {
+   "roll": "14",
+   "text": "¼ of the village",
+   "hate": "+3"
+  },
+  {
+   "roll": "15",
+   "text": "The Village Church",
+   "hate": "+5"
+  },
+  {
+   "roll": "16",
+   "text": "Bakery",
+   "hate": "+3"
+  },
+  {
+   "roll": "17",
+   "text": "1d6 Clusters of Houses, 1 field†",
+   "hate": "+4"
+  },
+  {
+   "roll": "18",
+   "text": "1d3 Clusters of Houses, 1d2 fields†",
+   "hate": "+1/field"
+  },
+  {
+   "roll": "19",
+   "text": "1d6 fields†",
+   "hate": "+1/field"
+  },
+  {
+   "roll": "20",
+   "text": "Roll twice.",
+   "hate": "—"
+  },
+  {
+   "roll": "21",
+   "text": "The Manor House",
+   "hate": "None"
+  },
+  {
+   "roll": "22",
+   "text": "The Manor House & Stable (½ of your horse herd)",
+   "hate": "None"
+  },
+  {
+   "roll": "23",
+   "text": "1 Investment & 1 Enhancement",
+   "hate": "None"
+  },
+  {
+   "roll": "24–25",
+   "text": "¼ of the village, 1d3 fields†",
+   "hate": "+6"
+  },
+  {
+   "roll": "26",
+   "text": "The Manor House & Stable (½ of your horse herd). Roll again.",
+   "hate": "None"
+  },
+  {
+   "roll": "27",
+   "text": "2 Investments & 2 Enhancements",
+   "hate": "None"
+  },
+  {
+   "roll": "28",
+   "text": "Manor House, ¼ of the village, 1d3 fields†",
+   "hate": "+6"
+  },
+  {
+   "roll": "29–30",
+   "text": "Everything: hall, 2d6 Clusters of Houses, 1d3 fields†, 1d3 Investments, 1d3 Enhancements",
+   "hate": "+15"
+  }
+ ],
+ "destructionNotes": [
+  "* If the required structure does not exist, then ignore the result. For instance, if 21 was rolled, but no Manor House existed, it is a \"no result.\"",
+  "† One field represents a loss of £1 income for the knight; of course, the field can be replanted next year.",
+  "Property Destruction roll modifiers: Raided +0 · Pillaged +5 · Plundered +10 (reduced by Siege success / Knightly Presence)."
+ ],
+ "careLines": [
+  "The landlord must attempt a roll of his Concern (my commoners) passion even if he is not present for the entire year.",
+  "First, find the current modified Passion level: subtract the commoners' Hate (landlord) from the knight's Concern (my commoners).",
+  "Result greater than zero → roll an uncontested contest of Concern (my commoners).",
+  "Result of zero → automatic Failure, but roll anyway to see if there is a 20, which is a Fumble.",
+  "Result less than zero → each point below zero adds one point of Fumble chance (e.g. −3 means a Fumble on 17–20). Any other roll is a Failure.",
+  "Critical: −10 to Fate · Success: −5 to Fate · Failure: no effect · Fumble: +5 to Fate. Record in the \"Care\" column."
+ ]
+}

@@ -58,8 +58,13 @@ mcp = FastMCP(
         "Do not assert Pendragon 6e rules from memory as fact — flag uncertainty "
         "and have Steve verify against the book.\n\n"
         "All entity types support read/write: story arcs, session prep, "
-        "NPCs, and chronicles. NPC updates are partial — only send the fields "
-        "you want to change."
+        "NPCs, chronicles, and the player knights' manors (ledger years, "
+        "improvements, property damage). Updates are partial — only send the "
+        "fields you want to change.\n\n"
+        "MANORS: Steve rolls EVERY die by hand — never roll for him. To record "
+        "a manor year call get_manor_reference + get_manor, ask for his roll "
+        "results, preview with record_manor_year(dry_run=true), and commit only "
+        "after he confirms the numbers."
     ),
 )
 
@@ -814,6 +819,376 @@ def update_prep(
 )
 def delete_prep(prep_id: str) -> dict:
     return _api("DELETE", f"/api/prep/{prep_id}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PLAYER MANORS — the four PK manors and their yearly ledgers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _strip_none(**kwargs) -> dict:
+    return {k: v for k, v in kwargs.items() if v is not None}
+
+
+@mcp.tool(
+    description=(
+        "List the player knights' manors (Blackwood, Cador, Dawnwell, Westwood) with "
+        "a one-screen summary each: knight, player, faction, treasury, last recorded "
+        "ledger year, whether the current game year is recorded yet, hatred/care, "
+        "base harvest, lifestyle, DV, lord/steward/heir, active improvements, open "
+        "property damage and vassal count. Call this first for any manor conversation."
+    )
+)
+def list_manors() -> dict:
+    return _api("GET", "/api/mcp/manors")
+
+
+@mcp.tool(
+    description=(
+        "Get everything about one player manor. 'manor' accepts the manor key/name "
+        "('Blackwood'), the knight's name ('Dame Vesa Blackwood' / 'Vesa Blackwood') or "
+        "the player's username ('Zerk'). Returns stats, personnel (lord, steward with "
+        "Stewardship/Industry skill, heir), all improvements with status/income/"
+        "maintenance/DV, all property damage (open damage costs 1 L harvest per damaged "
+        "field), vassal manors (with registry holder status), the stables (living horses), "
+        "the full list of recorded years, the last 'history_years' ledger entries in full, "
+        "and 'recordYearDefaults' — exactly what the Record Year form would pre-fill for "
+        "the current year (previous treasury, improvement income/maintenance, vassal income, "
+        "carried-forward lifestyle and family, shared weather). Use history_years=0 for "
+        "a lighter payload, up to 100 for the whole ledger."
+    )
+)
+def get_manor(manor: str, history_years: int = 5) -> dict:
+    return _api("GET", f"/api/mcp/manor/{manor}", params={"history": str(history_years)})
+
+
+@mcp.tool(
+    description=(
+        "Get one recorded ledger year for a player manor in full: luck and conflict "
+        "results, steward/misfortune test results, harvest outcome and income, every "
+        "income and expense line, misfortune factors, previous and closing treasury, notes."
+    )
+)
+def get_manor_year(manor: str, year: int) -> dict:
+    return _api("GET", f"/api/mcp/manor/{manor}/year/{year}")
+
+
+@mcp.tool(
+    description=(
+        "Get the Book of the Manor reference tables the Binder uses when recording a "
+        "year: Manorial Luck by campaign period, Benefit and Calamity (d20), Conflict "
+        "Results by period with fate dice and Property Destruction modifiers, the "
+        "Property Destruction table, Care (Concern vs Hate) rules, the Harvest Results "
+        "table and multipliers, lifestyle costs, the ledger formulas, Steve's house rules, "
+        "and the allowed values for every record_manor_year field. Call this BEFORE "
+        "helping record a year, and rely on it instead of remembered 6e rules."
+    )
+)
+def get_manor_reference() -> dict:
+    return _api("GET", "/api/mcp/manor-reference")
+
+
+@mcp.tool(
+    description=(
+        "Record a ledger year for a player manor — the server-side twin of the Binder's "
+        "Record Year form. WORKFLOW: Steve rolls every die by hand and tells you the "
+        "results; never roll for him. Call get_manor_reference and get_manor first, then "
+        "call this with dry_run=true to show Steve the computed ledger (harvest, totals, "
+        "closing treasury, which defaults were applied), and only after he confirms call "
+        "it again with dry_run=false. "
+        "The server derives: harvestOutcome from stewardResult × fateResult (tiebreaker "
+        "'win'/'lose' when both are Success); harvestIncome = round(baseHarvest × "
+        "multiplier) − 1 L per damaged field; fateConflict = conflictRoll − reduction "
+        "(manor DV if siegeSuccess, plus 1 per presSword/presBattle/presValorous; Bandits "
+        "never reduced); lifestyleCost from lifestyle; vassalIncome from vassal manors; "
+        "treasury = prevTreasury + income − expenses. Defaults when omitted: year = "
+        "current game year, improvIncome/improvMaint from active improvements, lifestyle "
+        "and family carried forward from last year, prevTreasury from the latest ledger "
+        "year, fateWeather shared from any other manor already recorded this year. "
+        "Pass explicit harvestOutcome/harvestIncome/fateConflict to override the derived "
+        "figures. hatred/care update the manor's standing passions. Misc lines are lists "
+        "of {amount, note}. Fails with 409 if the year already exists unless "
+        "overwrite=true — prefer update_manor_year for edits."
+    )
+)
+def record_manor_year(
+    manor: str,
+    year: int | None = None,
+    dry_run: bool = True,
+    overwrite: bool = False,
+    stewardResult: str | None = None,
+    fateResult: str | None = None,
+    tiebreaker: str | None = None,
+    harvestOutcome: str | None = None,
+    harvestIncome: float | None = None,
+    luck: str | None = None,
+    luckSeason: str | None = None,
+    conflict: str | None = None,
+    conflictSeason: str | None = None,
+    conflictRoll: float | None = None,
+    siegeSuccess: bool | None = None,
+    presSword: bool | None = None,
+    presBattle: bool | None = None,
+    presValorous: bool | None = None,
+    fateWeather: float | None = None,
+    fateConflict: float | None = None,
+    fateCommoners: float | None = None,
+    fatePresence: float | None = None,
+    fateMisc: float | None = None,
+    stewardIndustry: float | None = None,
+    improvIncome: float | None = None,
+    discretionary: float | None = None,
+    extraManorial: float | None = None,
+    miscIncomeItems: list[dict] | None = None,
+    lifestyle: str | None = None,
+    improvMaint: float | None = None,
+    family: float | None = None,
+    improvBuild: float | None = None,
+    miscExpItems: list[dict] | None = None,
+    prevTreasury: float | None = None,
+    hatred: int | None = None,
+    care: int | None = None,
+    notes: str | None = None,
+    notes2: str | None = None,
+) -> dict:
+    body = _strip_none(
+        year=year, dry_run=dry_run, overwrite=overwrite,
+        stewardResult=stewardResult, fateResult=fateResult, tiebreaker=tiebreaker,
+        harvestOutcome=harvestOutcome, harvestIncome=harvestIncome,
+        luck=luck, luckSeason=luckSeason, conflict=conflict, conflictSeason=conflictSeason,
+        conflictRoll=conflictRoll, siegeSuccess=siegeSuccess, presSword=presSword,
+        presBattle=presBattle, presValorous=presValorous,
+        fateWeather=fateWeather, fateConflict=fateConflict, fateCommoners=fateCommoners,
+        fatePresence=fatePresence, fateMisc=fateMisc,
+        stewardIndustry=stewardIndustry, improvIncome=improvIncome, discretionary=discretionary,
+        extraManorial=extraManorial, miscIncomeItems=miscIncomeItems,
+        lifestyle=lifestyle, improvMaint=improvMaint, family=family, improvBuild=improvBuild,
+        miscExpItems=miscExpItems, prevTreasury=prevTreasury,
+        hatred=hatred, care=care, notes=notes, notes2=notes2,
+    )
+    return _api("POST", f"/api/mcp/manor/{manor}/year", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Edit an already-recorded ledger year for a player manor. PARTIAL UPDATE — only "
+        "the fields you pass change. Income/expense totals and the closing treasury are "
+        "recomputed from the lines (pass 'treasury' to set it outright instead). Nothing "
+        "else is re-derived: to change the harvest pass both harvestOutcome and "
+        "harvestIncome; to change the conflict misfortune pass fateConflict. If the "
+        "treasury changes and later years exist, the response says so — confirm with "
+        "Steve, then call again with ripple_treasury=true to carry the difference "
+        "through every later recorded year (the same offer the Binder's edit modal makes)."
+    )
+)
+def update_manor_year(
+    manor: str,
+    year: int,
+    ripple_treasury: bool = False,
+    treasury: float | None = None,
+    stewardResult: str | None = None,
+    fateResult: str | None = None,
+    tiebreaker: str | None = None,
+    harvestOutcome: str | None = None,
+    harvestIncome: float | None = None,
+    luck: str | None = None,
+    luckSeason: str | None = None,
+    conflict: str | None = None,
+    conflictSeason: str | None = None,
+    conflictRoll: float | None = None,
+    siegeSuccess: bool | None = None,
+    presSword: bool | None = None,
+    presBattle: bool | None = None,
+    presValorous: bool | None = None,
+    fateWeather: float | None = None,
+    fateConflict: float | None = None,
+    fateCommoners: float | None = None,
+    fatePresence: float | None = None,
+    fateMisc: float | None = None,
+    stewardIndustry: float | None = None,
+    improvIncome: float | None = None,
+    discretionary: float | None = None,
+    extraManorial: float | None = None,
+    miscIncomeItems: list[dict] | None = None,
+    lifestyle: str | None = None,
+    lifestyleCost: float | None = None,
+    improvMaint: float | None = None,
+    family: float | None = None,
+    improvBuild: float | None = None,
+    miscExpItems: list[dict] | None = None,
+    prevTreasury: float | None = None,
+    hatred: int | None = None,
+    care: int | None = None,
+    notes: str | None = None,
+    notes2: str | None = None,
+) -> dict:
+    body = _strip_none(
+        ripple_treasury=ripple_treasury, treasury=treasury,
+        stewardResult=stewardResult, fateResult=fateResult, tiebreaker=tiebreaker,
+        harvestOutcome=harvestOutcome, harvestIncome=harvestIncome,
+        luck=luck, luckSeason=luckSeason, conflict=conflict, conflictSeason=conflictSeason,
+        conflictRoll=conflictRoll, siegeSuccess=siegeSuccess, presSword=presSword,
+        presBattle=presBattle, presValorous=presValorous,
+        fateWeather=fateWeather, fateConflict=fateConflict, fateCommoners=fateCommoners,
+        fatePresence=fatePresence, fateMisc=fateMisc,
+        stewardIndustry=stewardIndustry, improvIncome=improvIncome, discretionary=discretionary,
+        extraManorial=extraManorial, miscIncomeItems=miscIncomeItems,
+        lifestyle=lifestyle, lifestyleCost=lifestyleCost, improvMaint=improvMaint, family=family,
+        improvBuild=improvBuild, miscExpItems=miscExpItems, prevTreasury=prevTreasury,
+        hatred=hatred, care=care, notes=notes, notes2=notes2,
+    )
+    return _api("PATCH", f"/api/mcp/manor/{manor}/year/{year}", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Delete one recorded ledger year from a player manor. Irreversible — confirm "
+        "with Steve first. Later years keep their own treasury figures, so deleting a "
+        "middle year leaves a gap in the chain (the response warns when that happens)."
+    )
+)
+def delete_manor_year(manor: str, year: int) -> dict:
+    return _api("DELETE", f"/api/mcp/manor/{manor}/year/{year}")
+
+
+@mcp.tool(
+    description=(
+        "Update a player manor's standing figures. PARTIAL UPDATE. Fields: hatred, care "
+        "(the commoners' passions), baseHarvest (L), dvBase (base defensive value), "
+        "lifestyle (Impoverished/Poor/Normal/Rich/Extravagant), steward_skill, "
+        "steward_industry, faction, notes. Knight, player, lord/steward/heir assignments "
+        "and succession are NOT editable here — Steve handles those in the Binder."
+    )
+)
+def update_manor(
+    manor: str,
+    hatred: int | None = None,
+    care: int | None = None,
+    baseHarvest: int | None = None,
+    dvBase: int | None = None,
+    lifestyle: str | None = None,
+    steward_skill: int | None = None,
+    steward_industry: int | None = None,
+    faction: str | None = None,
+    notes: str | None = None,
+) -> dict:
+    body = _strip_none(hatred=hatred, care=care, baseHarvest=baseHarvest, dvBase=dvBase,
+                       lifestyle=lifestyle, steward_skill=steward_skill,
+                       steward_industry=steward_industry, faction=faction, notes=notes)
+    if not body:
+        return {"error": "No fields to update"}
+    return _api("PATCH", f"/api/mcp/manor/{manor}", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Log property damage on a player manor (e.g. a Property Destruction result). "
+        "type: General, Field, Building or Livestock. For Field damage give numFields — "
+        "each damaged field costs 1 L of harvest every year until repaired, and the "
+        "description defaults to 'N fields damaged'. repairCost in L; yearApplied "
+        "defaults to the current game year. The entry starts as status 'damaged'."
+    )
+)
+def add_manor_damage(
+    manor: str,
+    description: str | None = None,
+    type: str = "General",
+    numFields: int | None = None,
+    repairCost: float | None = None,
+    yearApplied: int | None = None,
+    notes: str | None = None,
+) -> dict:
+    body = _strip_none(description=description, type=type, numFields=numFields,
+                       repairCost=repairCost, yearApplied=yearApplied, notes=notes)
+    return _api("POST", f"/api/mcp/manor/{manor}/damage", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Edit or repair a property-damage entry on a player manor (ids come from "
+        "get_manor's propertyDamage list). PARTIAL UPDATE. status 'repaired' marks it "
+        "fixed (yearRepaired defaults to the current game year); 'damaged' reopens it. "
+        "Also editable: type, numFields, description, repairCost, yearApplied, "
+        "yearRepaired, notes."
+    )
+)
+def update_manor_damage(
+    manor: str,
+    damage_id: str,
+    status: str | None = None,
+    type: str | None = None,
+    numFields: int | None = None,
+    description: str | None = None,
+    repairCost: float | None = None,
+    yearApplied: int | None = None,
+    yearRepaired: int | None = None,
+    notes: str | None = None,
+) -> dict:
+    body = _strip_none(status=status, type=type, numFields=numFields, description=description,
+                       repairCost=repairCost, yearApplied=yearApplied, yearRepaired=yearRepaired,
+                       notes=notes)
+    if not body:
+        return {"error": "No fields to update"}
+    return _api("PATCH", f"/api/mcp/manor/{manor}/damage/{damage_id}", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Add an improvement to a player manor. cat: 'improvement' (investment), "
+        "'fortification' or 'enhancement'. buildCost (L, one-off — remember to include it "
+        "in that year's improvBuild), maintenance (L/yr, feeds improvMaint), income "
+        "(L/yr, feeds improvIncome; use incomeNote for dice like '1d2'), dvMod (+DV for "
+        "fortifications), yearBuilt (defaults to the current game year). Starts 'active'."
+    )
+)
+def add_manor_improvement(
+    manor: str,
+    name: str,
+    cat: str = "improvement",
+    buildCost: float | None = None,
+    maintenance: float | None = None,
+    income: float | None = None,
+    incomeNote: str | None = None,
+    dvMod: int | None = None,
+    dvNote: str | None = None,
+    yearBuilt: int | None = None,
+    notes: str | None = None,
+) -> dict:
+    body = _strip_none(name=name, cat=cat, buildCost=buildCost, maintenance=maintenance,
+                       income=income, incomeNote=incomeNote, dvMod=dvMod, dvNote=dvNote,
+                       yearBuilt=yearBuilt, notes=notes)
+    return _api("POST", f"/api/mcp/manor/{manor}/improvement", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Edit an improvement on a player manor (ids from get_manor's improvements list). "
+        "PARTIAL UPDATE. status: 'active' (counts for income, maintenance and DV), "
+        "'damaged' (excluded until repaired — set back to 'active') or 'inactive'. "
+        "Also editable: name, cat, buildCost, maintenance, income, incomeNote, dvMod, "
+        "dvNote, yearBuilt, notes."
+    )
+)
+def update_manor_improvement(
+    manor: str,
+    improvement_id: str,
+    status: str | None = None,
+    name: str | None = None,
+    cat: str | None = None,
+    buildCost: float | None = None,
+    maintenance: float | None = None,
+    income: float | None = None,
+    incomeNote: str | None = None,
+    dvMod: int | None = None,
+    dvNote: str | None = None,
+    yearBuilt: int | None = None,
+    notes: str | None = None,
+) -> dict:
+    body = _strip_none(status=status, name=name, cat=cat, buildCost=buildCost,
+                       maintenance=maintenance, income=income, incomeNote=incomeNote,
+                       dvMod=dvMod, dvNote=dvNote, yearBuilt=yearBuilt, notes=notes)
+    if not body:
+        return {"error": "No fields to update"}
+    return _api("PATCH", f"/api/mcp/manor/{manor}/improvement/{improvement_id}", json=body)
 
 
 # ── Entry Point ──────────────────────────────────────────────────────────────

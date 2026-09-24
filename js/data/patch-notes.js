@@ -413,6 +413,18 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.15.0',
+    date: '2026-09-24',
+    sections: [{
+      heading: 'MCP Bridge — Player Manors',
+      items: [
+        'Connected AI tools can now read the player manors: stats, personnel, improvements, property damage, vassal manors, stables, and the full year-by-year ledger.',
+        'The AI can also help the GM record a manor year. It works from the same Book of the Manor tables and ledger maths as the Record Year form, previews the numbers first, and only writes once the GM confirms. The GM still rolls every die.',
+        'Ledger years, improvements, property damage, and manor standing figures (hatred, care, base harvest, DV) can be edited through the bridge, with the same carry-forward offer when a treasury change affects later years.',
+      ],
+    }],
+  },
+  {
     version: '3.14.0',
     date: '2026-09-04',
     sections: [{

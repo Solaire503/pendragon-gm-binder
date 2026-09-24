@@ -7,6 +7,7 @@ import copy
 import hmac
 import json
 import logging
+import math
 import os
 import shutil
 import smtplib
@@ -43,7 +44,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.14.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.15.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -5541,6 +5542,920 @@ def api_mcp_delete_chronicle(year, entry_id):
 
     log.info('[MCP] Deleted chronicle entry %s from year %s', entry_id, year_int)
     return jsonify({'ok': True, 'deleted': entry_id})
+
+
+# ── MCP Manor API — player-knight manors & the yearly ledger ─────────────────
+# Read access to the four PK manors plus a server-side mirror of the
+# js/tabs/manors.js Record Year form, so an AI working with Steve can record,
+# edit and delete ledger years. Steve rolls ALL dice by hand — nothing here
+# rolls; the server only interprets the results it is given.
+
+_HARVEST_MULT = {
+    'Incredible': 2.5, 'Excellent': 2.0, 'Good': 1.5, 'Regular': 1.0,
+    'Meager': 0.75, 'Bad': 0.5, 'Very Bad': 0.25, 'Negligible': 1 / 6,
+}
+# Steward's result (row) vs Misfortune result (col). None = tie → tiebreaker.
+_HARVEST_TABLE = {
+    'Critical': {'Critical': 'Regular',    'Success': 'Good',     'Failure': 'Excellent', 'Fumble': 'Incredible'},
+    'Success':  {'Critical': 'Bad',        'Success': None,       'Failure': 'Good',      'Fumble': 'Excellent'},
+    'Failure':  {'Critical': 'Very Bad',   'Success': 'Bad',      'Failure': 'Regular',   'Fumble': 'Good'},
+    'Fumble':   {'Critical': 'Negligible', 'Success': 'Very Bad', 'Failure': 'Bad',       'Fumble': 'Meager'},
+}
+_LIFESTYLE_COST     = {'Impoverished': 0, 'Poor': 2, 'Normal': 4, 'Rich': 8, 'Extravagant': 18}
+_CONFLICT_FATE_DICE = {'Bandits': '1d6−1', 'Raided': '1d6+1', 'Pillaged': '1d6+6', 'Plundered': '2d6+6'}
+_CONFLICT_PD_MOD    = {'Raided': 0, 'Pillaged': 5, 'Plundered': 10}
+
+_TEST_RESULTS         = ('Critical', 'Success', 'Failure', 'Fumble')
+_LUCK_VALUES          = ('No Result', 'Boon', 'Calamity')
+_CONFLICT_VALUES      = ('No Result', 'Bandits', 'Raided', 'Pillaged', 'Plundered')
+_SEASON_VALUES        = ('—', 'Spring', 'Summer', 'Fall', 'Winter')
+_TIEBREAKER_VALUES    = ('win', 'lose')
+_IMPROVEMENT_CATS     = ('improvement', 'fortification', 'enhancement')
+_IMPROVEMENT_STATUSES = ('active', 'damaged', 'inactive')
+_DAMAGE_TYPES         = ('General', 'Field', 'Building', 'Livestock')
+_DAMAGE_STATUSES      = ('damaged', 'repaired')
+_MANOR_REF_FILE       = BASE_DIR / 'manor-ref.json'
+
+
+class _ManorInputError(ValueError):
+    pass
+
+
+def _js_round(v: float) -> int:
+    """JavaScript Math.round — halves round toward +∞, unlike Python's banker's rounding."""
+    return int(math.floor(v + 0.5))
+
+
+def _round1(v: float) -> float:
+    return _js_round(v * 10) / 10
+
+
+def _num(data: dict, key: str, default=0, minimum=None):
+    """Numeric field: missing/None → default; bool/str/etc → 400."""
+    if key not in data or data[key] is None:
+        return default
+    v = data[key]
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:
+        raise _ManorInputError(f'{key} must be a number')
+    if minimum is not None and v < minimum:
+        raise _ManorInputError(f'{key} must be >= {minimum}')
+    return v
+
+
+def _int(data: dict, key: str, default=None):
+    if key not in data or data[key] is None:
+        return default
+    v = data[key]
+    if isinstance(v, bool) or not isinstance(v, int):
+        raise _ManorInputError(f'{key} must be a whole number')
+    return v
+
+
+def _choice(data: dict, key: str, allowed, default=None):
+    if key not in data or data[key] is None:
+        return default
+    v = data[key]
+    if v not in allowed:
+        raise _ManorInputError(f'{key} must be one of: ' + ', '.join(allowed))
+    return v
+
+
+def _text(data: dict, key: str, limit: int, default=''):
+    if key not in data or data[key] is None:
+        return default
+    v = data[key]
+    if not isinstance(v, str):
+        raise _ManorInputError(f'{key} must be text')
+    return v.strip()[:limit]
+
+
+def _bool(data: dict, key: str, default=False):
+    if key not in data or data[key] is None:
+        return default
+    v = data[key]
+    if not isinstance(v, bool):
+        raise _ManorInputError(f'{key} must be true or false')
+    return v
+
+
+def _misc_items(data: dict, key: str, default=None):
+    """Itemised misc income/expense: [{amount, note}, ...] (max 20 rows)."""
+    if key not in data or data[key] is None:
+        return default
+    items = data[key]
+    if not isinstance(items, list) or len(items) > 20:
+        raise _ManorInputError(f'{key} must be a list of up to 20 {{amount, note}} items')
+    out = []
+    for it in items:
+        if not isinstance(it, dict):
+            raise _ManorInputError(f'{key} items must be objects with amount and note')
+        amt = it.get('amount', 0)
+        if isinstance(amt, bool) or not isinstance(amt, (int, float)) or amt < 0:
+            raise _ManorInputError(f'{key} amounts must be non-negative numbers')
+        note = it.get('note', '')
+        if not isinstance(note, str):
+            raise _ManorInputError(f'{key} notes must be text')
+        out.append({'amount': amt, 'note': note.strip()[:200]})
+    return out
+
+
+def _sum_items(items, legacy=0):
+    if isinstance(items, list) and items:
+        return sum((it.get('amount') or 0) for it in items if isinstance(it, dict))
+    return legacy or 0
+
+
+def _find_manor(binder: dict, needle: str):
+    """Resolve a PK manor by key, manor name, knight name (with or without
+    Sir/Dame) or player username — case-insensitive. Returns (key, manor)."""
+    manors = binder.get('manors') or {}
+    if not isinstance(manors, dict):
+        return None, None
+    q = (needle or '').strip().lower()
+    if not q:
+        return None, None
+    for k, m in manors.items():
+        if k.lower() == q:
+            return k, m
+    strip_title = lambda s: re.sub(r'^(sir|dame)\s+', '', (s or '').strip().lower())
+    for k, m in manors.items():
+        if not isinstance(m, dict):
+            continue
+        cands = {(m.get('name') or '').lower(), (m.get('player') or '').lower(),
+                 (m.get('knight') or '').lower(), strip_title(m.get('knight'))}
+        if q in cands or strip_title(q) in cands:
+            return k, m
+    return None, None
+
+
+def _npc_index(binder: dict) -> dict:
+    return {n.get('id'): n for n in _all_npcs(binder) if n.get('id')}
+
+
+def _npc_ref(npcs: dict, npc_id):
+    n = npcs.get(npc_id) if npc_id else None
+    if not n:
+        return {'id': npc_id, 'name': None} if npc_id else None
+    return {'id': n.get('id'), 'name': n.get('name'), 'status': n.get('status'),
+            'role': n.get('role'), 'year_born': n.get('year_born')}
+
+
+def _titled_knight(m: dict, npcs: dict) -> str:
+    """Mirror of STORE.titledKnight — Sir/Dame prefix derived from the lord NPC's pronoun."""
+    npc = npcs.get(m.get('lord_id')) if m.get('lord_id') else None
+    if not npc:
+        return m.get('knight') or '—'
+    name = npc.get('name') or '—'
+    if name.startswith('Sir ') or name.startswith('Dame '):
+        return name
+    p = (npc.get('pronoun') or '').lower()
+    title = 'Dame' if p.startswith('she') else '' if p.startswith('they') else 'Sir'
+    return f'{title} {name}' if title else name
+
+
+def _npc_manor_for_vassal_name(binder: dict, name: str):
+    """Mirror of STORE.npcManorForVassalName — unambiguous registry match, parentheticals stripped."""
+    q = (name or '').strip().lower()
+    if not q:
+        return None
+    all_nm = binder.get('npcManors') or []
+    if isinstance(all_nm, dict):
+        all_nm = list(all_nm.values())
+    exact = [nm for nm in all_nm if (nm.get('name') or '').strip().lower() == q]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        return None
+    base = lambda nm: re.sub(r'\s*\(.*\)\s*$', '', nm.get('name') or '').strip().lower()
+    matches = [nm for nm in all_nm if base(nm) == q]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _manor_treasury(m: dict) -> float:
+    hist = [h for h in (m.get('history') or []) if isinstance(h, dict)]
+    if not hist:
+        return 0
+    return sorted(hist, key=lambda h: h.get('year') or 0)[-1].get('treasury') or 0
+
+
+def _manor_computed(m: dict) -> dict:
+    """Derived figures the Record Year form pre-fills from the manor state."""
+    active  = [i for i in (m.get('improvements') or []) if i.get('status') == 'active']
+    damaged = [d for d in (m.get('propertyDamage') or []) if d.get('status') == 'damaged']
+    field_penalty = sum((d.get('numFields') or 0) for d in damaged
+                        if d.get('type') == 'Field' and d.get('numFields'))
+    return {
+        'treasury':          _manor_treasury(m),
+        'dv':                (m.get('dvBase') or 0) + sum((i.get('dvMod') or 0) for i in active),
+        'activeImprovements': len(active),
+        'improvIncome':      sum((i.get('income') or 0) for i in active),
+        'improvMaint':       sum((i.get('maintenance') or 0) for i in active),
+        'vassalIncome':      sum((v.get('passiveIncome') if v.get('passiveIncome') is not None else 1)
+                                 for v in (m.get('vassals') or [])),
+        'openDamage':        len(damaged),
+        'damagedFields':     field_penalty,
+        'openRepairCost':    sum((d.get('repairCost') or 0) for d in damaged),
+    }
+
+
+def _shared_weather(binder: dict, key: str, year: int):
+    """Weather (3d6+5) is rolled once per year for every manor — reuse another manor's figure."""
+    for k2, m2 in (binder.get('manors') or {}).items():
+        if k2 == key or not isinstance(m2, dict):
+            continue
+        for h in (m2.get('history') or []):
+            if isinstance(h, dict) and h.get('year') == year and h.get('fateWeather'):
+                return {'value': h['fateWeather'], 'source': k2}
+    return None
+
+
+def _horses_summary(m: dict) -> dict:
+    player = m.get('player')
+    horses = _read_horses(player) if player else []
+    alive = [{
+        'id': h.get('id'), 'name': h.get('name'), 'type': h.get('type'),
+        'rider': h.get('rider'), 'year_born': h.get('year_born'),
+        'year_acquired': h.get('year_acquired'), 'favorite': bool(h.get('favorite')),
+        'notes': h.get('notes') or '',
+    } for h in horses if isinstance(h, dict) and h.get('alive') is not False]
+    return {'alive': alive, 'aliveCount': len(alive),
+            'deadCount': sum(1 for h in horses if isinstance(h, dict) and h.get('alive') is False)}
+
+
+def _manor_summary(binder: dict, key: str, m: dict, npcs: dict) -> dict:
+    c = _manor_computed(m)
+    hist = [h for h in (m.get('history') or []) if isinstance(h, dict)]
+    years = sorted(h.get('year') for h in hist if isinstance(h.get('year'), int))
+    return {
+        'key': key, 'name': m.get('name'), 'knight': _titled_knight(m, npcs),
+        'player': m.get('player'), 'faction': m.get('faction'),
+        'hatred': m.get('hatred'), 'care': m.get('care'),
+        'baseHarvest': m.get('baseHarvest'), 'lifestyle': m.get('lifestyle'),
+        'dv': c['dv'], 'treasury': c['treasury'],
+        'lastRecordedYear': years[-1] if years else None,
+        'currentYearRecorded': binder.get('year') in years,
+        'lord': _npc_ref(npcs, m.get('lord_id')),
+        'steward': _npc_ref(npcs, m.get('steward_id')),
+        'steward_skill': m.get('steward_skill'),
+        'heir': _npc_ref(npcs, m.get('heir_id')),
+        'activeImprovements': c['activeImprovements'],
+        'openDamage': c['openDamage'], 'damagedFields': c['damagedFields'],
+        'vassalCount': len(m.get('vassals') or []),
+    }
+
+
+def _manor_full(binder: dict, key: str, m: dict, npcs: dict, history_years: int) -> dict:
+    out = _manor_summary(binder, key, m, npcs)
+    c = _manor_computed(m)
+    hist = sorted((h for h in (m.get('history') or []) if isinstance(h, dict)),
+                  key=lambda h: h.get('year') or 0)
+    vassals = []
+    for v in (m.get('vassals') or []):
+        reg = _npc_manor_for_vassal_name(binder, v.get('manorName'))
+        vassals.append({
+            **v,
+            'knight': _npc_ref(npcs, v.get('knightId')),
+            'registry': {
+                'id': reg.get('id'), 'status': reg.get('status'),
+                'holder': _npc_ref(npcs, reg.get('holderId')),
+                'yearGranted': reg.get('yearGranted'),
+            } if reg else None,
+        })
+    out.update({
+        'currentYear': binder.get('year'),
+        'dvBase': m.get('dvBase') or 0,
+        'steward_industry': m.get('steward_industry'),
+        'notes': m.get('notes') or '',
+        'recordYearDefaults': {
+            'prevTreasury': c['treasury'],
+            'improvIncome': c['improvIncome'],
+            'improvMaint': c['improvMaint'],
+            'vassalIncome': c['vassalIncome'],
+            'damagedFieldPenalty': c['damagedFields'],
+            'lifestyle': (hist[-1].get('lifestyle') if hist else None) or m.get('lifestyle') or 'Normal',
+            'family': hist[-1].get('family', 0) if hist else 0,
+            'sharedWeather': _shared_weather(binder, key, binder.get('year') or 0),
+        },
+        'improvements': m.get('improvements') or [],
+        'propertyDamage': m.get('propertyDamage') or [],
+        'openRepairCost': c['openRepairCost'],
+        'vassals': vassals,
+        'vassalIncome': c['vassalIncome'],
+        'stables': _horses_summary(m),
+        'historyYears': [h.get('year') for h in hist],
+        'historyCount': len(hist),
+        'history': hist[-history_years:] if history_years > 0 else [],
+    })
+    return out
+
+
+def _harvest_outcome(steward, fate, tiebreaker):
+    row = _HARVEST_TABLE.get(steward)
+    if not row or fate not in row:
+        return None
+    result = row[fate]
+    if result is None:
+        return {'win': 'Regular', 'lose': 'Meager'}.get(tiebreaker)
+    return result
+
+
+def _build_year_entry(binder: dict, key: str, m: dict, year: int, data: dict) -> tuple:
+    """Server-side mirror of TabManors._saveHistoryInline: interpret the
+    rolls Steve reports, fill the same defaults the form pre-fills, and
+    return (entry, breakdown). Raises _ManorInputError on bad input."""
+    hist = sorted((h for h in (m.get('history') or []) if isinstance(h, dict)),
+                  key=lambda h: h.get('year') or 0)
+    prev_entry = hist[-1] if hist else None
+    before = [h for h in hist if (h.get('year') or 0) < year]
+    c = _manor_computed(m)
+    defaults = []
+
+    steward_result = _choice(data, 'stewardResult', _TEST_RESULTS)
+    fate_result    = _choice(data, 'fateResult', _TEST_RESULTS)
+    tiebreaker     = _choice(data, 'tiebreaker', _TIEBREAKER_VALUES)
+    outcome        = _choice(data, 'harvestOutcome', tuple(_HARVEST_MULT))
+    derived = _harvest_outcome(steward_result, fate_result, tiebreaker)
+    if outcome is None:
+        outcome = derived
+    if outcome is None:
+        if steward_result == 'Success' and fate_result == 'Success' and not tiebreaker:
+            raise _ManorInputError("Success vs Success is a tie — pass tiebreaker 'win' or 'lose'")
+        raise _ManorInputError('Need stewardResult + fateResult (or an explicit harvestOutcome) to work out the harvest')
+    if derived and outcome != derived:
+        defaults.append(f'harvestOutcome {outcome} overrides table result {derived}')
+
+    base_harvest = m.get('baseHarvest') or 10
+    mult = _HARVEST_MULT[outcome]
+    base_income = _js_round(base_harvest * mult)
+    field_penalty = c['damagedFields']
+    harvest_income = _num(data, 'harvestIncome', None, minimum=0)
+    if harvest_income is None:
+        harvest_income = max(0, base_income - field_penalty)
+    else:
+        defaults.append('harvestIncome supplied explicitly')
+
+    lifestyle = _choice(data, 'lifestyle', tuple(_LIFESTYLE_COST))
+    if lifestyle is None:
+        lifestyle = (prev_entry.get('lifestyle') if prev_entry else None) or m.get('lifestyle') or 'Normal'
+        defaults.append(f'lifestyle {lifestyle} carried forward')
+    lifestyle_cost = _LIFESTYLE_COST[lifestyle]
+
+    improv_income = _num(data, 'improvIncome', None, minimum=0)
+    if improv_income is None:
+        improv_income = c['improvIncome']; defaults.append(f'improvIncome {improv_income} from active improvements')
+    improv_maint = _num(data, 'improvMaint', None, minimum=0)
+    if improv_maint is None:
+        improv_maint = c['improvMaint']; defaults.append(f'improvMaint {improv_maint} from active improvements')
+    family = _num(data, 'family', None, minimum=0)
+    if family is None:
+        family = (prev_entry.get('family') if prev_entry else None) or 0
+        defaults.append(f'family {family} carried forward')
+    prev_treasury = _num(data, 'prevTreasury', None)
+    if prev_treasury is None:
+        prev_treasury = (before[-1].get('treasury') or 0) if before else c['treasury']
+        defaults.append(f'prevTreasury {prev_treasury} from the latest ledger year')
+
+    conflict        = _choice(data, 'conflict', _CONFLICT_VALUES, 'No Result')
+    conflict_roll   = _num(data, 'conflictRoll', None, minimum=0)
+    siege_success   = _bool(data, 'siegeSuccess')
+    pres_sword      = _bool(data, 'presSword')
+    pres_battle     = _bool(data, 'presBattle')
+    pres_valorous   = _bool(data, 'presValorous')
+    pres_count      = sum((pres_sword, pres_battle, pres_valorous))
+    reduction       = 0 if conflict == 'Bandits' else (c['dv'] if siege_success else 0) + pres_count
+    fate_conflict   = _num(data, 'fateConflict', None, minimum=0)
+    if conflict_roll is not None and fate_conflict is None:
+        fate_conflict = max(0, _round1(conflict_roll - reduction))
+        defaults.append(f'fateConflict {fate_conflict} = conflictRoll {conflict_roll} − {reduction} reduction')
+    elif fate_conflict is None:
+        fate_conflict = 0
+    pd_base = _CONFLICT_PD_MOD.get(conflict)
+    pd_mod  = max(0, pd_base - reduction) if pd_base is not None else None
+
+    fate_weather = _num(data, 'fateWeather', None)
+    if fate_weather is None:
+        sw = _shared_weather(binder, key, year)
+        fate_weather = sw['value'] if sw else 0
+        if sw:
+            defaults.append(f"fateWeather {fate_weather} carried from {sw['source']}")
+
+    misc_in_items  = _misc_items(data, 'miscIncomeItems', []) or []
+    misc_exp_items = _misc_items(data, 'miscExpItems', []) or []
+    steward_industry = _num(data, 'stewardIndustry', 0, minimum=0)
+    discretionary    = _num(data, 'discretionary', 0, minimum=0)
+    extra_manorial   = _num(data, 'extraManorial', 0, minimum=0)
+    improv_build     = _num(data, 'improvBuild', 0, minimum=0)
+    vassal_income    = c['vassalIncome']
+
+    total_in  = (harvest_income + steward_industry + improv_income + discretionary
+                 + extra_manorial + _sum_items(misc_in_items) + vassal_income)
+    total_out = lifestyle_cost + improv_maint + family + improv_build + _sum_items(misc_exp_items)
+    net       = _round1(total_in - total_out)
+    treasury  = _round1(prev_treasury + total_in - total_out)
+
+    entry = {
+        'year': year,
+        'luck':           _choice(data, 'luck', _LUCK_VALUES, 'No Result'),
+        'luckSeason':     _choice(data, 'luckSeason', _SEASON_VALUES, '—'),
+        'conflict':       conflict,
+        'conflictSeason': _choice(data, 'conflictSeason', _SEASON_VALUES, '—'),
+        'conflictRoll':   conflict_roll,
+        'siegeSuccess':   siege_success,
+        'presSword':      pres_sword,
+        'presBattle':     pres_battle,
+        'presValorous':   pres_valorous,
+        'harvestOutcome': outcome,
+        'harvestIncome':  harvest_income,
+        'stewardIndustry': steward_industry,
+        'improvIncome':   improv_income,
+        'discretionary':  discretionary,
+        'extraManorial':  extra_manorial,
+        'vassalIncome':   vassal_income,
+        'miscIncomeItems': misc_in_items,
+        'lifestyle':      lifestyle,
+        'lifestyleCost':  lifestyle_cost,
+        'improvMaint':    improv_maint,
+        'family':         family,
+        'improvBuild':    improv_build,
+        'miscExpItems':   misc_exp_items,
+        'prevTreasury':   prev_treasury,
+        'treasury':       treasury,
+        'fateWeather':    fate_weather,
+        'fateConflict':   fate_conflict,
+        'fateCommoners':  _num(data, 'fateCommoners', 0),
+        'fatePresence':   _num(data, 'fatePresence', 0),
+        'fateMisc':       _num(data, 'fateMisc', 0),
+        'stewardResult':  steward_result or '—',
+        'fateResult':     fate_result or '—',
+        'tiebreaker':     tiebreaker or '—',
+        'notes':          _text(data, 'notes', 5000),
+        'notes2':         _text(data, 'notes2', 5000),
+    }
+    breakdown = {
+        'harvest': {'outcome': outcome, 'multiplier': mult, 'baseHarvest': base_harvest,
+                    'beforeFieldPenalty': base_income, 'damagedFieldPenalty': field_penalty,
+                    'income': harvest_income},
+        'conflict': {'type': conflict, 'fateDice': _CONFLICT_FATE_DICE.get(conflict),
+                     'reduction': reduction, 'manorDV': c['dv'], 'presenceCount': pres_count,
+                     'propertyDamageRollModifier': pd_mod},
+        'misfortuneTotal': _round1(fate_weather + fate_conflict + entry['fateCommoners']
+                                   + entry['fatePresence'] + entry['fateMisc']),
+        'totalIn': _round1(total_in), 'totalOut': _round1(total_out), 'net': net,
+        'prevTreasury': prev_treasury, 'treasury': treasury,
+        'defaultsApplied': defaults,
+    }
+    return entry, breakdown
+
+
+def _manor_mutation(key_raw: str, mutate):
+    """Shared lock/load/find/save wrapper for manor writes.
+    mutate(binder, key, manor) returns (status, payload); payload is returned
+    as JSON, and the binder is written only on a 2xx status."""
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        key, m = _find_manor(binder, key_raw)
+        if not m:
+            return jsonify({'error': 'Manor not found'}), 404
+        try:
+            status, payload = mutate(binder, key, m)
+        except _ManorInputError as e:
+            return jsonify({'error': str(e)}), 400
+        if 200 <= status < 300 and not payload.get('dry_run'):
+            _rotate_backup(save_path)
+            _write_json(save_path, binder)
+    return jsonify(payload), status
+
+
+@app.route('/api/mcp/manors')
+def api_mcp_manors():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    npcs = _npc_index(binder)
+    manors = binder.get('manors') or {}
+    return jsonify({
+        'year': binder.get('year'),
+        'manors': [_manor_summary(binder, k, m, npcs) for k, m in manors.items() if isinstance(m, dict)],
+    })
+
+
+@app.route('/api/mcp/manor/<key>')
+def api_mcp_manor(key):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    k, m = _find_manor(binder, key)
+    if not m:
+        return jsonify({'error': 'Manor not found'}), 404
+    try:
+        history_years = max(0, min(int(request.args.get('history', '5')), 100))
+    except ValueError:
+        history_years = 5
+    return jsonify(_manor_full(binder, k, m, _npc_index(binder), history_years))
+
+
+@app.route('/api/mcp/manor/<key>/year/<int:year>')
+def api_mcp_manor_year(key, year):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    k, m = _find_manor(binder, key)
+    if not m:
+        return jsonify({'error': 'Manor not found'}), 404
+    for h in (m.get('history') or []):
+        if isinstance(h, dict) and h.get('year') == year:
+            return jsonify({'manor': k, 'entry': h})
+    return jsonify({'error': f'No ledger entry for {year}'}), 404
+
+
+@app.route('/api/mcp/manor-reference')
+def api_mcp_manor_reference():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    tables = _read_json(_MANOR_REF_FILE, default={}) or {}
+    return jsonify({
+        'bookOfTheManor': tables,
+        'harvest': {
+            'table': _HARVEST_TABLE,
+            'multipliers': _HARVEST_MULT,
+            'notes': [
+                "Row = steward's Stewardship result, column = the Misfortune (Fate) result. "
+                "Success vs Success is a tie: tiebreaker 'win' → Regular, 'lose' → Meager.",
+                'Harvest income = round(baseHarvest × multiplier) − 1 L per currently damaged field (min 0).',
+                'The Misfortune total is fateWeather + fateConflict + fateCommoners + fatePresence + fateMisc; '
+                'Steve rolls the Misfortune test against it and reports the result.',
+            ],
+        },
+        'lifestyleCost': _LIFESTYLE_COST,
+        'conflict': {
+            'fateDice': _CONFLICT_FATE_DICE,
+            'propertyDamageRollModifier': _CONFLICT_PD_MOD,
+            'notes': [
+                'fateConflict = rolled conflict dice result − reduction (min 0).',
+                "Reduction = manor DV if the siege succeeded (siegeSuccess) + 1 per knightly presence flag "
+                "(presSword, presBattle, presValorous). HOUSE RULE: each presence flag is −1, replacing the book's 1d6.",
+                'Bandits are never reduced and have no Property Destruction roll.',
+                'Property Destruction roll = 1d20 + modifier (Raided +0, Pillaged +5, Plundered +10, minus the same reduction, min 0).',
+            ],
+        },
+        'ledger': {
+            'totalIn': 'harvestIncome + stewardIndustry + improvIncome + discretionary + extraManorial + Σ miscIncomeItems + vassalIncome',
+            'totalOut': 'lifestyleCost + improvMaint + family + improvBuild + Σ miscExpItems',
+            'treasury': 'prevTreasury + totalIn − totalOut, rounded to 0.1 L',
+            'vassalIncome': 'Σ passiveIncome of vassal manors (default 1 L each) — always computed, never entered',
+        },
+        'tableNotes': [
+            'Steve rolls every die by hand. Never roll for him — ask for results and interpret them.',
+            'Weather misfortune is rolled once per year (3d6+5) and applies to every manor; the first manor recorded seeds the others.',
+            'Care roll (Concern vs Hate): Critical −10 fate, Success −5, Failure 0, Fumble +5 — record it in fateCommoners.',
+            'Family and Lifestyle carry forward from the previous year; misfortune factors never do.',
+            "Luck value 'Boon' is the ledger's name for the book's Benefit result.",
+            'Ledger years before 501 were transcribed from older spreadsheets with the closing treasury typed in by hand, '
+            'so prevTreasury + income − expenses will not always equal treasury for them. That is expected — do not "fix" old years.',
+        ],
+        'fieldValues': {
+            'stewardResult/fateResult': _TEST_RESULTS, 'tiebreaker': _TIEBREAKER_VALUES,
+            'harvestOutcome': tuple(_HARVEST_MULT), 'luck': _LUCK_VALUES, 'conflict': _CONFLICT_VALUES,
+            'season': _SEASON_VALUES, 'lifestyle': tuple(_LIFESTYLE_COST),
+            'improvement.cat': _IMPROVEMENT_CATS, 'improvement.status': _IMPROVEMENT_STATUSES,
+            'damage.type': _DAMAGE_TYPES, 'damage.status': _DAMAGE_STATUSES,
+        },
+    })
+
+
+@app.route('/api/mcp/manor/<key>/year', methods=['POST'])
+def api_mcp_manor_record_year(key):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, k, m):
+        year = _int(data, 'year', binder.get('year'))
+        if not isinstance(year, int) or not (1 <= year <= 9999):
+            raise _ManorInputError('year must be a whole number')
+        dry_run   = _bool(data, 'dry_run')
+        overwrite = _bool(data, 'overwrite')
+        hist = m.setdefault('history', [])
+        existing = next((h for h in hist if isinstance(h, dict) and h.get('year') == year), None)
+        if existing and not overwrite:
+            return 409, {'error': f'{year} is already recorded for {k} — use update_manor_year, or overwrite=true',
+                         'entry': existing}
+        # Compute against the manor state without this year's stale entry.
+        if existing:
+            m['history'] = hist = [h for h in hist if h is not existing]
+        entry, breakdown = _build_year_entry(binder, k, m, year, data)
+        hatred = _int(data, 'hatred')
+        care   = _int(data, 'care')
+        if dry_run:
+            if existing:
+                hist.append(existing)
+            return 200, {'ok': True, 'dry_run': True, 'manor': k, 'entry': entry, 'breakdown': breakdown,
+                         'wouldReplace': bool(existing), 'hatred': hatred, 'care': care}
+        if hatred is not None: m['hatred'] = hatred
+        if care is not None:   m['care'] = care
+        hist.append(entry)
+        hist.sort(key=lambda h: h.get('year') or 0)
+        log.info('[MCP] Recorded manor year %s for %s (treasury %s)%s', year, k, entry['treasury'],
+                 ' [overwrite]' if existing else '')
+        return 201, {'ok': True, 'manor': k, 'entry': entry, 'breakdown': breakdown,
+                     'replaced': bool(existing), 'hatred': m.get('hatred'), 'care': m.get('care')}
+    return _manor_mutation(key, mutate)
+
+
+_YEAR_NUMERIC = ('harvestIncome', 'stewardIndustry', 'improvIncome', 'discretionary', 'extraManorial',
+                 'lifestyleCost', 'improvMaint', 'family', 'improvBuild', 'prevTreasury',
+                 'fateWeather', 'fateConflict', 'fateCommoners', 'fatePresence', 'fateMisc', 'conflictRoll')
+
+
+@app.route('/api/mcp/manor/<key>/year/<int:year>', methods=['PATCH'])
+def api_mcp_manor_update_year(key, year):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, k, m):
+        entry = next((h for h in (m.get('history') or []) if isinstance(h, dict) and h.get('year') == year), None)
+        if not entry:
+            return 404, {'error': f'No ledger entry for {year}'}
+        changed = []
+        for fld, allowed in (('luck', _LUCK_VALUES), ('luckSeason', _SEASON_VALUES),
+                             ('conflict', _CONFLICT_VALUES), ('conflictSeason', _SEASON_VALUES),
+                             ('harvestOutcome', tuple(_HARVEST_MULT)), ('lifestyle', tuple(_LIFESTYLE_COST)),
+                             ('stewardResult', _TEST_RESULTS + ('—',)), ('fateResult', _TEST_RESULTS + ('—',)),
+                             ('tiebreaker', _TIEBREAKER_VALUES + ('—',))):
+            v = _choice(data, fld, allowed)
+            if v is not None:
+                entry[fld] = v; changed.append(fld)
+        if 'lifestyle' in changed and 'lifestyleCost' not in data:
+            entry['lifestyleCost'] = _LIFESTYLE_COST[entry['lifestyle']]
+        for fld in _YEAR_NUMERIC:
+            v = _num(data, fld, None)
+            if v is not None:
+                entry[fld] = v; changed.append(fld)
+        for fld in ('siegeSuccess', 'presSword', 'presBattle', 'presValorous'):
+            if fld in data and data[fld] is not None:
+                entry[fld] = _bool(data, fld); changed.append(fld)
+        for fld in ('notes', 'notes2'):
+            v = _text(data, fld, 5000, None)
+            if v is not None:
+                entry[fld] = v; changed.append(fld)
+        for fld in ('miscIncomeItems', 'miscExpItems'):
+            v = _misc_items(data, fld)
+            if v is not None:
+                entry[fld] = v; changed.append(fld)
+                entry.pop('miscIncome' if fld == 'miscIncomeItems' else 'miscExp', None)
+        hatred = _int(data, 'hatred'); care = _int(data, 'care')
+        if hatred is not None: m['hatred'] = hatred; changed.append('hatred')
+        if care is not None:   m['care'] = care;     changed.append('care')
+        if not changed and 'treasury' not in data:
+            raise _ManorInputError('No updatable fields provided')
+
+        # Recompute totals from the (possibly edited) lines — same as the
+        # Edit Past Year modal — unless the treasury is being set outright.
+        n = lambda f: entry.get(f) or 0
+        total_in  = (n('harvestIncome') + n('stewardIndustry') + n('improvIncome') + n('discretionary')
+                     + n('extraManorial') + _sum_items(entry.get('miscIncomeItems'), entry.get('miscIncome'))
+                     + n('vassalIncome'))
+        total_out = (n('lifestyleCost') + n('improvMaint') + n('family') + n('improvBuild')
+                     + _sum_items(entry.get('miscExpItems'), entry.get('miscExp')))
+        old_treasury = entry.get('treasury') or 0
+        explicit = _num(data, 'treasury', None)
+        entry['treasury'] = explicit if explicit is not None else _round1(n('prevTreasury') + total_in - total_out)
+        delta = _round1(entry['treasury'] - old_treasury)
+        later = sorted((h for h in m['history'] if isinstance(h, dict) and (h.get('year') or 0) > year),
+                       key=lambda h: h.get('year') or 0)
+        rippled = []
+        if delta and later and _bool(data, 'ripple_treasury'):
+            for h in later:
+                h['prevTreasury'] = _round1((h.get('prevTreasury') or 0) + delta)
+                h['treasury']     = _round1((h.get('treasury') or 0) + delta)
+                rippled.append(h['year'])
+        log.info('[MCP] Updated manor year %s for %s: %s', year, k, ', '.join(changed) or 'treasury')
+        return 200, {'ok': True, 'manor': k, 'entry': entry, 'changed': changed,
+                     'totals': {'totalIn': _round1(total_in), 'totalOut': _round1(total_out),
+                                'net': _round1(total_in - total_out)},
+                     'treasuryDelta': delta, 'rippledYears': rippled,
+                     'laterYears': [h.get('year') for h in later],
+                     'hint': (f'Treasury changed by {delta:+} L and {len(later)} later year(s) exist — '
+                              'call again with ripple_treasury=true to carry the difference forward')
+                             if delta and later and not rippled else None}
+    return _manor_mutation(key, mutate)
+
+
+@app.route('/api/mcp/manor/<key>/year/<int:year>', methods=['DELETE'])
+def api_mcp_manor_delete_year(key, year):
+    err = _auth_gm_or_mcp()
+    if err: return err
+
+    def mutate(binder, k, m):
+        hist = m.get('history') or []
+        entry = next((h for h in hist if isinstance(h, dict) and h.get('year') == year), None)
+        if not entry:
+            return 404, {'error': f'No ledger entry for {year}'}
+        m['history'] = [h for h in hist if h is not entry]
+        later = [h.get('year') for h in m['history'] if isinstance(h, dict) and (h.get('year') or 0) > year]
+        log.info('[MCP] Deleted manor year %s for %s', year, k)
+        return 200, {'ok': True, 'manor': k, 'deleted': entry, 'remainingYears': len(m['history']),
+                     'warning': f'{len(later)} later year(s) still chain from this treasury' if later else None}
+    return _manor_mutation(key, mutate)
+
+
+@app.route('/api/mcp/manor/<key>', methods=['PATCH'])
+def api_mcp_manor_update(key):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, k, m):
+        changed = []
+        for fld in ('hatred', 'care', 'baseHarvest', 'dvBase', 'steward_skill', 'steward_industry'):
+            v = _int(data, fld)
+            if v is not None:
+                if v < 0: raise _ManorInputError(f'{fld} must be >= 0')
+                m[fld] = v; changed.append(fld)
+        v = _choice(data, 'lifestyle', tuple(_LIFESTYLE_COST))
+        if v is not None:
+            m['lifestyle'] = v; changed.append('lifestyle')
+        for fld, lim in (('notes', 5000), ('faction', 100)):
+            v = _text(data, fld, lim, None)
+            if v is not None:
+                m[fld] = v; changed.append(fld)
+        if not changed:
+            raise _ManorInputError('No updatable fields provided')
+        log.info('[MCP] Updated manor %s: %s', k, ', '.join(changed))
+        return 200, {'ok': True, 'manor': k, 'changed': changed,
+                     'summary': _manor_summary(binder, k, m, _npc_index(binder))}
+    return _manor_mutation(key, mutate)
+
+
+@app.route('/api/mcp/manor/<key>/damage', methods=['POST'])
+def api_mcp_manor_add_damage(key):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, k, m):
+        dtype = _choice(data, 'type', _DAMAGE_TYPES, 'General')
+        num_fields = _int(data, 'numFields', 1) if dtype == 'Field' else None
+        if dtype == 'Field' and num_fields < 1:
+            raise _ManorInputError('numFields must be at least 1')
+        desc = _text(data, 'description', 300)
+        if not desc:
+            if dtype != 'Field':
+                raise _ManorInputError('description is required')
+            desc = f"{num_fields} field{'s' if num_fields != 1 else ''} damaged"
+        d = {
+            'id': int(time.time() * 1000),
+            'type': dtype,
+            'description': desc,
+            'repairCost': _num(data, 'repairCost', 0, minimum=0),
+            'numFields': num_fields,
+            'yearRepaired': _int(data, 'yearRepaired'),
+            'yearApplied': _int(data, 'yearApplied', binder.get('year')),
+            'status': 'damaged',
+            'notes': _text(data, 'notes', 1000),
+        }
+        m.setdefault('propertyDamage', []).append(d)
+        log.info('[MCP] Logged damage on %s: %s', k, desc)
+        return 201, {'ok': True, 'manor': k, 'damage': d, 'damagedFields': _manor_computed(m)['damagedFields']}
+    return _manor_mutation(key, mutate)
+
+
+@app.route('/api/mcp/manor/<key>/damage/<damage_id>', methods=['PATCH'])
+def api_mcp_manor_update_damage(key, damage_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, k, m):
+        d = next((x for x in (m.get('propertyDamage') or []) if str(x.get('id')) == str(damage_id)), None)
+        if not d:
+            return 404, {'error': 'Damage entry not found'}
+        changed = []
+        status = _choice(data, 'status', _DAMAGE_STATUSES)
+        if status is not None:
+            d['status'] = status; changed.append('status')
+            if status == 'repaired' and not d.get('yearRepaired') and 'yearRepaired' not in data:
+                d['yearRepaired'] = binder.get('year')
+        dtype = _choice(data, 'type', _DAMAGE_TYPES)
+        if dtype is not None:
+            d['type'] = dtype; changed.append('type')
+        nf = _int(data, 'numFields')
+        if nf is not None:
+            if nf < 1: raise _ManorInputError('numFields must be at least 1')
+            d['numFields'] = nf; changed.append('numFields')
+        if d.get('type') != 'Field':
+            d['numFields'] = None
+        elif not d.get('numFields'):
+            d['numFields'] = 1
+        for fld in ('yearRepaired', 'yearApplied'):
+            v = _int(data, fld)
+            if v is not None:
+                d[fld] = v; changed.append(fld)
+        rc = _num(data, 'repairCost', None, minimum=0)
+        if rc is not None:
+            d['repairCost'] = rc; changed.append('repairCost')
+        for fld, lim in (('description', 300), ('notes', 1000)):
+            v = _text(data, fld, lim, None)
+            if v is not None:
+                d[fld] = v; changed.append(fld)
+        if not changed:
+            raise _ManorInputError('No updatable fields provided')
+        log.info('[MCP] Updated damage %s on %s: %s', damage_id, k, ', '.join(changed))
+        return 200, {'ok': True, 'manor': k, 'damage': d, 'changed': changed,
+                     'damagedFields': _manor_computed(m)['damagedFields']}
+    return _manor_mutation(key, mutate)
+
+
+def _apply_improvement_fields(i: dict, data: dict, creating: bool) -> list:
+    changed = []
+    name = _text(data, 'name', 200, None)
+    if name is not None:
+        if not name: raise _ManorInputError('name is required')
+        i['name'] = name; changed.append('name')
+    elif creating:
+        raise _ManorInputError('name is required')
+    cat = _choice(data, 'cat', _IMPROVEMENT_CATS, 'improvement' if creating else None)
+    if cat is not None:
+        i['cat'] = cat; changed.append('cat')
+    status = _choice(data, 'status', _IMPROVEMENT_STATUSES, 'active' if creating else None)
+    if status is not None:
+        i['status'] = status; changed.append('status')
+    yb = _int(data, 'yearBuilt')
+    if yb is not None:
+        i['yearBuilt'] = yb; changed.append('yearBuilt')
+        if creating: i['yearIncome'] = yb
+    for fld in ('buildCost', 'maintenance', 'income'):
+        v = _num(data, fld, 0 if creating else None, minimum=0)
+        if v is not None:
+            i[fld] = v; changed.append(fld)
+    dv = _int(data, 'dvMod', 0 if creating else None)
+    if dv is not None:
+        i['dvMod'] = dv; changed.append('dvMod')
+    for fld, lim in (('incomeNote', 200), ('dvNote', 200), ('notes', 1000)):
+        v = _text(data, fld, lim, '' if creating else None)
+        if v is not None:
+            i[fld] = v; changed.append(fld)
+    return changed
+
+
+@app.route('/api/mcp/manor/<key>/improvement', methods=['POST'])
+def api_mcp_manor_add_improvement(key):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, k, m):
+        year = _int(data, 'yearBuilt', binder.get('year'))
+        i = {'id': int(time.time() * 1000), 'yearBuilt': year, 'yearIncome': year}
+        _apply_improvement_fields(i, data, creating=True)
+        m.setdefault('improvements', []).append(i)
+        log.info('[MCP] Added improvement on %s: %s', k, i['name'])
+        return 201, {'ok': True, 'manor': k, 'improvement': i,
+                     'hint': f"Remember to include the {i['buildCost']} L build cost in this year's improvBuild"
+                             if i.get('buildCost') else None}
+    return _manor_mutation(key, mutate)
+
+
+@app.route('/api/mcp/manor/<key>/improvement/<impr_id>', methods=['PATCH'])
+def api_mcp_manor_update_improvement(key, impr_id):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, k, m):
+        i = next((x for x in (m.get('improvements') or []) if str(x.get('id')) == str(impr_id)), None)
+        if not i:
+            return 404, {'error': 'Improvement not found'}
+        changed = _apply_improvement_fields(i, data, creating=False)
+        if not changed:
+            raise _ManorInputError('No updatable fields provided')
+        log.info('[MCP] Updated improvement %s on %s: %s', impr_id, k, ', '.join(changed))
+        return 200, {'ok': True, 'manor': k, 'improvement': i, 'changed': changed}
+    return _manor_mutation(key, mutate)
 
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
