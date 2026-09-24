@@ -61,10 +61,17 @@ mcp = FastMCP(
         "NPCs, chronicles, and the player knights' manors (ledger years, "
         "improvements, property damage). Updates are partial — only send the "
         "fields you want to change.\n\n"
-        "MANORS: Steve rolls EVERY die by hand — never roll for him. To record "
-        "a manor year call get_manor_reference + get_manor, ask for his roll "
+        "MANORS: Steve rolls EVERY manor die by hand — never roll for him there. To "
+        "record a manor year call get_manor_reference + get_manor, ask for his roll "
         "results, preview with record_manor_year(dry_run=true), and commit only "
-        "after he confirms the numbers."
+        "after he confirms the numbers.\n\n"
+        "WINTER & SOLOS: roll_survival, roll_childbirth, roll_marriage and "
+        "roll_solo_event roll on the Binder's own tables but SAVE NOTHING. Steve, as "
+        "GM, may accept, reroll or overrule any result. Only the confirm tools "
+        "(confirm_death, record_birth, resolve_birth_tragedy, confirm_marriage, "
+        "marriage_wait, add_life_event) write, and only after he says so. For "
+        "solo events YOU write the flavor text in the house voice (see flavorGuide), "
+        "a different angle for each knight."
     ),
 )
 
@@ -280,7 +287,9 @@ def create_npc(
         "pronoun, manor, faction, glory, notes, gm_notes, eligibility, dowry, "
         "passions, skills, stats, con, blessed, blessed_note, barren, fate_touched, "
         "out_of_story, out_of_story_note, round_table, statblock_template, "
-        "and training fields (page_placed, page_court, training_path, etc). "
+        "training fields (page_placed, page_court, training_path, etc), "
+        "personalityNote (feeds solo-event flavor text), courtesy, "
+        "marriage_wait_years and marriage_orientation (hetero/homo/bi). "
         "PRIVACY: notes is visible to all players; gm_notes is the GM's private "
         "notes field and is never shown to players — put secrets there."
     )
@@ -320,6 +329,10 @@ def update_npc(
     training_where: str | None = None,
     training_npc_id: str | None = None,
     came_of_age: bool | None = None,
+    personalityNote: str | None = None,
+    courtesy: int | None = None,
+    marriage_wait_years: int | None = None,
+    marriage_orientation: str | None = None,
 ) -> dict:
     body = {}
     for key, val in {
@@ -335,6 +348,8 @@ def update_npc(
         "page_placed": page_placed, "page_court": page_court,
         "training_path": training_path, "training_where": training_where,
         "training_npc_id": training_npc_id, "came_of_age": came_of_age,
+        "personalityNote": personalityNote, "courtesy": courtesy,
+        "marriage_wait_years": marriage_wait_years, "marriage_orientation": marriage_orientation,
     }.items():
         if val is not None:
             body[key] = val
@@ -464,7 +479,12 @@ def get_npc_events(npc_id: str) -> dict:
         "- season: 'spring', 'summer', 'autumn', or 'winter'\n"
         "- mechDesc: mechanical description (what happened rules-wise)\n"
         "- flavorText: narrative prose (AI-generated or hand-written)\n"
-        "- userNotes: GM/player notes about the event"
+        "- userNotes: GM/player notes about the event\n"
+        "- glory: Glory to award for this event (added to the character's exact "
+        "Glory score like the Solos tab's Resolve; ignored for renown/N/A characters)\n\n"
+        "Adding an event with a year also pens a mirrored line in that year's Chronicle. "
+        "This is the RESOLVE step for roll_solo_event — pass the card's year, season, "
+        "title and mechDesc plus flavor text you wrote in the house voice."
     )
 )
 def add_life_event(
@@ -475,8 +495,11 @@ def add_life_event(
     mechDesc: str = "",
     flavorText: str = "",
     userNotes: str = "",
+    glory: int | None = None,
 ) -> dict:
     body = {"title": title}
+    if glory:
+        body["glory"] = glory
     if year:
         body["year"] = year
     if season:
@@ -1189,6 +1212,184 @@ def update_manor_improvement(
     if not body:
         return {"error": "No fields to update"}
     return _api("PATCH", f"/api/mcp/manor/{manor}/improvement/{improvement_id}", json=body)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WINTER PHASE & SOLO EVENTS — rolls are advisory, confirms write
+# ═══════════════════════════════════════════════════════════════════════════════
+# The roll tools run the Binder's own tables (js/tabs/winter.js, js/tabs/solos.js)
+# headlessly and save NOTHING. Steve, as GM, may accept, reroll or overrule any
+# result; only the confirm tools lock something in, and they take explicit values.
+
+_CONFIRM_RULE = (
+    " GM CONFIRMATION RULE: this only returns roll results and saves nothing. Show Steve "
+    "the results; he may accept, reroll, or overrule them. Lock a result in only with the "
+    "matching confirm tool after he says so."
+)
+
+
+@mcp.tool(
+    description=(
+        "Winter Phase overview: everyone on the table this year. Returns four lists — "
+        "survival (every living NPC with their survival category and whether they are "
+        "auto-exempt: player knights, pages, squires, fate-touched, out-of-story, blessed "
+        "under 21), births (women 18+ with spouse status, CON, automatic modifiers and "
+        "effective CON), marriage maidens (unmarried women 17+ with their age modifier) and "
+        "marriage knights (unmarried knights/nobles 21+ with Courtesy target and years "
+        "waited), plus soloKnights (who can roll yearly/solo events, wed or unwed). "
+        "Call this first when helping run winter."
+    )
+)
+def winter_overview() -> dict:
+    return _api("GET", "/api/mcp/winter/overview")
+
+
+@mcp.tool(
+    description=(
+        "Roll winter survival (death) checks on the Binder's survival table. Rolls for "
+        "everyone eligible, or narrow with npc_ids or a household name. Auto-exempt NPCs "
+        "are skipped unless include_exempt=true. Each result has category, the d20 rolls "
+        "and 'Death' or 'Safe'; 'deaths' lists the ids that came up dead." + _CONFIRM_RULE +
+        " Confirm a death with confirm_death."
+    )
+)
+def roll_survival(npc_ids: list[str] | None = None, household: str | None = None, include_exempt: bool = False) -> dict:
+    return _api("POST", "/api/mcp/winter/survival", json=_strip_none(npc_ids=npc_ids, household=household, include_exempt=include_exempt))
+
+
+@mcp.tool(
+    description=(
+        "CONFIRM a death (winter survival or any other cause) — WRITES. Moves the NPC to the "
+        "dead list, sets status Dead and year_died (defaults to the current year), and appends "
+        "'† cause' to their notes exactly like the Binder's Confirm Death button (cause defaults "
+        "to 'Winter survival roll'). Only call after Steve has explicitly confirmed this death."
+    )
+)
+def confirm_death(npc_id: str, year: int | None = None, cause: str | None = None) -> dict:
+    return _api("POST", "/api/mcp/winter/death", json=_strip_none(npc_id=npc_id, year=year, cause=cause))
+
+
+@mcp.tool(
+    description=(
+        "Roll childbirth on the Binder's conception table. With no mother_ids it rolls every "
+        "woman with a living spouse (the tab's Roll All); pass mother_ids to roll specific "
+        "women (widows, unmarried, or a bastard roll with bastard=true). modifier is the GM's "
+        "extra CON modifier; con overrides her CON for this roll only. Automatic modifiers "
+        "(−10 if she gave birth last year, −1 per year over 35) are applied and reported. "
+        "Results: 'success' (one child, sex given), 'critical' (twins/triplets or a blessed "
+        "child), 'failure', or 'fumble' with a tragedy type (child_dies, mother_dies, both_die, "
+        "difficult_birth, barren, no_birth)." + _CONFIRM_RULE +
+        " Then record_birth for children, or resolve_birth_tragedy for a fumble."
+    )
+)
+def roll_childbirth(mother_ids: list[str] | None = None, bastard: bool = False, modifier: int = 0, con: int | None = None) -> dict:
+    return _api("POST", "/api/mcp/winter/childbirth", json=_strip_none(npc_ids=mother_ids, bastard=bastard, modifier=modifier, con=con))
+
+
+@mcp.tool(
+    description=(
+        "CONFIRM a birth — WRITES. Creates each child as a living NPC (role 'Baby', the "
+        "mother's household, year_born = year or the current year) with a Child relationship "
+        "to the mother and to the father (Bastard relationship when bastard=true). father_id "
+        "defaults to the mother's living spouse for a legitimate birth and to nobody for a "
+        "bastard unless given. children: list of {name, pronoun ('he/him'/'she/her'), blessed, "
+        "blessing} — ask Steve for names first. Only call after he confirms."
+    )
+)
+def record_birth(mother_id: str, children: list[dict], father_id: str | None = None, bastard: bool = False, year: int | None = None) -> dict:
+    return _api("POST", "/api/mcp/winter/birth", json=_strip_none(mother_id=mother_id, children=children, father_id=father_id, bastard=bastard, year=year))
+
+
+@mcp.tool(
+    description=(
+        "CONFIRM a childbirth fumble — WRITES, mirroring the Binder's tragedy modal. tragedy: "
+        "'child_dies' (records a stillborn child in the Mausoleum unless record_child=false), "
+        "'mother_dies' (kills the mother; cause defaults to 'Died in childbirth'), 'both_die', "
+        "'difficult_birth' (mother's CON −1 permanently), 'barren' (marks her barren), or "
+        "'no_birth' (nothing to record). child_name/child_sex name the lost child. Only call "
+        "after Steve confirms."
+    )
+)
+def resolve_birth_tragedy(mother_id: str, tragedy: str, record_child: bool = True, child_name: str | None = None,
+                          child_sex: str | None = None, cause: str | None = None, year: int | None = None) -> dict:
+    return _api("POST", "/api/mcp/winter/birth-tragedy", json=_strip_none(
+        mother_id=mother_id, tragedy=tragedy, record_child=record_child, child_name=child_name,
+        child_sex=child_sex, cause=cause, year=year))
+
+
+@mcp.tool(
+    description=(
+        "Roll for marriage on the Binder's marriage tables. Maidens (unmarried women 17+, "
+        "not knights): d20 + age modifier, 20+ passes and auto-rolls the spouse rank. Knights/"
+        "nobles (unmarried, 21+): d20 under Courtesy + years waited passes; then Steve chooses "
+        "to roll rank now (roll_rank=true, or roll_marriage_rank later) or wait a year "
+        "(marriage_wait). kind is detected automatically; custom_mod is a GM bonus. Also "
+        "returns up to 40 eligible spouse candidates (orientation-aware)." + _CONFIRM_RULE +
+        " Lock in with confirm_marriage."
+    )
+)
+def roll_marriage(npc_id: str, kind: str | None = None, custom_mod: int = 0, roll_rank: bool = False) -> dict:
+    return _api("POST", "/api/mcp/winter/marriage", json=_strip_none(npc_id=npc_id, kind=kind, custom_mod=custom_mod, roll_rank=roll_rank))
+
+
+@mcp.tool(
+    description=(
+        "Roll a knight's spouse rank (d20 + years waited) on the spouse rank table, for a "
+        "knight who passed the Courtesy roll and chose to marry this year. Returns rank, dowry, "
+        "Glory and notes for the match, plus candidates." + _CONFIRM_RULE
+    )
+)
+def roll_marriage_rank(npc_id: str) -> dict:
+    return _api("POST", "/api/mcp/winter/marriage-rank", json={"npc_id": npc_id})
+
+
+@mcp.tool(
+    description=(
+        "A knight who passed Courtesy chooses to WAIT for a better match — WRITES: adds one "
+        "to their marriage_wait_years (a bonus to next year's rank roll). Only after Steve decides."
+    )
+)
+def marriage_wait(npc_id: str) -> dict:
+    return _api("POST", "/api/mcp/winter/marriage-wait", json={"npc_id": npc_id})
+
+
+@mcp.tool(
+    description=(
+        "CONFIRM a marriage — WRITES. Creates a Spouse relationship noted 'Married YEAR AD' "
+        "and resets the NPC's marriage wait counter, exactly like the Binder's Confirm "
+        "Marriage. Give spouse_id for an existing NPC, or new_spouse={name, pronoun, role, "
+        "year_born, household, notes} to create one (household defaults to the NPC's). With "
+        "neither, the marriage is recorded as unconfirmed (wait counter reset only). Refuses if "
+        "either party already has a living spouse. Dowry and Glory are NOT applied "
+        "automatically — record them with update_npc / add_life_event if Steve wants. Only call "
+        "after he confirms."
+    )
+)
+def confirm_marriage(npc_id: str, spouse_id: str | None = None, new_spouse: dict | None = None, year: int | None = None) -> dict:
+    return _api("POST", "/api/mcp/winter/marry", json=_strip_none(npc_id=npc_id, spouse_id=spouse_id, new_spouse=new_spouse, year=year))
+
+
+@mcp.tool(
+    description=(
+        "Roll a yearly, solo-adventure or kin event for one knight on the Binder's own event "
+        "tables (the Solos tab). mode: 'yearly' (d20 yearly events: fortune, friends, relations, "
+        "saga, enemies), 'solo' (d6 adventure chain: vassal duty, liege court, adventure, love/"
+        "questing), or 'kin' (family events by household size). tier 'I' (full tables) or 'II' "
+        "(simple). wed is detected from a living Spouse relationship; override with 'wed'/'unwed'. "
+        "fixed_roll uses a die Steve rolled by hand for the FIRST die instead of rolling it. "
+        "Returns cards with eventType, title, mechDesc, flags (e.g. childbirth-roll, "
+        "bastard-possible — follow up with roll_childbirth), chainResults, and gloryInText (the "
+        "Glory the Binder's Resolve button would add). Also returns flavorGuide: the house "
+        "style for narrative flavor text. RESOLVE WORKFLOW: show Steve the result; once he "
+        "accepts it, YOU write the flavor text (2–3 sentences in the flavorGuide voice, a "
+        "different angle for each knight) and call add_life_event with the year, season, title, "
+        "mechDesc, your flavorText, and glory=gloryInText if he wants it applied." + _CONFIRM_RULE
+    )
+)
+def roll_solo_event(npc_id: str, mode: str = "yearly", tier: str = "I", wed: str | None = None, season: str = "summer",
+                    year: int | None = None, kin_size: str = "normal", fixed_roll: int | None = None) -> dict:
+    return _api("POST", "/api/mcp/solo/roll", json=_strip_none(
+        npc_id=npc_id, mode=mode, tier=tier, wed=wed, season=season, year=year, kin_size=kin_size, fixed_roll=fixed_roll))
 
 
 # ── Entry Point ──────────────────────────────────────────────────────────────

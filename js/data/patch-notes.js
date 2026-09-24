@@ -413,6 +413,18 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.16.0',
+    date: '2026-09-24',
+    sections: [{
+      heading: 'MCP Bridge — Winter Phase & Solo Events',
+      items: [
+        'Connected AI tools can now run the Winter Phase with the GM: survival, childbirth and marriage rolls use the Binder’s own tables, and nothing is saved until the GM confirms each result. Deaths, births, birth tragedies and marriages are recorded exactly as the Winter tab records them.',
+        'Yearly, solo-adventure and kin events can be rolled through the bridge on the same tables as the Solos tab. The AI writes the narrative flavor in the house chronicler voice and records the event on the character card, mirrored into the Chronicle, with Glory applied for exact-score characters.',
+        'Life events edited or deleted through the bridge now keep their Chronicle line in sync, and character lookups through the bridge return the full card (skills, passions, stats, CON, life events).',
+      ],
+    }],
+  },
+  {
     version: '3.15.0',
     date: '2026-09-24',
     sections: [{

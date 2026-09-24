@@ -11,6 +11,7 @@ import math
 import os
 import shutil
 import smtplib
+import subprocess
 import secrets as _secrets_mod
 import ssl
 import sys
@@ -44,7 +45,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.15.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.16.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -4206,9 +4207,12 @@ _REL_CLOSENESS = {
     'Aunt/Uncle': 9, 'Niece/Nephew': 10, 'Vassal': 11,
 }
 
-def _safe_npc(npc: dict, include_gm: bool = False) -> dict:
+def _safe_npc(npc: dict, include_gm: bool = False, full: bool = False) -> dict:
     """Bot/MCP-facing NPC view. The Discord bot serves players, so gm_notes
-    only appears when include_gm=True (the MCP endpoints, which are GM-tier)."""
+    only appears when include_gm=True (the MCP endpoints, which are GM-tier).
+    full=True (MCP get_npc) returns every stored field except tree layout."""
+    if full and include_gm:
+        return {k: v for k, v in npc.items() if k not in ('treeX', 'treeY')}
     out = {k: npc.get(k) for k in _BOT_NPC_FIELDS}
     if include_gm:
         out['gm_notes'] = npc.get('gm_notes')
@@ -4902,7 +4906,7 @@ def api_mcp_npc(name_or_id):
     needle = name_or_id.lower()
     for npc in all_npcs:
         if (npc.get('id') or '').lower() == needle or (npc.get('name') or '').lower() == needle:
-            result = _safe_npc(npc, include_gm=True)
+            result = _safe_npc(npc, include_gm=True, full=True)
             result['relationships'] = _npc_relationships(npc.get('id', ''), all_npcs, all_rels)
             return jsonify(result)
     return jsonify({'error': 'NPC not found'}), 404
@@ -4966,6 +4970,7 @@ _MCP_NPC_UPDATABLE = (
     'round_table', 'statblock_template',
     'page_placed', 'page_court', 'page_type',
     'training_path', 'training_where', 'training_npc_id', 'came_of_age',
+    'personalityNote', 'courtesy', 'marriage_wait_years', 'marriage_orientation',
 )
 
 
@@ -5100,6 +5105,7 @@ def api_mcp_update_npc(npc_id):
             'out_of_story_note': 500, 'statblock_template': 100,
             'page_court': 200, 'page_type': 50, 'training_path': 50,
             'training_where': 200, 'training_npc_id': 50,
+            'personalityNote': 2000, 'marriage_orientation': 20,
         }
         changed = []
         for key in _MCP_NPC_UPDATABLE:
@@ -5317,6 +5323,15 @@ def api_mcp_add_event(npc_id):
             npc['soloEvents'] = []
         npc['soloEvents'].insert(0, event)
 
+        # Optional Glory award — mirrors the Solos tab's Resolve button, which
+        # only adds to exact numeric Glory (renown categories / N/A are untouched).
+        glory_award = data.get('glory')
+        glory_applied = None
+        if isinstance(glory_award, int) and not isinstance(glory_award, bool) and glory_award > 0:
+            if type(npc.get('glory')) is int:
+                npc['glory'] = npc['glory'] + glory_award
+                glory_applied = npc['glory']
+
         if event.get('year'):
             year_key = str(event['year'])
             chronicle = binder.setdefault('chronicle', {})
@@ -5335,7 +5350,40 @@ def api_mcp_add_event(npc_id):
         _write_json(save_path, binder)
 
     log.info('[MCP] Added life event to %s: %s', npc_id, title)
-    return jsonify({'ok': True, 'event': event}), 201
+    return jsonify({'ok': True, 'event': event, 'gloryApplied': glory_applied,
+                    'gloryNote': None if glory_applied is not None or not glory_award else
+                    'Glory not applied: this character uses a renown category or N/A, so the award stays recorded in the event only'}), 201
+
+
+def _sync_event_mirror(binder: dict, npc: dict, ev: dict) -> None:
+    """Mirror of STORE._syncSoloEventMirror — keep the auto chronicle line
+    matching its life event (text + year) after an edit."""
+    chronicle = binder.get('chronicle')
+    if not isinstance(chronicle, dict):
+        return
+    for yr in list(chronicle.keys()):
+        lst = chronicle.get(yr)
+        if not isinstance(lst, list):
+            continue
+        for i in range(len(lst) - 1, -1, -1):
+            entry = lst[i]
+            if not isinstance(entry, dict) or not entry.get('auto') or entry.get('sourceEventId') != ev.get('id'):
+                continue
+            entry['text'] = f"{npc.get('name', 'Unknown')} — {ev.get('title', '')}"
+            target = str(ev.get('year') or yr)
+            if target != yr:
+                lst.pop(i)
+                chronicle.setdefault(target, []).append(entry)
+
+
+def _remove_event_mirror(binder: dict, event_id: str) -> None:
+    """Mirror of STORE.deleteSoloEvent's chronicle cleanup."""
+    chronicle = binder.get('chronicle')
+    if not isinstance(chronicle, dict):
+        return
+    for yr, lst in chronicle.items():
+        if isinstance(lst, list):
+            chronicle[yr] = [e for e in lst if not (isinstance(e, dict) and e.get('auto') and e.get('sourceEventId') == event_id)]
 
 
 @app.route('/api/mcp/npc/<npc_id>/events/<event_id>', methods=['PATCH'])
@@ -5382,6 +5430,7 @@ def api_mcp_update_event(npc_id, event_id):
         if not changed:
             return jsonify({'error': 'No updatable fields provided'}), 400
 
+        _sync_event_mirror(binder, npc, ev)
         _rotate_backup(save_path)
         _write_json(save_path, binder)
 
@@ -5417,6 +5466,7 @@ def api_mcp_delete_event(npc_id, event_id):
         if len(npc['soloEvents']) == before:
             return jsonify({'error': 'Event not found'}), 404
 
+        _remove_event_mirror(binder, event_id)
         _rotate_backup(save_path)
         _write_json(save_path, binder)
 
@@ -6456,6 +6506,436 @@ def api_mcp_manor_update_improvement(key, impr_id):
         log.info('[MCP] Updated improvement %s on %s: %s', impr_id, k, ', '.join(changed))
         return 200, {'ok': True, 'manor': k, 'improvement': i, 'changed': changed}
     return _manor_mutation(key, mutate)
+
+
+# ── MCP Winter Phase & Solo API ──────────────────────────────────────────────
+# Survival, childbirth, marriage and yearly/solo/kin event rolls run through
+# scripts/roll-bridge.cjs, which evaluates the Binder's OWN js/tabs/winter.js
+# and js/tabs/solos.js headlessly — the AI rolls on exactly the tables the
+# tabs use. Roll endpoints never write. GM CONFIRMATION RULE: Steve may
+# accept, reroll or overrule any roll; only the confirm endpoints below lock a
+# result in, and they take explicit values rather than trusting a prior roll.
+
+_BRIDGE_SCRIPT = BASE_DIR / 'scripts' / 'roll-bridge.cjs'
+
+
+def _node_binary() -> str | None:
+    # pendragon.service runs with PATH limited to the venv, so look in the usual places too.
+    found = shutil.which('node')
+    if found:
+        return found
+    for cand in ('/usr/local/bin/node', '/usr/bin/node', '/snap/bin/node', '/opt/homebrew/bin/node'):
+        if os.path.exists(cand):
+            return cand
+    return None
+_ROLL_NOTE = ('Nothing has been saved. Rolls are advisory: Steve, as GM, can accept, reroll or overrule any '
+              'result (he sometimes tips the scales). Lock a result in ONLY with the matching confirm tool '
+              'after he says so.')
+
+
+def _bridge(op: str, binder: dict, args: dict):
+    payload = {'op': op, 'args': args,
+               'binder': {k: binder.get(k) for k in ('year', 'living', 'dead', 'relationships')}}
+    node = _node_binary()
+    if not node:
+        return None, 'node is not installed on the server — the roll bridge needs it'
+    try:
+        proc = subprocess.run([node, str(_BRIDGE_SCRIPT)], input=json.dumps(payload),
+                              capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
+        return None, 'node is not installed on the server — the roll bridge needs it'
+    except subprocess.TimeoutExpired:
+        return None, 'roll bridge timed out'
+    try:
+        out = json.loads(proc.stdout or '{}')
+    except ValueError:
+        return None, 'roll bridge returned invalid output: ' + (proc.stderr[-300:] or proc.stdout[:300])
+    if proc.returncode != 0 or (isinstance(out, dict) and out.get('error')):
+        return None, (out.get('error') if isinstance(out, dict) else None) or proc.stderr[-300:] or 'roll bridge failed'
+    return out, None
+
+
+def _roll_endpoint(op: str, args: dict):
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    out, err = _bridge(op, binder, args)
+    if err:
+        status = 404 if 'not found' in err else 400 if 'not eligible' in err or 'must be' in err else 500
+        return jsonify({'error': err}), status
+    out['confirmation'] = _ROLL_NOTE
+    return jsonify(out)
+
+
+def _npc_lists(binder: dict):
+    living = binder.get('living', [])
+    dead = binder.get('dead', [])
+    if isinstance(living, dict):
+        living = list(living.values())
+    if isinstance(dead, dict):
+        dead = list(dead.values())
+    binder['living'], binder['dead'] = living, dead
+    return living, dead
+
+
+def _locate_npc(binder: dict, npc_id: str):
+    living, dead = _npc_lists(binder)
+    for lst_name, lst in (('living', living), ('dead', dead)):
+        for n in lst:
+            if n.get('id') == npc_id:
+                return n, lst_name
+    return None, None
+
+
+def _next_npc_id(binder: dict) -> str:
+    living, dead = _npc_lists(binder)
+    existing = {n.get('id') for n in living + dead if n.get('id')}
+    num = 1
+    while f'npc-{num:03d}' in existing:
+        num += 1
+    return f'npc-{num:03d}'
+
+
+def _npc_brief(n: dict) -> dict:
+    return {'id': n.get('id'), 'name': n.get('name'), 'household': n.get('household'), 'role': n.get('role'),
+            'status': n.get('status'), 'year_born': n.get('year_born'), 'year_died': n.get('year_died')}
+
+
+def _kill_npc(binder: dict, npc: dict, year: int, cause: str) -> None:
+    """Mirror of STORE.killNpc — move to dead, stamp year, append the cause to notes."""
+    living, dead = _npc_lists(binder)
+    binder['living'] = [n for n in living if n is not npc]
+    npc['status'] = 'Dead'
+    npc['year_died'] = year
+    if cause:
+        npc['notes'] = ((npc.get('notes') or '') + '\n\n' if npc.get('notes') else '') + '† ' + cause
+    dead.append(npc)
+
+
+def _add_rel(binder: dict, source_id: str, target_id: str, rel_type: str, notes: str = '') -> dict:
+    rels = binder.setdefault('relationships', [])
+    for r in rels:
+        if r.get('sourceId') == source_id and r.get('targetId') == target_id and r.get('type') == rel_type:
+            return r
+        if rel_type in _SYMMETRIC_REL_TYPES and r.get('sourceId') == target_id and r.get('targetId') == source_id and r.get('type') == rel_type:
+            return r
+    rel = {'id': 'rel-' + str(uuid.uuid4()), 'sourceId': source_id, 'targetId': target_id, 'type': rel_type}
+    if notes:
+        rel['notes'] = notes
+    rels.append(rel)
+    return rel
+
+
+def _living_spouse(binder: dict, npc_id: str):
+    """Mirror of TabWinter._livingSpouse — prefer a living Spouse/Betrothed over a dead one."""
+    living, dead = _npc_lists(binder)
+    living_ids = {n.get('id') for n in living}
+    idx = {n.get('id'): n for n in living + dead}
+    dead_sp = None
+    for r in binder.get('relationships', []):
+        if r.get('type') not in ('Spouse', 'Betrothed'):
+            continue
+        if r.get('sourceId') == npc_id:
+            other = r.get('targetId')
+        elif r.get('targetId') == npc_id:
+            other = r.get('sourceId')
+        else:
+            continue
+        sp = idx.get(other)
+        if not sp:
+            continue
+        if other in living_ids:
+            return sp, True
+        dead_sp = dead_sp or sp
+    return (dead_sp, False) if dead_sp else (None, None)
+
+
+def _winter_mutation(mutate):
+    """Lock/load/save wrapper. mutate(binder) -> (status, payload); saved on 2xx."""
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        try:
+            status, payload = mutate(binder)
+        except _ManorInputError as e:
+            return jsonify({'error': str(e)}), 400
+        if 200 <= status < 300:
+            _rotate_backup(save_path)
+            _write_json(save_path, binder)
+    return jsonify(payload), status
+
+
+def _json_body():
+    data = request.get_json(force=True, silent=True)
+    return data if isinstance(data, dict) else {}
+
+
+@app.route('/api/mcp/winter/overview')
+def api_mcp_winter_overview():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    return _roll_endpoint('overview', {})
+
+
+@app.route('/api/mcp/winter/survival', methods=['POST'])
+def api_mcp_winter_survival():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    d = _json_body()
+    ids = d.get('npc_ids')
+    if ids is not None and not (isinstance(ids, list) and all(isinstance(i, str) for i in ids)):
+        return jsonify({'error': 'npc_ids must be a list of NPC ids'}), 400
+    return _roll_endpoint('survival', {'npc_ids': ids or [], 'household': d.get('household') or '',
+                                       'include_exempt': bool(d.get('include_exempt'))})
+
+
+@app.route('/api/mcp/winter/childbirth', methods=['POST'])
+def api_mcp_winter_childbirth():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    d = _json_body()
+    ids = d.get('npc_ids')
+    if ids is not None and not (isinstance(ids, list) and all(isinstance(i, str) for i in ids)):
+        return jsonify({'error': 'npc_ids must be a list of NPC ids'}), 400
+    args = {'npc_ids': ids or [], 'bastard': bool(d.get('bastard')), 'modifier': d.get('modifier') or 0}
+    if d.get('con') is not None:
+        args['con'] = d['con']
+    return _roll_endpoint('childbirth', args)
+
+
+@app.route('/api/mcp/winter/marriage', methods=['POST'])
+def api_mcp_winter_marriage():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    d = _json_body()
+    if not d.get('npc_id'):
+        return jsonify({'error': 'npc_id is required'}), 400
+    kind = d.get('kind')
+    if kind not in (None, '', 'maiden', 'knight'):
+        return jsonify({'error': "kind must be 'maiden' or 'knight'"}), 400
+    return _roll_endpoint('marriage', {'npc_id': d['npc_id'], 'kind': kind or None,
+                                       'custom_mod': d.get('custom_mod') or 0, 'roll_rank': bool(d.get('roll_rank'))})
+
+
+@app.route('/api/mcp/winter/marriage-rank', methods=['POST'])
+def api_mcp_winter_marriage_rank():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    d = _json_body()
+    if not d.get('npc_id'):
+        return jsonify({'error': 'npc_id is required'}), 400
+    return _roll_endpoint('marriage_rank', {'npc_id': d['npc_id']})
+
+
+@app.route('/api/mcp/solo/roll', methods=['POST'])
+def api_mcp_solo_roll():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    d = _json_body()
+    if not d.get('npc_id'):
+        return jsonify({'error': 'npc_id is required'}), 400
+    mode = d.get('mode') or 'yearly'
+    if mode not in ('yearly', 'solo', 'kin'):
+        return jsonify({'error': "mode must be 'yearly', 'solo' or 'kin'"}), 400
+    args = {'npc_id': d['npc_id'], 'mode': mode, 'tier': d.get('tier') or 'I', 'wed': d.get('wed'),
+            'season': d.get('season') or 'summer', 'year': d.get('year'), 'kin_size': d.get('kin_size') or 'normal'}
+    if isinstance(d.get('fixed_roll'), int) and not isinstance(d.get('fixed_roll'), bool):
+        args['fixed_roll'] = d['fixed_roll']
+    return _roll_endpoint('solo', args)
+
+
+# ── Winter confirmations (the only endpoints here that write) ────────────────
+
+@app.route('/api/mcp/winter/death', methods=['POST'])
+def api_mcp_winter_death():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    d = _json_body()
+
+    def mutate(binder):
+        npc, where = _locate_npc(binder, str(d.get('npc_id') or ''))
+        if not npc:
+            return 404, {'error': 'NPC not found'}
+        if where == 'dead':
+            return 409, {'error': f"{npc.get('name')} is already dead (year_died {npc.get('year_died')})"}
+        year = _int(d, 'year', binder.get('year'))
+        cause = _text(d, 'cause', 500) or 'Winter survival roll'
+        _kill_npc(binder, npc, year, cause)
+        log.info('[MCP] Winter death confirmed: %s (%s, %s)', npc.get('id'), year, cause)
+        return 200, {'ok': True, 'npc': _npc_brief(npc), 'cause': cause}
+    return _winter_mutation(mutate)
+
+
+@app.route('/api/mcp/winter/birth', methods=['POST'])
+def api_mcp_winter_birth():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    d = _json_body()
+
+    def mutate(binder):
+        mother, where = _locate_npc(binder, str(d.get('mother_id') or ''))
+        if not mother:
+            return 404, {'error': 'Mother not found'}
+        if where == 'dead':
+            return 409, {'error': f"{mother.get('name')} is dead"}
+        children = d.get('children')
+        if not isinstance(children, list) or not children or len(children) > 4:
+            raise _ManorInputError('children must be a list of 1–4 {name, pronoun, blessed, blessing} objects')
+        bastard = _bool(d, 'bastard')
+        year = _int(d, 'year', binder.get('year'))
+        father_id = _text(d, 'father_id', 50, None)
+        if father_id:
+            father, _ = _locate_npc(binder, father_id)
+            if not father:
+                return 404, {'error': f'Father {father_id} not found'}
+        elif not bastard:
+            sp, alive = _living_spouse(binder, mother['id'])
+            father_id = sp.get('id') if sp and alive else None
+        created = []
+        for c in children:
+            if not isinstance(c, dict):
+                raise _ManorInputError('each child must be an object')
+            name = _text(c, 'name', 200) or f"Child of {mother.get('name')}"
+            pronoun = _text(c, 'pronoun', 40) or 'he/him'
+            blessed = _bool(c, 'blessed')
+            blessing = _text(c, 'blessing', 500)
+            notes = '\n'.join(x for x in (f'✦ Blessing: {blessing}' if blessed and blessing else '', '⚔ Bastard' if bastard else '') if x)
+            child = {
+                'id': _next_npc_id(binder), 'name': name, 'pronoun': pronoun, 'year_born': year,
+                'household': mother.get('household') or '', 'role': 'Baby', 'status': 'Alive',
+                'blessed': blessed, 'fate_touched': False, 'notes': notes, 'glory': 'N/A',
+            }
+            binder['living'].append(child)
+            _add_rel(binder, child['id'], mother['id'], 'Child', '')
+            if father_id:
+                _add_rel(binder, child['id'], father_id, 'Bastard' if bastard else 'Child', '')
+            created.append(_npc_brief(child))
+        log.info('[MCP] Birth recorded for %s: %s', mother.get('id'), ', '.join(c['name'] for c in created))
+        return 201, {'ok': True, 'mother': _npc_brief(mother), 'father_id': father_id, 'bastard': bastard, 'children': created}
+    return _winter_mutation(mutate)
+
+
+_TRAGEDIES = ('child_dies', 'mother_dies', 'both_die', 'difficult_birth', 'barren', 'no_birth')
+
+
+@app.route('/api/mcp/winter/birth-tragedy', methods=['POST'])
+def api_mcp_winter_birth_tragedy():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    d = _json_body()
+
+    def mutate(binder):
+        mother, where = _locate_npc(binder, str(d.get('mother_id') or ''))
+        if not mother:
+            return 404, {'error': 'Mother not found'}
+        if where == 'dead':
+            return 409, {'error': f"{mother.get('name')} is dead"}
+        kind = _choice(d, 'tragedy', _TRAGEDIES)
+        if not kind:
+            raise _ManorInputError('tragedy must be one of: ' + ', '.join(_TRAGEDIES))
+        year = _int(d, 'year', binder.get('year'))
+        record_child = _bool(d, 'record_child', True)
+        sex = _choice(d, 'child_sex', ('boy', 'girl'), 'boy')
+        cause = _text(d, 'cause', 500) or 'Died in childbirth'
+        out = {'ok': True, 'mother': None, 'tragedy': kind, 'child': None}
+
+        def dead_child():
+            name = _text(d, 'child_name', 200) or f"Child of {mother.get('name')}"
+            child = {
+                'id': _next_npc_id(binder), 'name': name, 'pronoun': 'she/her' if sex == 'girl' else 'he/him',
+                'year_born': year, 'year_died': year, 'household': mother.get('household') or '', 'role': '',
+                'status': 'Dead', 'blessed': False, 'fate_touched': False, 'notes': '† Died in childbirth', 'glory': 'N/A',
+            }
+            binder['dead'].append(child)
+            _add_rel(binder, child['id'], mother['id'], 'Child', '')
+            return _npc_brief(child)
+
+        if kind == 'child_dies':
+            if record_child:
+                out['child'] = dead_child()
+        elif kind == 'mother_dies':
+            _kill_npc(binder, mother, year, cause)
+        elif kind == 'both_die':
+            if record_child:
+                out['child'] = dead_child()
+            _kill_npc(binder, mother, year, cause)
+        elif kind == 'difficult_birth':
+            mother['con'] = max(1, (mother.get('con') or 13) - 1)
+            out['con'] = mother['con']
+        elif kind == 'barren':
+            mother['barren'] = True
+        out['mother'] = _npc_brief(mother)
+        log.info('[MCP] Birth tragedy %s for %s', kind, mother.get('id'))
+        return 200, out
+    return _winter_mutation(mutate)
+
+
+@app.route('/api/mcp/winter/marriage-wait', methods=['POST'])
+def api_mcp_winter_marriage_wait():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    d = _json_body()
+
+    def mutate(binder):
+        npc, where = _locate_npc(binder, str(d.get('npc_id') or ''))
+        if not npc:
+            return 404, {'error': 'NPC not found'}
+        npc['marriage_wait_years'] = (npc.get('marriage_wait_years') or 0) + 1
+        log.info('[MCP] %s waits another year for marriage (%s)', npc.get('id'), npc['marriage_wait_years'])
+        return 200, {'ok': True, 'npc': _npc_brief(npc), 'marriage_wait_years': npc['marriage_wait_years']}
+    return _winter_mutation(mutate)
+
+
+@app.route('/api/mcp/winter/marry', methods=['POST'])
+def api_mcp_winter_marry():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    d = _json_body()
+
+    def mutate(binder):
+        npc, where = _locate_npc(binder, str(d.get('npc_id') or ''))
+        if not npc:
+            return 404, {'error': 'NPC not found'}
+        if where == 'dead':
+            return 409, {'error': f"{npc.get('name')} is dead"}
+        year = _int(d, 'year', binder.get('year'))
+        sp, alive = _living_spouse(binder, npc['id'])
+        if sp and alive:
+            return 409, {'error': f"{npc.get('name')} is already married to {sp.get('name')} ({sp.get('id')})"}
+        spouse = None
+        spouse_id = _text(d, 'spouse_id', 50, None)
+        new_sp = d.get('new_spouse')
+        if spouse_id:
+            spouse, sw = _locate_npc(binder, spouse_id)
+            if not spouse:
+                return 404, {'error': f'Spouse {spouse_id} not found'}
+            if sw == 'dead':
+                return 409, {'error': f"{spouse.get('name')} is dead"}
+            osp, oalive = _living_spouse(binder, spouse_id)
+            if osp and oalive:
+                return 409, {'error': f"{spouse.get('name')} is already married to {osp.get('name')}"}
+        elif isinstance(new_sp, dict):
+            name = _text(new_sp, 'name', 200)
+            if not name:
+                raise _ManorInputError('new_spouse.name is required')
+            spouse = {
+                'id': _next_npc_id(binder), 'name': name, 'pronoun': _text(new_sp, 'pronoun', 40) or 'she/her',
+                'role': _text(new_sp, 'role', 100), 'year_born': _int(new_sp, 'year_born'),
+                'household': _text(new_sp, 'household', 100) or (npc.get('household') or ''),
+                'status': 'Alive', 'blessed': False, 'fate_touched': False, 'notes': _text(new_sp, 'notes', 2000),
+                'glory': 'N/A',
+            }
+            binder['living'].append(spouse)
+        rel = None
+        if spouse:
+            rel = _add_rel(binder, npc['id'], spouse['id'], 'Spouse', f'Married {year} AD')
+        npc['marriage_wait_years'] = 0
+        log.info('[MCP] Marriage: %s ↔ %s (%s)', npc.get('id'), spouse.get('id') if spouse else 'unrecorded', year)
+        return 201 if spouse else 200, {'ok': True, 'npc': _npc_brief(npc), 'spouse': _npc_brief(spouse) if spouse else None,
+                                        'relationship': rel, 'unrecorded': spouse is None}
+    return _winter_mutation(mutate)
 
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────

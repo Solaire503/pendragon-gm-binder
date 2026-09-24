@@ -111,7 +111,9 @@ arcs → prep → multiplayer → app
 - Tools cover NPCs, relationships, life events, chronicles, arcs, session prep, and (v3.15.0) the player manors: `list_manors`, `get_manor`, `get_manor_year`, `get_manor_reference`, `record_manor_year` (dry-run by default), `update_manor_year`, `delete_manor_year`, `update_manor`, `add/update_manor_damage`, `add/update_manor_improvement`.
 - `record_manor_year` is the server-side mirror of `TabManors._saveHistoryInline` — keep the two in step when the form's maths changes (`_build_year_entry` in server.py).
 - `manor-ref.json` is GENERATED from `js/data/manor-tables.js` by `node scripts/gen-manor-ref.cjs`; rerun it after editing the tables. Served via `/api/mcp/manor-reference`.
-- Steve rolls every die by hand — no tool or endpoint may roll for him.
+- Winter Phase + solo tools (v3.16.0): `winter_overview`, `roll_survival`, `roll_childbirth`, `roll_marriage`, `roll_marriage_rank`, `roll_solo_event` are ADVISORY — they run `scripts/roll-bridge.cjs`, which evaluates `js/tabs/winter.js` + `js/tabs/solos.js` headlessly in node (the real tables, nothing re-typed) and write nothing. Only `confirm_death`, `record_birth`, `resolve_birth_tragedy`, `confirm_marriage`, `marriage_wait`, `add_life_event` write, and only after Steve confirms — he may reroll or overrule any roll. If a winter/solo method starts touching the DOM, the bridge's stubs in roll-bridge.cjs need extending.
+- Dice rule: Steve rolls every MANOR die by hand (no rolling in manor tools). Winter and solo tables roll in-app, so the bridge may roll there.
+- `get_npc` returns the full stored card (`_safe_npc(full=True)`); `search_npcs` and bot endpoints keep the slim whitelist.
 
 ## Data Model
 
@@ -160,7 +162,7 @@ Battle Records work is tracked in storybloq (MCP). At session start, run `storyb
 
 ## Testing
 
-Focused regression checks: `node tests/glory.test.cjs` and `.venv/bin/python -m unittest discover -s tests` (Glory + MCP manor API; isolated temporary saves — `tests/test_manors.py` replays real ledger years through the server to prove the maths matches the form). Verify other changes with:
+Focused regression checks: `node tests/glory.test.cjs` and `.venv/bin/python -m unittest discover -s tests` (Glory, MCP manor API, MCP winter/solo API, life-event chronicle mirror; isolated temporary saves — `tests/test_manors.py` replays real ledger years through the server to prove the maths matches the form; `tests/test_winter.py` needs node for the roll bridge). Verify other changes with:
 - `python3 -m py_compile server.py` — syntax check backend
 - `node -c <file.js>` — syntax check frontend files
 - `curl` against running server for API endpoints
