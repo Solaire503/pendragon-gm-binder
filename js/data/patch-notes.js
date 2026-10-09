@@ -413,6 +413,17 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.16.1',
+    date: '2026-10-09',
+    sections: [{
+      heading: 'Household Training — Saves You Can Trust',
+      items: [
+        'Page placement, training-path assignment and coming-of-age for your own household now wait for the Binder to confirm the change before celebrating it. If the server turns the change down — most often an expired login — the card goes straight back to how it was and a message tells you why, instead of looking saved and then quietly reverting on the next refresh.',
+        'Refused saves are now recorded on the server, so the GM can see what went wrong when you report a problem.',
+      ],
+    }],
+  },
+  {
     version: '3.16.0',
     date: '2026-09-24',
     sections: [{

@@ -1833,6 +1833,44 @@ const Components = {
 
   // ── TRAINING LIFECYCLE MODALS ─────────────────────────────────
 
+  // ── Player household edits — server is the source of truth ──────────
+  // The training-lifecycle modals used to apply the change locally, fire the
+  // PATCH and never look at the answer. If the server refused it (expired
+  // session, Cloudflare challenge, household mismatch…) the card showed the
+  // new state until the next 30s refresh quietly put it back — which players
+  // reported as "the binder won't update" (GitHub #16). Now: apply, wait,
+  // and on failure roll back and say why.
+  async _applyHouseholdEdit(id, changes, mutate) {
+    const npc = STORE.getNpc(id);
+    if (!npc) return false;
+    const snapNpc  = JSON.parse(JSON.stringify(npc));
+    const snapRels = JSON.parse(JSON.stringify(STORE.relationships));
+    if (typeof mutate === 'function') mutate();
+    STORE.updateNpc(id, changes);
+    if (isGM()) return true;
+
+    const res = await API.patch(`/api/npc/${id}`, changes);
+    if (res.ok) {
+      if (res.data && res.data.npc) Object.assign(npc, res.data.npc);
+      return true;
+    }
+
+    // Roll the optimistic edit back so the card matches what is on disk.
+    Object.keys(npc).forEach(k => delete npc[k]);
+    Object.assign(npc, snapNpc);
+    STORE.relationships.splice(0, STORE.relationships.length, ...snapRels);
+    STORE.save();
+    const why = res.status === 401
+      ? 'your login session has expired — refresh the page and sign in again'
+      : res.status === 0
+        ? 'the server could not be reached'
+        : /^HTTP \d+$/.test(res.error || '') ? `the server refused the change (${res.status})`
+        : `${res.error || 'the server refused the change'} (${res.status})`;
+    Toast.error(`Change NOT saved — ${why}`);
+    console.warn('[household-edit] PATCH refused', id, res.status, res.error);
+    return false;
+  },
+
   _openPlacementModal(id) {
     const npc = STORE.getNpc(id);
     if (!npc) return;
@@ -1859,16 +1897,15 @@ const Components = {
     if (CardPopup.isOpen()) { CardPopup.open(html); } else { Modal.open(html); }
   },
 
-  _confirmPlacement(id) {
+  async _confirmPlacement(id) {
     const type  = document.querySelector('input[name="placement-type"]:checked')?.value;
     const where = document.getElementById('placement-where')?.value?.trim();
     if (!type)  { Toast.error('Select a placement type'); return; }
     if (!where) { Toast.error('Enter a placement location'); return; }
     const placementChanges = { role: type, page_court: where, page_placed: true, page_type: type };
-    STORE.updateNpc(id, placementChanges);
-    if (!isGM()) API.patch(`/api/npc/${id}`, placementChanges);
+    const ok = await this._applyHouseholdEdit(id, placementChanges);
     const npc = STORE.getNpc(id);
-    Toast.success(`${npc.name} placed as ${type} at ${where}`);
+    if (ok) Toast.success(`${npc.name} placed as ${type} at ${where}`);
     APP.refreshCurrentTab();
     this.openNpcCard(id);
   },
@@ -1935,7 +1972,7 @@ const Components = {
     if (locationFields) locationFields.style.display  = path !== 'squire' ? '' : 'none';
   },
 
-  _confirmTrainingPath(id) {
+  async _confirmTrainingPath(id) {
     const npc = STORE.getNpc(id);
     if (!npc) return;
     const lockedEl = document.getElementById('tp-path');
@@ -1945,6 +1982,7 @@ const Components = {
     const roleMap = { squire: 'Squire', steward: 'Steward', clergy: 'Priest', druid: 'Druid' };
     const newRole = roleMap[path];
     const changes = { role: newRole, training_path: path };
+    let mutate = null;
 
     if (path === 'squire') {
       const npcId = document.getElementById('tp-npc-id')?.value?.trim();
@@ -1953,15 +1991,17 @@ const Components = {
       if (npcId) {
         changes.training_npc_id = npcId;
         changes.training_where  = '';
-        const alreadyLinked = STORE.relationships.some(r =>
-          (r.type === 'Squire' || r.type === 'Former Squire') && ((r.sourceId === npcId && r.targetId === id) || (r.sourceId === id && r.targetId === npcId))
-        );
-        // Any other active Squire link (e.g. to a knight who has died) becomes Former Squire.
-        STORE.relationships.forEach(r => {
-          if (r.type === 'Squire' && (r.sourceId === id || r.targetId === id)
-              && r.sourceId !== npcId && r.targetId !== npcId) r.type = 'Former Squire';
-        });
-        if (!alreadyLinked) STORE.addRelationship(npcId, id, 'Squire', '');
+        mutate = () => {
+          const alreadyLinked = STORE.relationships.some(r =>
+            (r.type === 'Squire' || r.type === 'Former Squire') && ((r.sourceId === npcId && r.targetId === id) || (r.sourceId === id && r.targetId === npcId))
+          );
+          // Any other active Squire link (e.g. to a knight who has died) becomes Former Squire.
+          STORE.relationships.forEach(r => {
+            if (r.type === 'Squire' && (r.sourceId === id || r.targetId === id)
+                && r.sourceId !== npcId && r.targetId !== npcId) r.type = 'Former Squire';
+          });
+          if (!alreadyLinked) STORE.addRelationship(npcId, id, 'Squire', '');
+        };
       } else {
         changes.training_npc_id = '';
         changes.training_where  = freeText;
@@ -1973,9 +2013,8 @@ const Components = {
       changes.training_npc_id = '';
     }
 
-    STORE.updateNpc(id, changes);
-    if (!isGM()) API.patch(`/api/npc/${id}`, changes);
-    Toast.success(`${npc.name} assigned to ${newRole} training`);
+    const ok = await this._applyHouseholdEdit(id, changes, mutate);
+    if (ok) Toast.success(`${npc.name} assigned to ${newRole} training`);
     APP.refreshCurrentTab();
     this.openNpcCard(id);
   },
@@ -2012,25 +2051,25 @@ const Components = {
     if (CardPopup.isOpen()) { CardPopup.open(html); } else { Modal.open(html); }
   },
 
-  _confirmComingOfAge(id) {
+  async _confirmComingOfAge(id) {
     const npc = STORE.getNpc(id);
     if (!npc) return;
     const roleLower = (npc.role || '').toLowerCase();
     const isSquire = roleLower === 'squire';
 
     const changes = { came_of_age: true };
+    let mutate = null;
     if (isSquire) {
       const newRole = document.querySelector('input[name="coa-role"]:checked')?.value;
       if (!newRole) { Toast.error('Select a rank'); return; }
       changes.role = newRole;
-      STORE.relationships.forEach(r => {
+      mutate = () => STORE.relationships.forEach(r => {
         if (r.type === 'Squire' && (r.sourceId === id || r.targetId === id)) r.type = 'Former Squire';
       });
     }
 
-    STORE.updateNpc(id, changes);
-    if (!isGM()) API.patch(`/api/npc/${id}`, changes);
-    Toast.success(`${npc.name} has come of age`);
+    const ok = await this._applyHouseholdEdit(id, changes, mutate);
+    if (ok) Toast.success(`${npc.name} has come of age`);
     APP.refreshCurrentTab();
     this.openNpcCard(id);
   },

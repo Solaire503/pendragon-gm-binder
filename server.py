@@ -45,7 +45,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.16.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.16.1'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -328,6 +328,25 @@ def _auth_gm_or_mcp():
     return _csrf_check()
 
 # ── SECURITY HEADERS ──────────────────────────────────────────────────────────
+
+@app.after_request
+def _log_refused_api_calls(response):
+    """Werkzeug's access log is off, so a 4xx/5xx on a write endpoint used to
+    leave no trace at all — GitHub #16 ("cannot update paging") was undiagnosable
+    because the refused PATCH never appeared anywhere. Log every failed API
+    write, and failed reads other than the routine 401 from an expired tab's
+    30s poll or a plain 404."""
+    try:
+        if response.status_code >= 400 and request.path.startswith('/api/'):
+            if request.method != 'GET' or response.status_code not in (401, 404):
+                log.warning('[API] %s %s -> %s user=%s origin=%s',
+                            request.method, request.path, response.status_code,
+                            session.get('username') or '-',
+                            request.headers.get('Origin') or request.headers.get('Referer') or '-')
+    except Exception:
+        pass
+    return response
+
 
 @app.after_request
 def add_security_headers(response):
