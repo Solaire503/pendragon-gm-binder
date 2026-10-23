@@ -45,7 +45,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.16.1'  # keep in sync with js/app.js
+APP_VERSION  = '3.17.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -4981,6 +4981,27 @@ def _valid_npc_glory(value):
         type(value) is int and 0 <= value <= 9007199254740991)
 
 
+def _coerce_npc_glory(value):
+    """Normalise Glory input from the MCP bridge. Claude.ai's tool client sends
+    an int|str field as text ("1500"), and a whole-number float survives JSON
+    as 1500.0 — both are an exact score. Renown categories are matched
+    case-insensitively. Anything else is returned untouched for validation."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        t = value.strip().replace(',', '').replace('_', '')
+        if re.fullmatch(r'[+-]?\d+', t):
+            return int(t)
+        for cat in ('N/A', *_NPC_RENOWN):
+            if t.lower() == cat.lower():
+                return cat
+        if t.lower() in ('na', 'none', ''):
+            return 'N/A'
+    return value
+
+
 _MCP_NPC_UPDATABLE = (
     'name', 'role', 'household', 'status', 'year_born', 'year_died',
     'pronoun', 'manor', 'faction', 'glory', 'notes', 'gm_notes', 'eligibility', 'dowry',
@@ -5005,8 +5026,10 @@ def api_mcp_create_npc():
     if not isinstance(name, str) or not name.strip():
         return jsonify({'error': 'name is required'}), 400
 
-    if 'glory' in data and not _valid_npc_glory(data['glory']):
-        return jsonify({'error': 'Glory must be a nonnegative whole number, N/A, or a valid renown category'}), 400
+    if 'glory' in data:
+        data['glory'] = _coerce_npc_glory(data['glory'])
+        if not _valid_npc_glory(data['glory']):
+            return jsonify({'error': 'Glory must be a nonnegative whole number, N/A, or a valid renown category'}), 400
 
     save_path = get_save_path()
     if not save_path or not save_path.exists():
@@ -5085,8 +5108,10 @@ def api_mcp_update_npc(npc_id):
     if not isinstance(data, dict):
         return jsonify({'error': 'Invalid payload'}), 400
 
-    if 'glory' in data and not _valid_npc_glory(data['glory']):
-        return jsonify({'error': 'Glory must be a nonnegative whole number, N/A, or a valid renown category'}), 400
+    if 'glory' in data:
+        data['glory'] = _coerce_npc_glory(data['glory'])
+        if not _valid_npc_glory(data['glory']):
+            return jsonify({'error': 'Glory must be a nonnegative whole number, N/A, or a valid renown category'}), 400
 
     save_path = get_save_path()
     if not save_path or not save_path.exists():
@@ -5127,6 +5152,23 @@ def api_mcp_update_npc(npc_id):
             'personalityNote': 2000, 'marriage_orientation': 20,
         }
         changed = []
+        glory_note = None
+        if data.get('glory_add') is not None:
+            # Relative award — "add 50 Glory" — mirrors the Solos tab's Resolve:
+            # only exact numeric scores can be added to.
+            add = _coerce_npc_glory(data['glory_add'])
+            if type(add) is not int:
+                return jsonify({'error': 'glory_add must be a whole number (positive to award, negative to deduct)'}), 400
+            if 'glory' in data:
+                return jsonify({'error': 'Pass either glory (set an exact value) or glory_add (adjust the current score), not both'}), 400
+            if type(npc.get('glory')) is not int:
+                return jsonify({'error': f"Cannot add Glory to {npc.get('name')}: their Glory is {npc.get('glory')!r} "
+                                         "(a renown category or N/A, not an exact score). Set glory=<number> first "
+                                         "if Steve wants an exact score."}), 400
+            before = npc['glory']
+            npc['glory'] = max(0, before + add)
+            changed.append('glory')
+            glory_note = f'Glory {before} {"+" if add >= 0 else "-"} {abs(add)} = {npc["glory"]}'
         for key in _MCP_NPC_UPDATABLE:
             if key in data:
                 val = data[key]
@@ -5156,8 +5198,11 @@ def api_mcp_update_npc(npc_id):
         _rotate_backup(save_path)
         _write_json(save_path, binder)
 
-    log.info('[MCP] Updated NPC %s: %s', npc_id, ', '.join(changed))
-    return jsonify({'ok': True, 'id': npc_id, 'changed': changed, 'npc': _safe_npc(npc, include_gm=True)})
+    log.info('[MCP] Updated NPC %s: %s%s', npc_id, ', '.join(changed), f' ({glory_note})' if glory_note else '')
+    out = {'ok': True, 'id': npc_id, 'changed': changed, 'npc': _safe_npc(npc, include_gm=True)}
+    if glory_note:
+        out['gloryNote'] = glory_note
+    return jsonify(out)
 
 
 _VALID_REL_TYPES = {
@@ -5757,6 +5802,19 @@ def _find_manor(binder: dict, needle: str):
     return None, None
 
 
+def _manor_not_found(binder: dict, needle: str):
+    """404 for the PK manor routes — points at the NPC manor tools when the name
+    is in the vassal/NPC registry instead (the usual cause of a miss)."""
+    nm = _find_npc_manor(binder, needle)
+    if nm:
+        return jsonify({'error': f"{nm.get('name')!r} is an NPC vassal manor, not a player knight's manor. "
+                                 "Use get_npc_manor / update_npc_manor / assign_npc_manor for it.",
+                        'npcManorId': nm.get('id')}), 404
+    return jsonify({'error': 'Manor not found. Player manors: ' +
+                             ', '.join(sorted((binder.get('manors') or {}).keys())) +
+                             '. For NPC vassal manors use list_npc_manors.'}), 404
+
+
 def _npc_index(binder: dict) -> dict:
     return {n.get('id'): n for n in _all_npcs(binder) if n.get('id')}
 
@@ -6087,7 +6145,7 @@ def _manor_mutation(key_raw: str, mutate):
         binder = _read_json(save_path, default={})
         key, m = _find_manor(binder, key_raw)
         if not m:
-            return jsonify({'error': 'Manor not found'}), 404
+            return _manor_not_found(binder, key_raw)
         try:
             status, payload = mutate(binder, key, m)
         except _ManorInputError as e:
@@ -6122,7 +6180,7 @@ def api_mcp_manor(key):
         return jsonify({'error': 'Save file not found'}), 503
     k, m = _find_manor(binder, key)
     if not m:
-        return jsonify({'error': 'Manor not found'}), 404
+        return _manor_not_found(binder, key)
     try:
         history_years = max(0, min(int(request.args.get('history', '5')), 100))
     except ValueError:
@@ -6525,6 +6583,414 @@ def api_mcp_manor_update_improvement(key, impr_id):
         log.info('[MCP] Updated improvement %s on %s: %s', impr_id, k, ', '.join(changed))
         return 200, {'ok': True, 'manor': k, 'improvement': i, 'changed': changed}
     return _manor_mutation(key, mutate)
+
+
+# ── MCP NPC Manor Registry API ────────────────────────────────────────────────
+# The NPC Manors tab (js/tabs/npc-manors.js) keeps the vassal/NPC manor registry
+# in binder['npcManors']. These routes mirror its Add / Edit / Assign /
+# Succession flows so the MCP bridge can enfeoff or reassign a manor the same
+# way the GM does by hand — holder sync into the PK vassal ledgers and the
+# Chronicle line included. Keep them in step with TabNpcManors.
+
+_NPC_MANOR_STATUSES = ('Granted', 'Gifted', 'Seized', 'Purchased', 'Escheated', 'Other')
+_NPC_MANOR_EVENTS = ('grant', 'inherit', 'abdication', 'escheat', 'assume')
+
+
+def _npc_manors_list(binder: dict) -> list:
+    nm = binder.get('npcManors')
+    if isinstance(nm, dict):
+        nm = list(nm.values())
+        binder['npcManors'] = nm
+    if not isinstance(nm, list):
+        nm = []
+        binder['npcManors'] = nm
+    return nm
+
+
+def _find_npc_manor(binder: dict, needle: str):
+    """Resolve a registry manor by id or name — case-insensitive; a bare name
+    also matches 'Name (Suffix)' when that is unambiguous. Returns the record."""
+    q = (needle or '').strip().lower()
+    if not q:
+        return None
+    all_nm = [m for m in _npc_manors_list(binder) if isinstance(m, dict)]
+    for m in all_nm:
+        if (m.get('id') or '').lower() == q:
+            return m
+    exact = [m for m in all_nm if (m.get('name') or '').strip().lower() == q]
+    if len(exact) == 1:
+        return exact[0]
+    if exact:
+        return None
+    base = lambda m: re.sub(r'\s*\(.*\)\s*$', '', m.get('name') or '').strip().lower()
+    matches = [m for m in all_nm if base(m) == q]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _npc_of_age(npc, year) -> bool:
+    """Mirror of TabNpcManors._isOfAge."""
+    if not npc:
+        return False
+    if npc.get('came_of_age'):
+        return True
+    yb = npc.get('year_born')
+    return isinstance(yb, int) and isinstance(year, int) and year - yb >= 21
+
+
+def _sync_vassal_knight(binder: dict, nm: dict) -> int:
+    """Mirror of STORE.syncVassalKnight — push the registry holder into every PK
+    vassal-ledger row that unambiguously names this manor. Returns rows touched."""
+    n = 0
+    for pk in (binder.get('manors') or {}).values():
+        if not isinstance(pk, dict):
+            continue
+        for v in (pk.get('vassals') or []):
+            if isinstance(v, dict) and _npc_manor_for_vassal_name(binder, v.get('manorName')) is nm:
+                v['knightId'] = nm.get('holderId') or None
+                n += 1
+    return n
+
+
+def _liege_manors_for(binder: dict, nm: dict) -> list:
+    """PK manors whose vassal ledger lists this registry manor."""
+    out = []
+    for k, pk in (binder.get('manors') or {}).items():
+        if not isinstance(pk, dict):
+            continue
+        for v in (pk.get('vassals') or []):
+            if isinstance(v, dict) and _npc_manor_for_vassal_name(binder, v.get('manorName')) is nm:
+                out.append({'manor': k, 'knight': pk.get('knight'), 'tenure': v.get('tenure'),
+                            'passiveIncome': v.get('passiveIncome', 1)})
+    return out
+
+
+def _chronicle_push(binder: dict, year, text: str, cat: str = 'political') -> dict:
+    """Mirror of TabNpcManors._writeChronicle."""
+    entry = {'id': 'ev-' + str(uuid.uuid4()), 'text': text[:4000], 'cat': cat,
+             'ts': int(datetime.now(timezone.utc).timestamp() * 1000)}
+    binder.setdefault('chronicle', {}).setdefault(str(year), []).append(entry)
+    return entry
+
+
+def _npc_manor_view(binder: dict, nm: dict, npcs: dict, full: bool = False) -> dict:
+    holder = npcs.get(nm.get('holderId')) if nm.get('holderId') else None
+    holder_dead = bool(holder and str(holder.get('status', '')).lower() == 'dead')
+    vacant = not holder or holder_dead
+    in_trust = bool(nm.get('trusteeId') and holder and not holder_dead)
+    of_age = _npc_of_age(holder, binder.get('year'))
+    out = {
+        'id': nm.get('id'), 'name': nm.get('name'), 'location': nm.get('location', ''),
+        'status': nm.get('status'), 'faction': nm.get('faction', ''),
+        'yearGranted': nm.get('yearGranted'),
+        'holder': _npc_ref(npcs, nm.get('holderId')),
+        'trustee': _npc_ref(npcs, nm.get('trusteeId')) if nm.get('trusteeId') else None,
+        'vacant': vacant, 'holderDead': holder_dead, 'inTrust': in_trust,
+        'holderOfAge': bool(holder) and of_age,
+        'readyToAssume': in_trust and of_age,
+        'liege': _liege_manors_for(binder, nm),
+    }
+    if full:
+        out['notes'] = nm.get('notes', '')
+        out['relatedNpcs'] = [
+            {**(_npc_ref(npcs, r.get('npcId')) or {}), 'role': r.get('role', ''), 'notes': r.get('notes', '')}
+            for r in (nm.get('relatedNpcs') or []) if isinstance(r, dict) and r.get('npcId')
+        ]
+    return out
+
+
+def _npc_manor_mutation(key_raw, mutate):
+    """Lock/load/find/save wrapper for registry writes. key_raw=None skips the
+    lookup (create). mutate(binder, nm) returns (status, payload)."""
+    save_path = get_save_path()
+    if not save_path or not save_path.exists():
+        return jsonify({'error': 'Save file not found'}), 503
+    with _save_lock:
+        binder = _read_json(save_path, default={})
+        nm = None
+        if key_raw is not None:
+            nm = _find_npc_manor(binder, key_raw)
+            if not nm:
+                k, pk = _find_manor(binder, key_raw)
+                if pk:
+                    return jsonify({'error': f'{k!r} is a player knight\'s manor, not an NPC manor — '
+                                             'use the manor tools (get_manor / update_manor) for it.'}), 404
+                return jsonify({'error': 'NPC manor not found — check list_npc_manors for the exact name or id'}), 404
+        try:
+            status, payload = mutate(binder, nm)
+        except _ManorInputError as e:
+            return jsonify({'error': str(e)}), 400
+        if 200 <= status < 300:
+            _rotate_backup(save_path)
+            _write_json(save_path, binder)
+    return jsonify(payload), status
+
+
+def _npc_id_field(data: dict, key: str, npcs: dict, allow_blank: bool = True):
+    """Validate an NPC id field. Returns None when absent, '' to clear, else the id."""
+    if key not in data or data[key] is None:
+        return None
+    v = data[key]
+    if not isinstance(v, str):
+        raise _ManorInputError(f'{key} must be an NPC id string like npc-042')
+    v = v.strip()
+    if not v:
+        if allow_blank:
+            return ''
+        raise _ManorInputError(f'{key} is required')
+    if v not in npcs:
+        # Be forgiving: allow an exact NPC name when unambiguous.
+        hits = [n for n in npcs.values() if (n.get('name') or '').strip().lower() == v.lower()]
+        if len(hits) == 1:
+            return hits[0]['id']
+        raise _ManorInputError(f'{key} {v!r} is not a known NPC id (use search_npcs to find it)')
+    return v
+
+
+@app.route('/api/mcp/npc-manors')
+def api_mcp_npc_manors():
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    npcs = _npc_index(binder)
+    views = [_npc_manor_view(binder, m, npcs) for m in _npc_manors_list(binder) if isinstance(m, dict)]
+    q = (request.args.get('q') or '').strip().lower()
+    if q:
+        views = [v for v in views if q in (v['name'] or '').lower()
+                 or q in ((v['holder'] or {}).get('name') or '').lower()]
+    if request.args.get('vacant') in ('1', 'true'):
+        views = [v for v in views if v['vacant']]
+    views.sort(key=lambda v: (v['name'] or '').lower())
+    return jsonify({'year': binder.get('year'), 'count': len(views),
+                    'vacantCount': sum(1 for v in views if v['vacant']), 'manors': views})
+
+
+@app.route('/api/mcp/npc-manor/<path:key>')
+def api_mcp_npc_manor(key):
+    err = _auth_gm_or_mcp_read()
+    if err: return err
+    binder = _load_binder()
+    if binder is None:
+        return jsonify({'error': 'Save file not found'}), 503
+    nm = _find_npc_manor(binder, key)
+    if not nm:
+        k, pk = _find_manor(binder, key)
+        if pk:
+            return jsonify({'error': f'{k!r} is a player knight\'s manor, not an NPC manor — use get_manor for it.'}), 404
+        return jsonify({'error': 'NPC manor not found — check list_npc_manors for the exact name or id'}), 404
+    npcs = _npc_index(binder)
+    out = _npc_manor_view(binder, nm, npcs, full=True)
+    needle = (nm.get('name') or '').lower()
+    mentions = []
+    for yr, entries in (binder.get('chronicle') or {}).items():
+        for e in entries or []:
+            if isinstance(e, dict) and needle and needle in (e.get('text') or '').lower():
+                mentions.append({'year': yr, 'id': e.get('id'), 'text': e.get('text'), 'cat': e.get('cat')})
+    mentions.sort(key=lambda e: (str(e['year']), e.get('id') or ''))
+    out['chronicle'] = mentions[-12:]
+    out['currentYear'] = binder.get('year')
+    return jsonify(out)
+
+
+@app.route('/api/mcp/npc-manor', methods=['POST'])
+def api_mcp_npc_manor_create():
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, _nm):
+        name = _text(data, 'name', 200, '')
+        if not name:
+            raise _ManorInputError('name is required')
+        all_nm = _npc_manors_list(binder)
+        if any((m.get('name') or '').strip().lower() == name.lower() for m in all_nm if isinstance(m, dict)):
+            raise _ManorInputError(f'An NPC manor named {name!r} already exists — use update_npc_manor or assign_npc_manor')
+        npcs = _npc_index(binder)
+        year = _int(data, 'yearGranted', binder.get('year'))
+        status = _choice(data, 'status', _NPC_MANOR_STATUSES, 'Granted')
+        holder_id = _npc_id_field(data, 'holderId', npcs) or ''
+        trustee_id = _npc_id_field(data, 'trusteeId', npcs) or ''
+        nm = {
+            'id': 'nm-' + str(int(datetime.now(timezone.utc).timestamp() * 1000)) + '-' + _secrets_mod.token_hex(2)[:3],
+            'name': name,
+            'location': _text(data, 'location', 200, ''),
+            'status': status,
+            'faction': _text(data, 'faction', 100, ''),
+            'holderId': holder_id,
+            'yearGranted': year,
+            'notes': _text(data, 'notes', 5000, ''),
+        }
+        if trustee_id:
+            nm['trusteeId'] = trustee_id
+        all_nm.append(nm)
+        synced = _sync_vassal_knight(binder, nm)
+        entry = None
+        if holder_id and _bool(data, 'chronicle', True):
+            holder = npcs[holder_id]
+            entry = _chronicle_push(binder, year, f"{holder.get('name')} became {holder.get('role') or 'holder'} of {name} ({status.lower()})")
+        log.info('[MCP] Created NPC manor %s: %s (holder %s)', nm['id'], name, holder_id or '-')
+        return 201, {'ok': True, 'manor': _npc_manor_view(binder, nm, npcs, full=True),
+                     'chronicleEntry': entry, 'vassalRowsSynced': synced}
+    return _npc_manor_mutation(None, mutate)
+
+
+@app.route('/api/mcp/npc-manor/<path:key>', methods=['PATCH'])
+def api_mcp_npc_manor_update(key):
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, nm):
+        npcs = _npc_index(binder)
+        changed = []
+        v = _text(data, 'name', 200, None)
+        if v is not None:
+            if not v:
+                raise _ManorInputError('name cannot be blank')
+            clash = [m for m in _npc_manors_list(binder) if isinstance(m, dict) and m is not nm
+                     and (m.get('name') or '').strip().lower() == v.lower()]
+            if clash:
+                raise _ManorInputError(f'Another NPC manor is already named {v!r}')
+            nm['name'] = v; changed.append('name')
+        for fld, lim in (('location', 200), ('faction', 100), ('notes', 5000)):
+            v = _text(data, fld, lim, None)
+            if v is not None:
+                nm[fld] = v; changed.append(fld)
+        v = _choice(data, 'status', _NPC_MANOR_STATUSES)
+        if v is not None:
+            nm['status'] = v; changed.append('status')
+        v = _int(data, 'yearGranted')
+        if v is not None:
+            nm['yearGranted'] = v; changed.append('yearGranted')
+        trustee = _npc_id_field(data, 'trusteeId', npcs)
+        holder = _npc_id_field(data, 'holderId', npcs)
+        if holder is not None and holder != (nm.get('holderId') or ''):
+            new_holder = npcs.get(holder) if holder else None
+            if new_holder and str(new_holder.get('status', '')).lower() == 'dead':
+                raise _ManorInputError(f"{new_holder.get('name')} is dead and cannot hold a manor")
+            effective_trustee = trustee if trustee is not None else (nm.get('trusteeId') or '')
+            if new_holder and not _npc_of_age(new_holder, binder.get('year')) and not effective_trustee:
+                raise _ManorInputError(
+                    f"{new_holder.get('name')} is not of age (under 21 and not marked came_of_age). The Binder "
+                    "holds such manors in trust: pass trusteeId as well, or use assign_npc_manor with of_age=true.")
+            nm['holderId'] = holder; changed.append('holderId')
+        if trustee is not None:
+            if trustee:
+                nm['trusteeId'] = trustee
+            else:
+                nm.pop('trusteeId', None)
+            changed.append('trusteeId')
+        if not changed:
+            raise _ManorInputError('No updatable fields provided')
+        synced = _sync_vassal_knight(binder, nm) if 'holderId' in changed else 0
+        log.info('[MCP] Updated NPC manor %s (%s): %s', nm.get('id'), nm.get('name'), ', '.join(changed))
+        return 200, {'ok': True, 'changed': changed, 'vassalRowsSynced': synced,
+                     'manor': _npc_manor_view(binder, nm, npcs, full=True)}
+    return _npc_manor_mutation(key, mutate)
+
+
+@app.route('/api/mcp/npc-manor/<path:key>/assign', methods=['POST'])
+def api_mcp_npc_manor_assign(key):
+    """Mirror of the NPC Manors tab's Assign / Succession / Abdication /
+    Come-of-age dialogs: changes the holder AND writes the Chronicle line."""
+    err = _auth_gm_or_mcp()
+    if err: return err
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    def mutate(binder, nm):
+        npcs = _npc_index(binder)
+        event = _choice(data, 'event', _NPC_MANOR_EVENTS, 'grant')
+        year = _int(data, 'year', binder.get('year'))
+        notes = _text(data, 'notes', 5000, None)
+        reason = _text(data, 'reason', 300, '')
+        write_chron = _bool(data, 'chronicle', True)
+        prev = npcs.get(nm.get('holderId')) if nm.get('holderId') else None
+        prev_name = (prev or {}).get('name') or 'the previous holder'
+        name = nm.get('name')
+        lines = []
+
+        if event == 'assume':
+            holder = prev
+            if not holder:
+                raise _ManorInputError(f'{name} has no holder to come of age')
+            trustee = npcs.get(nm.get('trusteeId')) if nm.get('trusteeId') else None
+            if not trustee:
+                raise _ManorInputError(f'{name} is not held in trust')
+            holder['came_of_age'] = True
+            nm.pop('trusteeId', None)
+            nm['yearGranted'] = year
+            lines.append(f"{holder.get('name')} came of age and assumed full control of {name}, ending the trust held by {trustee.get('name')}")
+        elif event == 'escheat' or (event == 'abdication' and not (data.get('holderId') or '').strip()):
+            if event == 'abdication' and not reason:
+                raise _ManorInputError('reason is required for an abdication (e.g. "took holy orders")')
+            nm['holderId'] = ''
+            nm.pop('trusteeId', None)
+            nm['status'] = 'Escheated'
+            nm['yearGranted'] = year
+            lines.append(f"{prev_name} abdicated {name} ({reason}); manor reverted to the liege" if event == 'abdication'
+                         else f"{name} escheated to the liege after {prev_name}'s death")
+        else:
+            holder_id = _npc_id_field(data, 'holderId', npcs, allow_blank=False)
+            if holder_id is None:
+                raise _ManorInputError('holderId is required (the NPC who takes the manor)')
+            holder = npcs[holder_id]
+            if str(holder.get('status', '')).lower() == 'dead':
+                raise _ManorInputError(f"{holder.get('name')} is dead and cannot take a manor")
+            role = holder.get('role') or 'holder'
+            hname = holder.get('name')
+            if _bool(data, 'of_age', False):
+                holder['came_of_age'] = True
+            trustee_id = _npc_id_field(data, 'trusteeId', npcs) or ''
+            of_age = _npc_of_age(holder, binder.get('year'))
+            if not of_age and not trustee_id:
+                age = (binder.get('year') - holder['year_born']) if isinstance(holder.get('year_born'), int) and isinstance(binder.get('year'), int) else None
+                raise _ManorInputError(
+                    f"{hname} is not of age" + (f" ({age} in {binder.get('year')})" if age is not None else '') +
+                    ". The Binder holds such manors in trust: pass trusteeId (an adult who holds it for them), "
+                    "or of_age=true if Steve rules they have come of age.")
+            if of_age:
+                trustee_id = ''
+            if event == 'abdication' and not reason:
+                raise _ManorInputError('reason is required for an abdication (e.g. "took holy orders")')
+            status = _choice(data, 'status', _NPC_MANOR_STATUSES, None)
+            if event in ('inherit', 'abdication'):
+                status = status or 'Granted'
+            else:
+                status = status or nm.get('status') or 'Granted'
+            nm['holderId'] = holder_id
+            if trustee_id:
+                nm['trusteeId'] = trustee_id
+            else:
+                nm.pop('trusteeId', None)
+            nm['status'] = status
+            nm['yearGranted'] = year
+            trustee = npcs.get(trustee_id) if trustee_id else None
+            tname = (trustee or {}).get('name') or 'Unknown'
+            if event == 'inherit':
+                lines.append(f"{hname} inherited {name} after {prev_name}'s death, becoming {role} of {name}" if of_age
+                             else f"{hname} inherited {name} after {prev_name}'s death; manor held in trust by {tname} until {hname} comes of age")
+            elif event == 'abdication':
+                lines.append(f"{prev_name} abdicated {name} ({reason}); {hname} succeeded as {role} of {name}" if of_age
+                             else f"{prev_name} abdicated {name} ({reason}); {hname} granted {name}; manor held in trust by {tname} until {hname} comes of age")
+            else:
+                lines.append(f"{hname} became {role} of {name} ({status.lower()})" if of_age
+                             else f"{hname} granted {name} ({status.lower()}); manor held in trust by {tname} until {hname} comes of age")
+
+        if notes is not None:
+            nm['notes'] = notes
+        synced = _sync_vassal_knight(binder, nm)
+        entries = [_chronicle_push(binder, year, t) for t in lines] if write_chron else []
+        log.info('[MCP] NPC manor %s (%s): %s -> holder %s', nm.get('id'), name, event, nm.get('holderId') or '-')
+        return 200, {'ok': True, 'event': event, 'year': year, 'vassalRowsSynced': synced,
+                     'chronicleEntries': entries, 'manor': _npc_manor_view(binder, nm, npcs, full=True)}
+    return _npc_manor_mutation(key, mutate)
 
 
 # ── MCP Winter Phase & Solo API ──────────────────────────────────────────────

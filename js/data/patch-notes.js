@@ -413,6 +413,18 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.17.0',
+    date: '2026-10-23',
+    sections: [{
+      heading: 'MCP Bridge — NPC Manors & Glory Awards',
+      items: [
+        'Connected AI tools can now read and change the NPC Manors registry: list the vassal manors (with who holds each, who is in trust, and which player manor they owe service to), grant, inherit, abdicate or escheat a manor, and end a trust when an heir comes of age. Each change writes the same Chronicle line the NPC Manors tab writes and re-points the player manors’ vassal ledgers, so dashboards stop alerting on a knight who no longer holds the land.',
+        'Asking a connected tool for a vassal manor by name (“Steeple Langford”) used to come back “Manor not found”, because only the four player manors were reachable. It now explains which kind of manor it is and which tool to use.',
+        'Glory awards through the bridge work again. Exact scores sent as text (“1500”) were being refused on every attempt; they are now accepted, and a new “add Glory” option awards or deducts from a character’s current score instead of overwriting it. Characters on a renown category or N/A are still protected from arithmetic.',
+      ],
+    }],
+  },
+  {
     version: '3.16.1',
     date: '2026-10-09',
     sections: [{

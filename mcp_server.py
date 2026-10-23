@@ -13,6 +13,8 @@ import logging
 import os
 from pathlib import Path
 
+from urllib.parse import quote
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -58,9 +60,17 @@ mcp = FastMCP(
         "Do not assert Pendragon 6e rules from memory as fact — flag uncertainty "
         "and have Steve verify against the book.\n\n"
         "All entity types support read/write: story arcs, session prep, "
-        "NPCs, chronicles, and the player knights' manors (ledger years, "
-        "improvements, property damage). Updates are partial — only send the "
+        "NPCs, chronicles, the player knights' manors (ledger years, "
+        "improvements, property damage) and the NPC vassal-manor registry "
+        "(who holds Steeple Langford, Devizes, etc.). Updates are partial — only send the "
         "fields you want to change.\n\n"
+        "TWO KINDS OF MANOR: get_manor/update_manor/record_manor_year are for the FOUR "
+        "player knights' manors only (Blackwood, Cador, Dawnwell, Westwood). Every other "
+        "manor — the vassal and NPC manors shown on the NPC Manors tab — lives in the "
+        "registry: list_npc_manors, get_npc_manor, create_npc_manor, update_npc_manor, "
+        "and assign_npc_manor (grant / inheritance / abdication / escheat / come of age, "
+        "with the Chronicle line written like the tab does). Reassigning a holder always "
+        "goes through assign_npc_manor unless Steve asks for a silent data fix.\n\n"
         "MANORS: Steve rolls EVERY manor die by hand — never roll for him there. To "
         "record a manor year call get_manor_reference + get_manor, ask for his roll "
         "results, preview with record_manor_year(dry_run=true), and commit only "
@@ -76,6 +86,18 @@ mcp = FastMCP(
 )
 
 client = httpx.Client(base_url=BINDER_URL, headers=HEADERS, timeout=30)
+
+
+def _glory_arg(value):
+    """Claude.ai's tool client tends to send int|str fields as text ("1500").
+    Turn numeric strings back into ints before they reach the Binder."""
+    if isinstance(value, str):
+        t = value.strip().replace(',', '')
+        if t.lstrip('+').isdigit():
+            return int(t)
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
 
 
 def _api(method: str, path: str, **kwargs) -> dict | list | str:
@@ -266,7 +288,7 @@ def create_npc(
     body = {
         "name": name, "role": role, "status": status, "pronoun": pronoun,
         "manor": manor, "household": household, "faction": faction,
-        "glory": glory, "notes": notes, "gm_notes": gm_notes,
+        "glory": _glory_arg(glory), "notes": notes, "gm_notes": gm_notes,
         "eligibility": eligibility,
     }
     if year_born is not None:
@@ -279,8 +301,13 @@ def create_npc(
         "Update an NPC's fields. PARTIAL UPDATE — only the fields you pass are "
         "changed; everything else stays as-is. Use for targeted edits like "
         "'add a note', 'change status to Dead', 'set glory to 1500'. "
-        "Glory also accepts N/A or a renown category: Non-knight, Unproven, "
+        "GLORY: glory=<number> SETS the exact score; glory_add=<number> ADDS to the "
+        "current exact score (negative to deduct) — use glory_add for awards like "
+        "'give Sir Rhodri 50 Glory'. Pass one or the other, not both. glory also accepts "
+        "N/A or a renown category: Non-knight, Unproven, "
         "Veteran, Respected, Notable, Renowned, Illustrious, Extraordinary, Legendary. "
+        "glory_add is refused for characters on a category or N/A (set an exact "
+        "score first if Steve wants one). "
         "If status changes to 'Dead', the NPC automatically moves to the dead list "
         "(and vice versa back to living). "
         "Updatable fields: name, role, household, status, year_born, year_died, "
@@ -306,6 +333,7 @@ def update_npc(
     household: str | None = None,
     faction: str | None = None,
     glory: int | str | None = None,
+    glory_add: int | None = None,
     notes: str | None = None,
     gm_notes: str | None = None,
     eligibility: str | None = None,
@@ -338,7 +366,8 @@ def update_npc(
     for key, val in {
         "name": name, "role": role, "status": status, "year_born": year_born,
         "year_died": year_died, "pronoun": pronoun, "manor": manor,
-        "household": household, "faction": faction, "glory": glory,
+        "household": household, "faction": faction, "glory": _glory_arg(glory),
+        "glory_add": _glory_arg(glory_add),
         "notes": notes, "gm_notes": gm_notes, "eligibility": eligibility, "dowry": dowry,
         "passions": passions, "skills": skills, "stats": stats, "con": con,
         "blessed": blessed, "blessed_note": blessed_note, "barren": barren,
@@ -854,11 +883,12 @@ def _strip_none(**kwargs) -> dict:
 
 @mcp.tool(
     description=(
-        "List the player knights' manors (Blackwood, Cador, Dawnwell, Westwood) with "
+        "List the FOUR player knights' manors (Blackwood, Cador, Dawnwell, Westwood) with "
         "a one-screen summary each: knight, player, faction, treasury, last recorded "
         "ledger year, whether the current game year is recorded yet, hatred/care, "
         "base harvest, lifestyle, DV, lord/steward/heir, active improvements, open "
-        "property damage and vassal count. Call this first for any manor conversation."
+        "property damage and vassal count. Call this first for any manor conversation. "
+        "NPC/vassal manors (Steeple Langford, Devizes, ...) are NOT here — see list_npc_manors."
     )
 )
 def list_manors() -> dict:
@@ -1079,7 +1109,8 @@ def delete_manor_year(manor: str, year: int) -> dict:
         "(the commoners' passions), baseHarvest (L), dvBase (base defensive value), "
         "lifestyle (Impoverished/Poor/Normal/Rich/Extravagant), steward_skill, "
         "steward_industry, faction, notes. Knight, player, lord/steward/heir assignments "
-        "and succession are NOT editable here — Steve handles those in the Binder."
+        "and succession are NOT editable here — Steve handles those in the Binder. "
+        "NOT for vassal/NPC manors: those use update_npc_manor / assign_npc_manor."
     )
 )
 def update_manor(
@@ -1212,6 +1243,152 @@ def update_manor_improvement(
     if not body:
         return {"error": "No fields to update"}
     return _api("PATCH", f"/api/mcp/manor/{manor}/improvement/{improvement_id}", json=body)
+
+
+# ── NPC Manor Registry Tools (vassal / NPC-held manors) ──────────────────────
+# These are the manors on the NPC Manors tab — everything that is NOT one of the
+# four player knights' manors. Holder changes mirror the tab's dialogs exactly:
+# the PK vassal ledgers are re-pointed and a Chronicle line is written.
+
+@mcp.tool(
+    description=(
+        "List the NPC vassal-manor registry (the NPC Manors tab): every manor that is "
+        "NOT one of the four player knights' manors — Steeple Langford, Devizes, Wilton, "
+        "Tisbury and so on. Each row gives id, name, status (Granted/Gifted/Seized/"
+        "Purchased/Escheated/Other), holder (NPC ref), trustee if held in trust, "
+        "yearGranted, flags (vacant, holderDead, inTrust, holderOfAge, readyToAssume) and "
+        "'liege' — which player manor lists it as a vassal. Filters: q (name or holder "
+        "substring), vacant_only. Use this before any reassignment so you have the exact "
+        "id/name."
+    )
+)
+def list_npc_manors(q: str = "", vacant_only: bool = False) -> dict:
+    params = {}
+    if q:
+        params["q"] = q
+    if vacant_only:
+        params["vacant"] = "1"
+    return _api("GET", "/api/mcp/npc-manors", params=params)
+
+
+@mcp.tool(
+    description=(
+        "Get one NPC/vassal manor by id ('nm-import-028') or name ('Steeple Langford' — a "
+        "bare name also matches 'Wilton (Manor)' when unambiguous). Returns the full "
+        "registry record: holder, trustee, status, yearGranted, location, faction, notes, "
+        "relatedNpcs (steward, family, etc.), the player manor(s) it is a vassal of, and up "
+        "to 12 Chronicle lines that mention it. If the name is a PLAYER manor you get a "
+        "404 pointing at get_manor instead."
+    )
+)
+def get_npc_manor(manor: str) -> dict:
+    return _api("GET", f"/api/mcp/npc-manor/{quote(manor, safe='')}")
+
+
+@mcp.tool(
+    description=(
+        "Add a new manor to the NPC Manors registry (mirrors the tab's Add Manor form). "
+        "Only name is required. holderId: NPC id (or exact unique name) of the holder, "
+        "leave blank for a vacant manor. status defaults to Granted; yearGranted defaults "
+        "to the current game year. trusteeId: an adult holding it for an under-age heir. "
+        "When a holder is given a Chronicle line '<Name> became <role> of <Manor> "
+        "(granted)' is written for yearGranted, like the tab does (chronicle=false to "
+        "skip). Fails if a registry manor of that name already exists — then use "
+        "assign_npc_manor / update_npc_manor. Confirm with Steve before creating."
+    )
+)
+def create_npc_manor(
+    name: str,
+    holderId: str = "",
+    status: str = "Granted",
+    yearGranted: int | None = None,
+    location: str = "",
+    faction: str = "",
+    notes: str = "",
+    trusteeId: str = "",
+    chronicle: bool = True,
+) -> dict:
+    body = {"name": name, "holderId": holderId, "status": status, "location": location,
+            "faction": faction, "notes": notes, "trusteeId": trusteeId, "chronicle": chronicle}
+    if yearGranted is not None:
+        body["yearGranted"] = yearGranted
+    return _api("POST", "/api/mcp/npc-manor", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Edit an NPC/vassal manor's record fields. PARTIAL UPDATE — only the fields you "
+        "pass change. Fields: name, location, status (Granted/Gifted/Seized/Purchased/"
+        "Escheated/Other), faction, notes, yearGranted, holderId, trusteeId (pass '' to "
+        "clear). This is the tab's Edit form: a SILENT data fix with no Chronicle line — "
+        "for an actual grant, inheritance, abdication or escheat use assign_npc_manor, "
+        "which writes the Chronicle like the GM's dialogs. Changing holderId re-points "
+        "the player manors' vassal ledgers automatically. An under-age holder (under 21, "
+        "not came_of_age) needs a trusteeId."
+    )
+)
+def update_npc_manor(
+    manor: str,
+    name: str | None = None,
+    location: str | None = None,
+    status: str | None = None,
+    faction: str | None = None,
+    notes: str | None = None,
+    yearGranted: int | None = None,
+    holderId: str | None = None,
+    trusteeId: str | None = None,
+) -> dict:
+    body = _strip_none(name=name, location=location, status=status, faction=faction,
+                       notes=notes, yearGranted=yearGranted, holderId=holderId, trusteeId=trusteeId)
+    if not body:
+        return {"error": "No fields to update"}
+    return _api("PATCH", f"/api/mcp/npc-manor/{quote(manor, safe='')}", json=body)
+
+
+@mcp.tool(
+    description=(
+        "Change who holds an NPC/vassal manor — the tab's Assign / Succession / Abdicate / "
+        "Come-of-age dialogs in one tool. Writes the Chronicle line the tab would and "
+        "re-points the player manors' vassal ledgers. CONFIRM WITH STEVE FIRST.\n\n"
+        "event (default 'grant'):\n"
+        "- grant: holderId takes the manor. status keeps the manor's current status unless "
+        "given. Chronicle: '<Name> became <role> of <Manor> (granted)'.\n"
+        "- inherit: holderId inherits after the previous holder's death; status becomes "
+        "Granted. Chronicle: '<Heir> inherited <Manor> after <Prev>'s death, becoming ...'.\n"
+        "- abdication: previous holder steps down; reason is REQUIRED (e.g. 'took holy "
+        "orders'). With holderId the heir succeeds; without one the manor escheats.\n"
+        "- escheat: no holderId; manor reverts to the liege (status Escheated). Chronicle: "
+        "'<Manor> escheated to the liege after <Prev>'s death'.\n"
+        "- assume: the current under-age holder comes of age, ending the trust (sets "
+        "came_of_age on them).\n\n"
+        "year defaults to the current game year. An UNDER-AGE holder (under 21 and not "
+        "came_of_age) must have a trusteeId — an adult who holds the manor for them — or "
+        "of_age=true if Steve rules they are of age (marks came_of_age on the NPC). "
+        "notes replaces the manor notes. chronicle=false skips the Chronicle line (data "
+        "fixes only). holderId accepts an NPC id or an exact, unique NPC name."
+    )
+)
+def assign_npc_manor(
+    manor: str,
+    holderId: str = "",
+    event: str = "grant",
+    year: int | None = None,
+    status: str | None = None,
+    trusteeId: str = "",
+    reason: str = "",
+    notes: str | None = None,
+    of_age: bool = False,
+    chronicle: bool = True,
+) -> dict:
+    body = {"holderId": holderId, "event": event, "trusteeId": trusteeId, "reason": reason,
+            "of_age": of_age, "chronicle": chronicle}
+    if year is not None:
+        body["year"] = year
+    if status is not None:
+        body["status"] = status
+    if notes is not None:
+        body["notes"] = notes
+    return _api("POST", f"/api/mcp/npc-manor/{quote(manor, safe='')}/assign", json=body)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
