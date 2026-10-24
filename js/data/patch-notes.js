@@ -413,6 +413,18 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.18.0',
+    date: '2026-10-24',
+    sections: [{
+      heading: 'Caliburn Carries the GM’s Word',
+      items: [
+        'The GM’s connected AI tools can now speak through Caliburn in The Round Table: herald announcements as gold-bordered cards, open polls, and post session musters. Nothing is sent until the GM has seen a preview and approved it, and Caliburn only ever posts in The Round Table channels.',
+        'Two kinds of poll: Discord’s own tap-to-vote poll, or the new Caliburn Poll card — lettered options 🇦 🇧 🇨 with progress bars and voter names that update live as knights react. Closed polls lock with the result written in.',
+        'Session musters show the start time in each knight’s own local time with a countdown, and fill in Attending / Can’t make it / Maybe as you react ✅ ❌ ❔.',
+      ],
+    }],
+  },
+  {
     version: '3.17.0',
     date: '2026-10-23',
     sections: [{

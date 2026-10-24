@@ -81,7 +81,12 @@ mcp = FastMCP(
         "(confirm_death, record_birth, resolve_birth_tragedy, confirm_marriage, "
         "marriage_wait, add_life_event) write, and only after he says so. For "
         "solo events YOU write the flavor text in the house voice (see flavorGuide), "
-        "a different angle for each knight."
+        "a different angle for each knight.\n\n"
+        "DISCORD: the discord_* tools post to the players' Discord server AS the Caliburn bot "
+        "(announcements, native or embed polls, session musters, reading channel history). Posting "
+        "is limited to text channels under 'The Round Table'. Every write defaults to dry_run=True "
+        "— show Steve the preview and send only after he approves. Never ping the knights unless "
+        "he asks for it."
     ),
 )
 
@@ -1567,6 +1572,13 @@ def roll_solo_event(npc_id: str, mode: str = "yearly", tier: str = "I", wed: str
                     year: int | None = None, kin_size: str = "normal", fixed_roll: int | None = None) -> dict:
     return _api("POST", "/api/mcp/solo/roll", json=_strip_none(
         npc_id=npc_id, mode=mode, tier=tier, wed=wed, season=season, year=year, kin_size=kin_size, fixed_roll=fixed_roll))
+
+
+# ── Discord tools (announcements, polls, musters) ────────────────────────────
+
+import discord_tools  # noqa: E402  (same directory as this file)
+
+discord_client = discord_tools.register(mcp, SECRETS)
 
 
 # ── Entry Point ──────────────────────────────────────────────────────────────

@@ -45,7 +45,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.17.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.18.0'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
