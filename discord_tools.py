@@ -23,7 +23,10 @@ Secrets (pendragon/secrets.env):
 
 Every write tool defaults to dry_run=True and returns a preview; nothing
 reaches the server until the GM has seen the preview and the tool is called
-again with dry_run=False.
+again with dry_run=False.  Reading AND posting are both locked to the
+DISCORD_WRITE_CATEGORY channels (Steve's call, Oct 24 2026): the AI cannot
+look into archived campaigns, other games' channels or anything else the bot
+happens to see.
 """
 
 from __future__ import annotations
@@ -186,6 +189,7 @@ class DiscordClient:
                     "category": cat,
                     "type": TEXT_TYPES[c["type"]],
                     "topic": (c.get("topic") or "")[:200],
+                    "can_read": self._in_write_category(cat) or c["id"] in self.cfg.extra_allowed,
                     "can_post": self._writable(c, cat),
                     "_pos": (0 if self._in_write_category(cat) else 1,
                              cat_pos.get(c.get("parent_id"), 0), c.get("position", 0)),
@@ -234,7 +238,17 @@ class DiscordClient:
         opts = "; ".join(f"#{c['name']} in '{c['category'] or 'no category'}' (id {c['id']})" for c in exact)
         raise ValueError(f"#{name} is ambiguous — {opts}. Pass the channel id instead.")
 
+    def require_readable(self, chan: dict) -> dict:
+        """Every tool, read or write, is locked to the configured category."""
+        if not chan.get("can_read"):
+            raise ValueError(
+                f"#{chan['name']} ({chan['category'] or 'no category'}) is outside '{self.cfg.write_category}'. "
+                f"Caliburn's tools are locked to that category — reading included."
+            )
+        return chan
+
     def require_writable(self, chan: dict) -> dict:
+        self.require_readable(chan)
         if not chan.get("can_post"):
             raise ValueError(
                 f"Posting to #{chan['name']} ({chan['category'] or 'no category'}) is not allowed. "
@@ -710,6 +724,9 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
         except ValueError as exc:
             return {"error": str(exc)}
 
+    def _chan(ref: str) -> dict:
+        return client.require_readable(client.resolve_channel(ref))
+
     def _post(chan: dict, payload: dict, dry_run, kind: str, reactions: list[str] | None = None) -> dict:
         client.require_writable(chan)
         if _truthy(dry_run):
@@ -740,16 +757,17 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
 
     @mcp.tool(
         description=(
-            "List the Discord server's text channels with id, name, category and whether Caliburn is "
-            "allowed to post there (only text channels under 'The Round Table' by default). Channels "
-            "Caliburn may post in come first. Call this before posting if you are unsure which channel "
-            "Steve means — names like #general-chat exist in more than one category."
+            "List the Discord channels Caliburn's tools may use: the text channels under 'The Round "
+            "Table' (id, name, topic, whether posting is allowed — forum channels are read-only). "
+            "Channels outside that category are off limits for reading and posting alike and are not "
+            "listed. Call this before posting if you are unsure which channel Steve means."
         )
     )
     def discord_list_channels() -> dict:
         def go():
-            chans = client.channels(force=True)
-            return {"write_category": cfg.write_category,
+            chans = [c for c in client.channels(force=True) if c["can_read"]]
+            return {"locked_to": cfg.write_category,
+                    "note": "Caliburn's tools can only read and post within this category. Other channels are not listed.",
                     "postable": [c for c in chans if c["can_post"]],
                     "read_only": [c for c in chans if not c["can_post"]]}
         return _run(go)
@@ -759,13 +777,13 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
             "Read recent messages from a Discord channel (newest first; up to 100 per call, use "
             "before_message_id to page further back). Returns author, time (UTC), text, embeds, "
             "reaction counts and native-poll tallies. Use it to catch up on scheduling chatter or "
-            "check what was already announced before drafting something new. Reading is allowed in "
-            "any channel Caliburn can see; posting is not."
+            "check what was already announced before drafting something new. Like every discord_* "
+            "tool, this only works inside 'The Round Table' channels."
         )
     )
     def discord_read_messages(channel: str, limit: int = 25, before_message_id: str | None = None) -> dict:
         def go():
-            chan = client.resolve_channel(channel)
+            chan = _chan(channel)
             msgs = client.list_messages(chan["id"], limit, before_message_id)
             return {"channel": {"id": chan["id"], "name": chan["name"], "category": chan["category"]},
                     "count": len(msgs),
@@ -788,7 +806,7 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
                                   ping_knights: bool = False, image_url: str | None = None,
                                   footer: str | None = None, dry_run: bool = True) -> dict:
         def go():
-            chan = client.resolve_channel(channel)
+            chan = _chan(channel)
             payload = build_announcement(cfg, body, title, style, _truthy(ping_knights), image_url, footer)
             return _post(chan, payload, dry_run, "announcement")
         return _run(go)
@@ -810,7 +828,7 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
                             multi_select: bool = False, style: str = "native", intro: str | None = None,
                             ping_knights: bool = False, dry_run: bool = True) -> dict:
         def go():
-            chan = client.resolve_channel(channel)
+            chan = _chan(channel)
             if style == "native":
                 payload = build_native_poll(cfg, question, options, duration_hours, _truthy(multi_select), intro, _truthy(ping_knights))
                 return _post(chan, payload, dry_run, "poll:native")
@@ -830,7 +848,7 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
         )
     )
     def discord_poll_results(channel: str, message_id: str) -> dict:
-        return _run(lambda: poll_results(client, client.resolve_channel(channel), str(message_id)))
+        return _run(lambda: poll_results(client, _chan(channel), str(message_id)))
 
     @mcp.tool(
         description=(
@@ -842,7 +860,7 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
     )
     def discord_close_poll(channel: str, message_id: str) -> dict:
         def go():
-            chan = client.resolve_channel(channel)
+            chan = _chan(channel)
             msg = client.get_message(chan["id"], str(message_id))
             kind = _poll_kind(msg)
             if msg.get("author", {}).get("id") != client.me().get("id"):
@@ -869,7 +887,7 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
                                     timezone: str | None = None, duration_hours: float | None = None,
                                     ping_knights: bool = False, dry_run: bool = True) -> dict:
         def go():
-            chan = client.resolve_channel(channel)
+            chan = _chan(channel)
             when = parse_when(starts_at, timezone, cfg.default_tz)
             payload = build_muster(cfg, title, when, description, duration_hours, _truthy(ping_knights))
             out = _post(chan, payload, dry_run, "muster", reactions=[e for e, _ in RSVP])
@@ -885,7 +903,7 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
         )
     )
     def discord_event_rsvps(channel: str, message_id: str) -> dict:
-        return _run(lambda: muster_rsvps(client, client.resolve_channel(channel), str(message_id)))
+        return _run(lambda: muster_rsvps(client, _chan(channel), str(message_id)))
 
     @mcp.tool(
         description=(
@@ -898,7 +916,7 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
     def discord_edit_message(channel: str, message_id: str, body: str | None = None, title: str | None = None,
                              dry_run: bool = True) -> dict:
         def go():
-            chan = client.resolve_channel(channel)
+            chan = _chan(channel)
             client.require_writable(chan)
             msg = client.get_message(chan["id"], str(message_id))
             if msg.get("author", {}).get("id") != client.me().get("id"):
@@ -943,7 +961,7 @@ def register(mcp, secrets: dict, client: DiscordClient | None = None):
     )
     def discord_delete_message(channel: str, message_id: str) -> dict:
         def go():
-            chan = client.resolve_channel(channel)
+            chan = _chan(channel)
             msg = client.get_message(chan["id"], str(message_id))
             if msg.get("author", {}).get("id") != client.me().get("id"):
                 raise ValueError("Caliburn can only delete its own messages.")

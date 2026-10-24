@@ -159,9 +159,12 @@ class DiscordToolTests(unittest.TestCase):
         postable = [c["name"] for c in out["postable"]]
         self.assertEqual(postable, ["knightly-chat", "gm-solar", "court-of-schedules"])
         read_only = {c["name"]: c for c in out["read_only"]}
-        self.assertIn("library-of-camelot", read_only)      # forum: not postable
-        self.assertIn("scheduling", read_only)              # archived category
-        self.assertNotIn("The Court", read_only)            # voice channels are not listed
+        self.assertEqual(list(read_only), ["library-of-camelot"])   # forum: readable, not postable
+        self.assertEqual(out["locked_to"], "The Round Table")
+        listed = {c["name"] for c in out["postable"]} | set(read_only)
+        self.assertNotIn("scheduling", listed)              # archived category: hidden entirely
+        self.assertNotIn("general-chat", listed)
+        self.assertNotIn("The Court", listed)               # voice channels are not listed
 
     def test_resolve_by_name_hash_id_and_mention(self):
         for ref in ("gm-solar", "#gm-solar", "GM Solar", "100", "<#100>"):
@@ -177,8 +180,27 @@ class DiscordToolTests(unittest.TestCase):
 
     def test_post_outside_round_table_is_refused(self):
         out = self.t["discord_post_announcement"]("scheduling", "hello", dry_run=False)
-        self.assertIn("not allowed", out["error"])
+        self.assertIn("locked", out["error"])
         self.assertFalse(any(m == "POST" for m, _, _ in self.fake.calls))
+
+    def test_read_outside_round_table_is_refused(self):
+        for tool, args in (("discord_read_messages", ("scheduling",)),
+                           ("discord_poll_results", ("300", "1")),
+                           ("discord_event_rsvps", ("<#300>", "1")),
+                           ("discord_delete_message", ("scheduling", "1")),
+                           ("discord_edit_message", ("scheduling", "1", "x"))):
+            out = self.t[tool](*args)
+            self.assertIn("locked", out.get("error", ""), tool)
+        self.assertFalse(any(p.endswith("/messages") or "/messages/" in p for _, p, _ in self.fake.calls))
+
+    def test_extra_allowed_channel_opens_read_and_post(self):
+        secrets = dict(SECRETS, DISCORD_ALLOWED_CHANNELS="200")
+        tools = _Tools()
+        client = D.DiscordClient(D.DiscordConfig(secrets), transport=self.fake.transport(), sleep=lambda s: None)
+        D.register(tools, secrets, client=client)
+        out = tools.fns["discord_post_announcement"]("scheduling", "hello", dry_run=False)
+        self.assertTrue(out["posted"])
+        self.assertIn("scheduling", [c["name"] for c in tools.fns["discord_list_channels"]()["postable"]])
 
     # -- announcements -------------------------------------------------------
 
@@ -393,6 +415,9 @@ class DiscordToolTests(unittest.TestCase):
         out = self.t["discord_list_channels"]()
         self.assertIn("postable", out)
         self.assertEqual([c[0] for c in self.fake.calls].count("GET"), 2)
+
+    def test_resolve_lore_handouts_round_table_name_wins_over_dnd_lookalike(self):
+        self.assertEqual(self.client.resolve_channel("knightly chat")["id"], "102")
 
     def test_truthy_strings_from_claude_ai(self):
         out = self.t["discord_post_announcement"]("gm-solar", "x", ping_knights="true", dry_run="false")
