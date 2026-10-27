@@ -1605,7 +1605,8 @@ const Components = {
       pronoun:      g('ef-pronoun')?.value || npc.pronoun,
       glory,
       year_born:    parseInt(g('ef-year-born')?.value, 10) || null,
-      age:          parseInt(g('ef-age')?.value, 10) || null,
+      // Age is derived from year_born everywhere; only store a number when there is no birth year (GitHub #17)
+      age:          (parseInt(g('ef-year-born')?.value, 10) || null) ? null : (parseInt(g('ef-age')?.value, 10) || null),
       household:    g('ef-household')?.value || '',
       faction:      g('ef-faction')?.value || '',
       manor:        g('ef-manor-link')?.value?.trim() || g('ef-manor')?.value?.trim() || '',
@@ -2163,7 +2164,8 @@ const Components = {
       pronoun:      g('ef-pronoun')?.value || '',
       glory,
       year_born:    parseInt(g('ef-year-born')?.value, 10) || null,
-      age:          parseInt(g('ef-age')?.value, 10) || null,
+      // Age is derived from year_born everywhere; only store a number when there is no birth year (GitHub #17)
+      age:          (parseInt(g('ef-year-born')?.value, 10) || null) ? null : (parseInt(g('ef-age')?.value, 10) || null),
       household:    g('ef-household')?.value || '',
       faction:      g('ef-faction')?.value || '',
       manor:        g('ef-manor-link')?.value?.trim() || g('ef-manor')?.value?.trim() || '',

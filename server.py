@@ -45,7 +45,7 @@ log = logging.getLogger('pendragon')
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 
-APP_VERSION  = '3.18.0'  # keep in sync with js/app.js
+APP_VERSION  = '3.18.1'  # keep in sync with js/app.js
 BASE_DIR     = Path(__file__).parent.resolve()
 CONFIG_FILE  = BASE_DIR / 'config.json'
 SECRETS_FILE = BASE_DIR / 'secrets.env'
@@ -1239,6 +1239,9 @@ def api_save():
                         if rid and rid not in merged_by_id:
                             merged_by_id[rid] = r
                     gm_binder['relationships'] = list(merged_by_id.values())
+                    cleared = _normalize_npc_ages(gm_binder)
+                    if cleared:
+                        log.info('[Save] Cleared stale stored age on %d NPCs (age is computed from year_born)', cleared)
                     body = json.dumps(gm_binder, ensure_ascii=False)
                 except Exception as e:
                     log.warning('[Save] Relationship merge failed: %s', e)
@@ -4226,15 +4229,51 @@ _REL_CLOSENESS = {
     'Aunt/Uncle': 9, 'Niece/Nephew': 10, 'Vassal': 11,
 }
 
-def _safe_npc(npc: dict, include_gm: bool = False, full: bool = False) -> dict:
+def _npc_age(npc: dict, year) -> int | None:
+    """Age worked out from year_born and the campaign year — never the stored
+    `age` field, which is a one-off snapshot that drifts (GitHub #17). The dead
+    are aged at death (year_died − year_born). Falls back to the stored number
+    only for NPCs with no birth year at all."""
+    yb = npc.get('year_born')
+    if isinstance(yb, int) and not isinstance(yb, bool):
+        yd = npc.get('year_died')
+        if isinstance(yd, int) and not isinstance(yd, bool):  # a death year ages them at death, whatever the status label says (mirrors buildNpcCardHtml)
+            return yd - yb
+        if isinstance(year, int) and not isinstance(year, bool):
+            return year - yb
+        return None
+    stored = npc.get('age')
+    return stored if isinstance(stored, int) and not isinstance(stored, bool) else None
+
+
+def _normalize_npc_ages(binder: dict) -> int:
+    """Drop the stored `age` snapshot wherever year_born exists so it cannot drift
+    again. Returns the number of NPCs touched. Mutates the binder in place."""
+    n = 0
+    for key in ('living', 'dead'):
+        lst = binder.get(key)
+        if isinstance(lst, dict):
+            lst = list(lst.values())
+        for npc in lst or []:
+            if isinstance(npc, dict) and isinstance(npc.get('year_born'), int) \
+                    and not isinstance(npc.get('year_born'), bool) and npc.get('age') is not None:
+                npc['age'] = None
+                n += 1
+    return n
+
+
+def _safe_npc(npc: dict, include_gm: bool = False, full: bool = False, year=None) -> dict:
     """Bot/MCP-facing NPC view. The Discord bot serves players, so gm_notes
     only appears when include_gm=True (the MCP endpoints, which are GM-tier).
-    full=True (MCP get_npc) returns every stored field except tree layout."""
+    full=True (MCP get_npc) returns every stored field except tree layout.
+    `age` in the output is always computed from year_born and `year`."""
     if full and include_gm:
-        return {k: v for k, v in npc.items() if k not in ('treeX', 'treeY')}
-    out = {k: npc.get(k) for k in _BOT_NPC_FIELDS}
-    if include_gm:
-        out['gm_notes'] = npc.get('gm_notes')
+        out = {k: v for k, v in npc.items() if k not in ('treeX', 'treeY')}
+    else:
+        out = {k: npc.get(k) for k in _BOT_NPC_FIELDS}
+        if include_gm:
+            out['gm_notes'] = npc.get('gm_notes')
+    out['age'] = _npc_age(npc, year)
     return out
 
 def _npc_relationships(npc_id: str, all_npcs: list, all_rels: list, limit: int = 4) -> list:
@@ -4285,7 +4324,7 @@ def api_bot_npcs():
     binder = _load_binder()
     if binder is None:
         return jsonify({'error': 'Save file not found'}), 503
-    npcs = [_safe_npc(n) for n in _all_npcs(binder)]
+    npcs = [_safe_npc(n, year=binder.get('year')) for n in _all_npcs(binder)]
     return jsonify({'npcs': npcs})
 
 @app.route('/api/bot/npc/<name_or_id>')
@@ -4299,7 +4338,7 @@ def api_bot_npc(name_or_id):
     needle = name_or_id.lower()
     for npc in all_npcs:
         if (npc.get('id') or '').lower() == needle or (npc.get('name') or '').lower() == needle:
-            result = _safe_npc(npc)
+            result = _safe_npc(npc, year=binder.get('year'))
             result['relationships'] = _npc_relationships(npc.get('id', ''), all_npcs, all_rels)
             return jsonify(result)
     return jsonify({'error': 'NPC not found'}), 404
@@ -4909,7 +4948,7 @@ def api_mcp_npcs():
     if binder is None:
         return jsonify({'error': 'Save file not found'}), 503
     search = request.args.get('search', '').lower()
-    npcs = [_safe_npc(n, include_gm=True) for n in _all_npcs(binder)]
+    npcs = [_safe_npc(n, include_gm=True, year=binder.get('year')) for n in _all_npcs(binder)]
     if search:
         npcs = [n for n in npcs if search in (n.get('name') or '').lower()]
     return jsonify({'npcs': npcs})
@@ -4925,7 +4964,7 @@ def api_mcp_npc(name_or_id):
     needle = name_or_id.lower()
     for npc in all_npcs:
         if (npc.get('id') or '').lower() == needle or (npc.get('name') or '').lower() == needle:
-            result = _safe_npc(npc, include_gm=True, full=True)
+            result = _safe_npc(npc, include_gm=True, full=True, year=binder.get('year'))
             result['relationships'] = _npc_relationships(npc.get('id', ''), all_npcs, all_rels)
             return jsonify(result)
     return jsonify({'error': 'NPC not found'}), 404
@@ -5002,6 +5041,24 @@ def _coerce_npc_glory(value):
     return value
 
 
+def _age_to_year_born(data: dict, binder: dict, npc: dict | None = None):
+    """MCP clients may pass `age` instead of year_born. Convert it to a birth year
+    against the campaign year (or, for a dead NPC, their year of death) so the
+    stored card never carries a snapshot that drifts. Returns (year_born, error)."""
+    if 'age' not in data or data.get('age') is None:
+        return None, None
+    raw = data.get('age')
+    if isinstance(raw, str) and raw.strip().lstrip('-').isdigit():
+        raw = int(raw.strip())
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0 or raw > 150:
+        return None, 'age must be a whole number of years (0–150)'
+    yd = data.get('year_died') if 'year_died' in data else (npc or {}).get('year_died')
+    anchor = yd if (isinstance(yd, int) and not isinstance(yd, bool)) else binder.get('year')
+    if not isinstance(anchor, int) or isinstance(anchor, bool):
+        return None, 'Cannot convert age to a birth year: the campaign year is unknown. Pass year_born instead.'
+    return anchor - raw, None
+
+
 _MCP_NPC_UPDATABLE = (
     'name', 'role', 'household', 'status', 'year_born', 'year_died',
     'pronoun', 'manor', 'faction', 'glory', 'notes', 'gm_notes', 'eligibility', 'dowry',
@@ -5043,6 +5100,13 @@ def api_mcp_create_npc():
             living = list(living.values())
         if isinstance(dead, dict):
             dead = list(dead.values())
+
+        if data.get('year_born') is None:
+            yb, age_err = _age_to_year_born(data, binder)
+            if age_err:
+                return jsonify({'error': age_err}), 400
+            if yb is not None:
+                data['year_born'] = yb
 
         existing_ids = {n.get('id') for n in living + dead if n.get('id')}
         npc_num = 1
@@ -5097,7 +5161,7 @@ def api_mcp_create_npc():
         _write_json(save_path, binder)
 
     log.info('[MCP] Created NPC %s: %s', npc_id, npc['name'])
-    return jsonify({'ok': True, 'id': npc_id, 'npc': _safe_npc(npc, include_gm=True)}), 201
+    return jsonify({'ok': True, 'id': npc_id, 'npc': _safe_npc(npc, include_gm=True, year=binder.get('year'))}), 201
 
 
 @app.route('/api/mcp/npc/<npc_id>', methods=['PATCH'])
@@ -5169,6 +5233,12 @@ def api_mcp_update_npc(npc_id):
             npc['glory'] = max(0, before + add)
             changed.append('glory')
             glory_note = f'Glory {before} {"+" if add >= 0 else "-"} {abs(add)} = {npc["glory"]}'
+        if data.get('year_born') is None and 'age' in data:
+            yb, age_err = _age_to_year_born(data, binder, npc)
+            if age_err:
+                return jsonify({'error': age_err}), 400
+            if yb is not None:
+                data['year_born'] = yb
         for key in _MCP_NPC_UPDATABLE:
             if key in data:
                 val = data[key]
@@ -5176,6 +5246,8 @@ def api_mcp_update_npc(npc_id):
                     val = val[:_STR_LIMITS[key]]
                 npc[key] = val
                 changed.append(key)
+        if 'year_born' in changed and npc.get('age') is not None:
+            npc['age'] = None  # the stored snapshot is dead weight once a birth year exists
 
         if not changed:
             return jsonify({'error': 'No updatable fields provided'}), 400
@@ -5199,7 +5271,7 @@ def api_mcp_update_npc(npc_id):
         _write_json(save_path, binder)
 
     log.info('[MCP] Updated NPC %s: %s%s', npc_id, ', '.join(changed), f' ({glory_note})' if glory_note else '')
-    out = {'ok': True, 'id': npc_id, 'changed': changed, 'npc': _safe_npc(npc, include_gm=True)}
+    out = {'ok': True, 'id': npc_id, 'changed': changed, 'npc': _safe_npc(npc, include_gm=True, year=binder.get('year'))}
     if glory_note:
         out['gloryNote'] = glory_note
     return jsonify(out)

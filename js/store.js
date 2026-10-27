@@ -43,6 +43,14 @@ const RELATION_TYPES = [
 
 // ── STORE OBJECT ──────────────────────────────────────────────
 const STORE = {
+  // Age from year_born and the campaign year — never the stored `age` snapshot (GitHub #17).
+  // Dead NPCs are aged at death; returns null when there is no birth year.
+  npcAge(npc, year) {
+    if (!npc || typeof npc.year_born !== 'number') return null;
+    const yr = typeof year === 'number' ? year : this.year;
+    if (npc.status === 'Dead' && typeof npc.year_died === 'number') return npc.year_died - npc.year_born;
+    return typeof yr === 'number' ? yr - npc.year_born : null;
+  },
   living:        [],
   dead:          [],
   households:    [],

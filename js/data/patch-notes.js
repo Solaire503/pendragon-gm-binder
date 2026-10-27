@@ -413,6 +413,18 @@ const FEATURES = [
 // Each entry: { version, date, sections: [{ heading, items:[] }] }
 const PATCH_NOTES = [
   {
+    version: '3.18.1',
+    date: '2026-10-27',
+    sections: [{
+      heading: 'Ages That Keep Up With the Years',
+      items: [
+        'An NPC’s age is now worked out from their birth year and the campaign year every time it is shown or asked for — including through the GM’s connected AI tools, which were reading an old stored number and calling a 43-year-old knight 34. The dead are aged at the year they died.',
+        'Editing a character no longer freezes their age as a number in the save. The next GM save clears the old frozen ages; a stored age is only kept for the handful of characters with no birth year at all.',
+        'Connected AI tools can pass an age when creating or updating a character and the Binder converts it to a birth year, and NPC searches now include each character’s current age.',
+      ],
+    }],
+  },
+  {
     version: '3.18.0',
     date: '2026-10-24',
     sections: [{

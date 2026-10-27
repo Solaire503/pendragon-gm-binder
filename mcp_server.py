@@ -191,8 +191,10 @@ def get_arc(arc_id: str) -> dict:
 @mcp.tool(
     description=(
         "Search or list NPCs. Returns id, name, role, household, status, "
-        "year_born, year_died, pronoun, manor, faction, glory, notes, and "
+        "year_born, year_died, age, pronoun, manor, faction, glory, notes, and "
         "gm_notes (the GM's private notes, never visible to players) for each. "
+        "age is always computed from year_born and the current campaign year "
+        "(for the dead: year_died − year_born) — trust it over any arithmetic of your own. "
         "Pass a search string to filter by name (case-insensitive partial match), "
         "or omit to list all. Use when an arc references an NPC you need detail on."
     )
@@ -208,7 +210,9 @@ def search_npcs(search: str = "") -> dict:
     description=(
         "Get full detail for a single NPC by name or ID (case-insensitive). "
         "Returns all fields plus up to 4 closest relationships "
-        "(with type and related NPC name). "
+        "(with type and related NPC name). The age field is computed live from "
+        "year_born and the campaign year (the dead are aged at death); it is never "
+        "a stored number. "
         "Use when you need to understand an NPC's connections and backstory."
     )
 )
@@ -266,8 +270,9 @@ def get_prep(prep_id: str) -> dict:
         "Create a new NPC in the Binder. Only 'name' is required — all other "
         "fields are optional and can be filled in later via update_npc. "
         "Common fields: role (e.g. 'Knight', 'Baron', 'Peasant'), status "
-        "('Alive'/'Dead'), year_born, pronoun ('He/him', 'She/her'), "
-        "manor, household, faction, glory, notes. "
+        "('Alive'/'Dead'), year_born (or age — converted to a birth year against "
+        "the current campaign year; year_born wins if both are given), pronoun "
+        "('He/him', 'She/her'), manor, household, faction, glory, notes. "
         "Glory accepts a nonnegative integer, N/A, or a renown category: "
         "Non-knight, Unproven, Veteran, Respected, Notable, Renowned, "
         "Illustrious, Extraordinary, Legendary. "
@@ -281,6 +286,7 @@ def create_npc(
     role: str = "",
     status: str = "Alive",
     year_born: int | None = None,
+    age: int | None = None,
     pronoun: str = "",
     manor: str = "",
     household: str = "",
@@ -298,6 +304,8 @@ def create_npc(
     }
     if year_born is not None:
         body["year_born"] = year_born
+    if age is not None:
+        body["age"] = age
     return _api("POST", "/api/mcp/npc", json=body)
 
 
@@ -316,6 +324,8 @@ def create_npc(
         "If status changes to 'Dead', the NPC automatically moves to the dead list "
         "(and vice versa back to living). "
         "Updatable fields: name, role, household, status, year_born, year_died, "
+        "age (a shortcut: converted to year_born = campaign year − age, or year_died − age "
+        "for the dead; age itself is never stored, every read computes it), "
         "pronoun, manor, faction, glory, notes, gm_notes, eligibility, dowry, "
         "passions, skills, stats, con, blessed, blessed_note, barren, fate_touched, "
         "out_of_story, out_of_story_note, round_table, statblock_template, "
@@ -333,6 +343,7 @@ def update_npc(
     status: str | None = None,
     year_born: int | None = None,
     year_died: int | None = None,
+    age: int | None = None,
     pronoun: str | None = None,
     manor: str | None = None,
     household: str | None = None,
@@ -370,7 +381,7 @@ def update_npc(
     body = {}
     for key, val in {
         "name": name, "role": role, "status": status, "year_born": year_born,
-        "year_died": year_died, "pronoun": pronoun, "manor": manor,
+        "year_died": year_died, "age": age, "pronoun": pronoun, "manor": manor,
         "household": household, "faction": faction, "glory": _glory_arg(glory),
         "glory_add": _glory_arg(glory_add),
         "notes": notes, "gm_notes": gm_notes, "eligibility": eligibility, "dowry": dowry,
